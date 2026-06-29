@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clans vs Society — Skills</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1C1A17;--bg-panel:#25211C;--bg-panel-2:#2C2620;
+    --parchment:#DCCEA6;--rust:#8B3A2A;--rust-bright:#B0492F;
+    --brass:#B08D45;--brass-dim:#8A6F3A;--bone:#ECE4D2;--ash:#93897A;
+    --green:#4A7C59;--green-bright:#5C9E70;--line:rgba(176,141,69,0.22);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--bone);font-family:'EB Garamond',serif;font-size:17px;line-height:1.5;min-height:100vh;}
+  .shell{display:grid;grid-template-columns:220px 1fr;grid-template-rows:54px 1fr;min-height:100vh;}
+  .topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 1.4rem;background:rgba(28,26,23,0.95);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10;}
+  .brand{display:flex;align-items:center;gap:0.6rem;font-family:'Cinzel',serif;font-size:0.9rem;letter-spacing:0.1em;text-transform:uppercase;}
+  .brand svg{width:24px;height:24px;}
+  .topbar-right{display:flex;align-items:center;gap:1.2rem;}
+  .player-name{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--brass);letter-spacing:0.08em;}
+  .logout{font-family:'JetBrains Mono',monospace;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ash);text-decoration:none;border:1px solid var(--line);padding:0.35rem 0.7rem;transition:color 0.2s,border-color 0.2s;}
+  .logout:hover{color:var(--bone);border-color:var(--brass-dim);}
+  .sidebar{background:var(--bg-panel);border-right:1px solid var(--line);padding:1.4rem 0;display:flex;flex-direction:column;gap:0.2rem;}
+  .nav-label{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ash);padding:0.8rem 1.2rem 0.4rem;}
+  .nav-item{display:flex;align-items:center;gap:0.7rem;padding:0.6rem 1.2rem;color:var(--ash);text-decoration:none;font-family:'EB Garamond',serif;font-size:1rem;transition:color 0.15s,background 0.15s;border-left:2px solid transparent;cursor:pointer;}
+  .nav-item:hover{color:var(--bone);background:rgba(176,141,69,0.06);}
+  .nav-item.active{color:var(--parchment);border-left-color:var(--rust-bright);background:rgba(139,58,42,0.12);}
+  .nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:0.7;}
+  .nav-item.active svg{opacity:1;}
+  .nav-divider{height:1px;background:var(--line);margin:0.6rem 1.2rem;}
+  .main{padding:1.8rem 2rem;overflow-y:auto;}
+  .page-title{font-family:'Cinzel',serif;font-size:1.3rem;font-weight:600;letter-spacing:0.06em;color:var(--parchment);margin-bottom:0.3rem;}
+  .page-sub{font-size:0.95rem;color:var(--ash);font-style:italic;margin-bottom:1.8rem;}
+
+  /* POINTS BANNER */
+  .points-bar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    padding:1rem 1.4rem;
+    margin-bottom:1.8rem;
+  }
+  .points-left{}
+  .points-label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:0.62rem;
+    letter-spacing:0.16em;
+    text-transform:uppercase;
+    color:var(--ash);
+    margin-bottom:0.3rem;
+  }
+  .points-count{
+    font-family:'Cinzel',serif;
+    font-size:1.8rem;
+    color:var(--green-bright);
+    letter-spacing:0.04em;
+  }
+  .points-count.none{color:var(--ash);}
+  .points-hint{
+    font-size:0.88rem;
+    color:var(--ash);
+    font-style:italic;
+    text-align:right;
+  }
+
+  /* SKILL TREES */
+  .trees{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    gap:1.2rem;
+    margin-bottom:1.2rem;
+  }
+
+  .tree{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    padding:1.4rem;
+  }
+  .tree-header{
+    display:flex;
+    align-items:center;
+    gap:0.8rem;
+    margin-bottom:1.2rem;
+    padding-bottom:0.9rem;
+    border-bottom:1px solid var(--line);
+  }
+  .tree-icon{
+    width:38px;height:38px;
+    background:var(--bg-panel-2);
+    border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+    color:var(--brass);
+  }
+  .tree-icon svg{width:18px;height:18px;}
+  .tree-name{
+    font-family:'Cinzel',serif;
+    font-size:1rem;
+    color:var(--parchment);
+    letter-spacing:0.06em;
+  }
+  .tree-desc{
+    font-size:0.85rem;
+    color:var(--ash);
+    font-style:italic;
+  }
+
+  /* SKILL NODES */
+  .skill-nodes{
+    display:flex;
+    flex-direction:column;
+    gap:0.6rem;
+  }
+  .skill-node{
+    display:flex;
+    align-items:center;
+    gap:0.9rem;
+    padding:0.7rem 0.8rem;
+    background:var(--bg-panel-2);
+    border:1px solid var(--line);
+    transition:border-color 0.15s;
+  }
+  .skill-node:hover{ border-color:var(--brass-dim); }
+
+  .node-rank{
+    display:flex;
+    gap:3px;
+    flex-shrink:0;
+  }
+  .rank-pip{
+    width:9px;height:9px;
+    background:rgba(255,255,255,0.07);
+    border:1px solid var(--line);
+  }
+  .rank-pip.filled{
+    background:var(--brass);
+    border-color:var(--brass);
+  }
+  .rank-pip.filled.maxed{
+    background:var(--rust-bright);
+    border-color:var(--rust-bright);
+  }
+
+  .node-info{flex:1;}
+  .node-name{
+    font-family:'Cinzel',serif;
+    font-size:0.88rem;
+    color:var(--parchment);
+    margin-bottom:0.1rem;
+  }
+  .node-effect{
+    font-family:'JetBrains Mono',monospace;
+    font-size:0.62rem;
+    color:var(--green-bright);
+    letter-spacing:0.06em;
+  }
+  .node-desc{
+    font-size:0.82rem;
+    color:var(--ash);
+    font-style:italic;
+  }
+
+  .node-btn{
+    font-family:'JetBrains Mono',monospace;
+    font-size:0.68rem;
+    letter-spacing:0.08em;
+    padding:0.4rem 0.8rem;
+    border:1px solid var(--green);
+    background:transparent;
+    color:var(--green-bright);
+    cursor:pointer;
+    transition:background 0.15s,color 0.15s;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+  .node-btn:hover:not(:disabled){background:var(--green);color:var(--bone);}
+  .node-btn:disabled{
+    opacity:0.35;
+    cursor:not-allowed;
+    border-color:var(--line);
+    color:var(--ash);
+  }
+  .node-btn.maxed{
+    border-color:var(--rust);
+    color:var(--rust-bright);
+    cursor:default;
+    pointer-events:none;
+  }
+
+  /* TOAST */
+  .toast{
+    position:fixed;bottom:1.5rem;right:1.5rem;
+    background:var(--bg-panel-2);border:1px solid var(--brass-dim);
+    padding:0.8rem 1.2rem;
+    font-family:'JetBrains Mono',monospace;font-size:0.72rem;letter-spacing:0.06em;
+    color:var(--bone);opacity:0;transform:translateY(8px);
+    transition:opacity 0.2s,transform 0.2s;pointer-events:none;max-width:300px;z-index:100;
+  }
+  .toast.show{opacity:1;transform:translateY(0);}
+
+  @media(max-width:900px){.trees{grid-template-columns:1fr;}}
+  @media(max-width:800px){.shell{grid-template-columns:1fr;}.sidebar{display:none;}}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="18" stroke="var(--brass)" stroke-width="1.5"/>
+        <path d="M12 24 L14 14 L17 18 L20 12 L23 18 L26 14 L28 24 Z" stroke="var(--brass)" stroke-width="1.3" stroke-linejoin="round"/>
+      </svg>
+      Clans vs Society
+    </div>
+    <div class="topbar-right">
+      <span class="player-name" id="player-name">Loading...</span>
+      <a class="logout" href="/logout">Leave Realm</a>
+    </div>
+  </header>
+
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <main class="main">
+    <div class="page-title">Skills</div>
+    <div class="page-sub">Spend your earned points to shape your legend.</div>
+
+    <!-- POINTS BANNER -->
+    <div class="points-bar">
+      <div class="points-left">
+        <div class="points-label">Available Stat Points</div>
+        <div class="points-count" id="points-count">—</div>
+      </div>
+      <div class="points-hint" id="points-hint">Earn more by levelling up.</div>
+    </div>
+
+    <!-- SKILL TREES -->
+    <div class="trees">
+
+      <!-- STRENGTH -->
+      <div class="tree">
+        <div class="tree-header">
+          <div class="tree-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21V9M12 9l-5-5M12 9l5-5" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <div class="tree-name">Strength</div>
+            <div class="tree-desc">Raw power — improves attack damage</div>
+          </div>
+        </div>
+        <div class="skill-nodes" id="nodes-strength"></div>
+      </div>
+
+      <!-- DEFENSE -->
+      <div class="tree">
+        <div class="tree-header">
+          <div class="tree-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4v5c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V7z" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <div class="tree-name">Defense</div>
+            <div class="tree-desc">Iron will — reduces damage taken</div>
+          </div>
+        </div>
+        <div class="skill-nodes" id="nodes-defense"></div>
+      </div>
+
+      <!-- SPEED -->
+      <div class="tree">
+        <div class="tree-header">
+          <div class="tree-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div>
+            <div class="tree-name">Speed</div>
+            <div class="tree-desc">Swift feet — improves action success rate</div>
+          </div>
+        </div>
+        <div class="skill-nodes" id="nodes-speed"></div>
+      </div>
+
+      <!-- DEXTERITY -->
+      <div class="tree">
+        <div class="tree-header">
+          <div class="tree-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <div class="tree-name">Dexterity</div>
+            <div class="tree-desc">Cunning hands — improves loot and gold gains</div>
+          </div>
+        </div>
+        <div class="skill-nodes" id="nodes-dexterity"></div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/nav.js"></script>
+<script>
+  // Skill tree definitions — each stat has 5 upgrade tiers
+  const TREES = {
+    strength: [
+      { name: 'Sturdy Arms',    desc: 'Your arms grow used to the weight of steel.',       effect: '+2 Strength', cost: 1, maxRank: 3 },
+      { name: 'Warrior\'s Grip', desc: 'Your grip tightens. Weapons feel like extensions of your will.', effect: '+3 Strength', cost: 1, maxRank: 3 },
+      { name: 'Iron Fury',      desc: 'In battle your strikes carry the weight of thunder.', effect: '+5 Strength', cost: 2, maxRank: 2 },
+    ],
+    defense: [
+      { name: 'Thick Hide',     desc: 'Scars teach lessons no trainer can.',               effect: '+2 Defense', cost: 1, maxRank: 3 },
+      { name: 'Shield Mastery', desc: 'You read attacks before they land.',                 effect: '+3 Defense', cost: 1, maxRank: 3 },
+      { name: 'Unyielding',     desc: 'You have stared death down and laughed.',            effect: '+5 Defense', cost: 2, maxRank: 2 },
+    ],
+    speed: [
+      { name: 'Light Step',     desc: 'You move without sound across cobblestones.',        effect: '+2 Speed', cost: 1, maxRank: 3 },
+      { name: 'Fleet Footed',   desc: 'Few can match your pace on road or field.',          effect: '+3 Speed', cost: 1, maxRank: 3 },
+      { name: 'Shadow Runner',  desc: 'You are gone before they know you were there.',      effect: '+5 Speed', cost: 2, maxRank: 2 },
+    ],
+    dexterity: [
+      { name: 'Nimble Fingers', desc: 'Coins and daggers both find your hands first.',      effect: '+2 Dexterity', cost: 1, maxRank: 3 },
+      { name: 'Pickpocket\'s Eye', desc: 'You see the weight of a purse from ten paces.',  effect: '+3 Dexterity', cost: 1, maxRank: 3 },
+      { name: 'Ghost Hand',     desc: 'Lords have lost rings without ever feeling it.',     effect: '+5 Dexterity', cost: 2, maxRank: 2 },
+    ],
+  };
+
+  let playerStats = null;
+  // Track how many ranks player has spent on each skill node
+  // Stored as skillRanks[stat][nodeIndex] = rank
+  // We derive this from the stat value since we don't have a separate skills table yet
+  const skillRanks = { strength: [0,0,0], defense: [0,0,0], speed: [0,0,0], dexterity: [0,0,0] };
+
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+
+  function renderPips(current, max, stat){
+    let html = '';
+    for(let i = 0; i < max; i++){
+      const filled = i < current;
+      const maxed = filled && current === max;
+      html += `<div class="rank-pip ${filled ? 'filled' : ''} ${maxed ? 'maxed' : ''}"></div>`;
+    }
+    return html;
+  }
+
+  function renderTrees(){
+    if(!playerStats) return;
+    const pts = playerStats.statPoints;
+
+    ['strength','defense','speed','dexterity'].forEach(stat => {
+      const container = document.getElementById(`nodes-${stat}`);
+      container.innerHTML = '';
+
+      TREES[stat].forEach((skill, i) => {
+        const rank = skillRanks[stat][i];
+        const isMaxed = rank >= skill.maxRank;
+        const canAfford = pts >= skill.cost;
+        const canUpgrade = !isMaxed && canAfford;
+
+        const node = document.createElement('div');
+        node.className = 'skill-node';
+        node.innerHTML = `
+          <div class="node-rank">${renderPips(rank, skill.maxRank, stat)}</div>
+          <div class="node-info">
+            <div class="node-name">${skill.name}</div>
+            <div class="node-effect">${skill.effect} per rank &nbsp;·&nbsp; ${rank}/${skill.maxRank}</div>
+            <div class="node-desc">${skill.desc}</div>
+          </div>
+          <button
+            class="node-btn ${isMaxed ? 'maxed' : ''}"
+            ${isMaxed ? '' : (canUpgrade ? '' : 'disabled')}
+            onclick="upgradeSkill('${stat}', ${i})"
+          >
+            ${isMaxed ? 'MASTERED' : `+1 (${skill.cost} pt${skill.cost > 1 ? 's' : ''})`}
+          </button>
+        `;
+        container.appendChild(node);
+      });
+    });
+  }
+
+  async function upgradeSkill(stat, nodeIndex){
+    const skill = TREES[stat][nodeIndex];
+    try {
+      const res = await fetch('/api/spend-stat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stat })
+      });
+      const data = await res.json();
+      if(!res.ok){ showToast(data.error); return; }
+
+      skillRanks[stat][nodeIndex]++;
+      playerStats.statPoints -= skill.cost;
+      playerStats[stat] = data.newValue;
+
+      updatePointsDisplay();
+      renderTrees();
+      showToast(`${skill.name} upgraded — ${stat} is now ${data.newValue}.`);
+    } catch(e){
+      showToast('Something went wrong.');
+    }
+  }
+
+  function updatePointsDisplay(){
+    const pts = playerStats.statPoints;
+    const el = document.getElementById('points-count');
+    el.textContent = pts;
+    el.className = 'points-count' + (pts === 0 ? ' none' : '');
+    document.getElementById('points-hint').textContent = pts > 0
+      ? 'Click a skill below to spend points.'
+      : 'Earn more by levelling up on the dashboard.';
+  }
+
+  async function loadPlayer(){
+    const res = await fetch('/api/me');
+    if(!res.ok){ window.location.href='/'; return; }
+    const data = await res.json();
+    playerStats = data.stats;
+    document.getElementById('player-name').textContent = data.username;
+    updatePointsDisplay();
+    renderTrees();
+  }
+
+  loadPlayer();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,118 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id             Int          @id @default(autoincrement())
+  username       String       @unique
+  password       String?
+  googleId       String?      @unique
+  email          String?      @unique
+  googleName     String?
+  avatar         String?
+  characterName  String?
+  characterClass String?
+  lastLoginAt    DateTime?
+  createdAt      DateTime     @default(now())
+  stats          Stats?
+  houseMember    HouseMember?
+  inventory      Inventory[]
+  listings       Listing[]
+  userSkills     UserSkill[]
+}
+
+
+model Stats {
+  id                Int       @id @default(autoincrement())
+  userId            Int       @unique
+  user              User      @relation(fields: [userId], references: [id])
+  strength          Int       @default(10)
+  defense           Int       @default(10)
+  speed             Int       @default(10)
+  dexterity         Int       @default(10)
+  intelligence      Int       @default(5)
+  health            Int       @default(100)
+  maxHealth         Int       @default(100)
+  energy            Int       @default(100)
+  maxEnergy         Int       @default(100)
+  gold              Int       @default(500)
+  level             Int       @default(1)
+  xp                Int       @default(0)
+  statPoints        Int       @default(0)
+  lastStrengthTrain DateTime?
+  lastDefenseTrain  DateTime?
+  lastSpeedTrain    DateTime?
+  lastDexTrain      DateTime?
+  inJail       Boolean   @default(false)
+jailUntil    DateTime?
+inHospital   Boolean   @default(false)
+hospitalUntil DateTime?
+}
+
+model UserSkill {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  skillKey   String
+  unlockedAt DateTime @default(now())
+  @@unique([userId, skillKey])
+}
+
+model House {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  motto     String   @default("Strength through unity.")
+  gold      Int      @default(0)
+  leaderId  Int      @unique
+  createdAt DateTime @default(now())
+  members   HouseMember[]
+}
+
+model HouseMember {
+  id      Int    @id @default(autoincrement())
+  userId  Int    @unique
+  houseId Int
+  rank    String @default("Bannerman")
+  user    User   @relation(fields: [userId], references: [id])
+  house   House  @relation(fields: [houseId], references: [id])
+}
+
+model Item {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String
+  type        String
+  effect      String
+  basePrice   Int
+  listings    Listing[]
+  inventory   Inventory[]
+}
+
+model Inventory {
+  id       Int  @id @default(autoincrement())
+  userId   Int
+  itemId   Int
+  quantity Int  @default(1)
+  user     User @relation(fields: [userId], references: [id])
+  item     Item @relation(fields: [itemId], references: [id])
+}
+
+model Listing {
+  id        Int      @id @default(autoincrement())
+  sellerId  Int
+  itemId    Int
+  price     Int
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  seller    User     @relation(fields: [sellerId], references: [id])
+  item      Item     @relation(fields: [itemId], references: [id])
+}

@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clans vs Society — Leave the Realm</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='18' fill='%231C1A17' stroke='%23B08D45' stroke-width='1.5'/%3E%3Cpath d='M12 24 L14 14 L17 18 L20 12 L23 18 L26 14 L28 24 Z' stroke='%23B08D45' stroke-width='1.3' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #1C1A17;
+    --bg-panel: #25211C;
+    --bg-panel-2: #2C2620;
+    --parchment: #DCCEA6;
+    --rust: #8B3A2A;
+    --rust-bright: #B0492F;
+    --brass: #B08D45;
+    --brass-dim: #8A6F3A;
+    --bone: #ECE4D2;
+    --ash: #93897A;
+    --line: rgba(176,141,69,0.22);
+  }
+
+  *{ box-sizing: border-box; margin: 0; padding: 0; }
+
+  body{
+    background:
+      radial-gradient(ellipse at top, rgba(176,141,69,0.05), transparent 55%),
+      var(--bg);
+    color: var(--bone);
+    font-family: 'EB Garamond', serif;
+    font-size: 19px;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------- NAV ---------- */
+  nav{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem 5vw;
+    background: rgba(28,26,23,0.92);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+  }
+  .brand svg{ width: 28px; height: 28px; }
+  .brand-name{
+    font-family: 'Cinzel', serif;
+    font-size: 0.95rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .eyebrow{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ash);
+  }
+
+  /* ---------- MAIN STAGE ---------- */
+  .stage{
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6vh 5vw;
+  }
+
+  .card{
+    width: 100%;
+    max-width: 440px;
+    background: var(--bg-panel-2);
+    border: 1px solid var(--line);
+    position: relative;
+    padding: 2.8rem 2.4rem 2.4rem;
+    text-align: center;
+  }
+  /* top & bottom brass edge accents */
+  .card::before, .card::after{
+    content: "";
+    position: absolute;
+    left: 0; right: 0;
+    height: 5px;
+    background: linear-gradient(90deg, transparent, var(--brass-dim), transparent);
+    opacity: 0.5;
+  }
+  .card::before{ top: 0; }
+  .card::after{ bottom: 0; }
+
+  /* ---------- SEAL ---------- */
+  .seal-wrap{
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 1.8rem;
+    animation: descend 0.6s cubic-bezier(.3,.9,.4,1.05) both;
+  }
+  @keyframes descend{
+    0%{ transform: translateY(-20px) scale(1.2); opacity: 0; }
+    60%{ transform: translateY(2px) scale(0.97); opacity: 1; }
+    100%{ transform: translateY(0) scale(1); }
+  }
+
+  /* ---------- COPY ---------- */
+  .card-eyebrow{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--brass);
+    display: block;
+    margin-bottom: 0.7rem;
+  }
+  .card h1{
+    font-family: 'Cinzel', serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--parchment);
+    margin-bottom: 1rem;
+  }
+  .card p{
+    color: var(--ash);
+    font-size: 1.05rem;
+    font-style: italic;
+    line-height: 1.75;
+    max-width: 340px;
+    margin: 0 auto 2rem;
+  }
+
+  /* ---------- RULE ---------- */
+  .rule{
+    width: 56px;
+    height: 1px;
+    background: var(--brass-dim);
+    margin: 0 auto 2rem;
+    opacity: 0.6;
+  }
+
+  /* ---------- BUTTONS ---------- */
+  .btn-row{
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .btn{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.76rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.95rem 1.8rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.15s;
+    width: 100%;
+    text-decoration: none;
+    display: block;
+  }
+  .btn:focus-visible{ outline: 2px solid var(--rust-bright); outline-offset: 3px; }
+
+  .btn-danger{
+    background: var(--rust);
+    color: var(--bone);
+    border-color: var(--rust);
+  }
+  .btn-danger:hover{ background: var(--rust-bright); border-color: var(--rust-bright); transform: translateY(-1px); }
+  .btn-danger:active{ transform: translateY(0); }
+
+  /* Confirming state */
+  .btn-danger.confirming{
+    background: transparent;
+    border-color: var(--rust-bright);
+    color: var(--rust-bright);
+    animation: pulse-border 1.2s ease infinite;
+  }
+  @keyframes pulse-border{
+    0%, 100%{ border-color: var(--rust-bright); }
+    50%{ border-color: var(--rust); }
+  }
+
+  .btn-ghost{
+    background: transparent;
+    color: var(--bone);
+    border-color: var(--brass-dim);
+  }
+  .btn-ghost:hover{ border-color: var(--brass); background: rgba(176,141,69,0.08); }
+
+  /* ---------- CONFIRM NOTICE ---------- */
+  .confirm-notice{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    color: var(--rust-bright);
+    text-align: center;
+    min-height: 1.2em;
+    margin-top: 0.6rem;
+    transition: opacity 0.3s;
+    opacity: 0;
+  }
+  .confirm-notice.visible{ opacity: 1; }
+
+  /* ---------- STATUS (post-logout) ---------- */
+  .status-msg{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--ash);
+    text-align: center;
+    margin-top: 1.4rem;
+    min-height: 1.2em;
+  }
+  .status-msg.active{ color: var(--brass); }
+
+  /* ---------- FOOTER ---------- */
+  footer{
+    text-align: center;
+    padding: 2rem 5vw 3rem;
+    border-top: 1px solid var(--line);
+  }
+  footer p{ color: var(--ash); font-size: 0.85rem; font-style: italic; }
+
+  @media (prefers-reduced-motion: reduce){
+    .seal-wrap{ animation: none; }
+    .btn{ transition: none; }
+    .confirm-notice{ transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand">
+    <svg viewBox="0 0 40 40" fill="none">
+      <circle cx="20" cy="20" r="18" stroke="var(--brass)" stroke-width="1.5"/>
+      <path d="M12 24 L14 14 L17 18 L20 12 L23 18 L26 14 L28 24 Z" stroke="var(--brass)" stroke-width="1.3" stroke-linejoin="round"/>
+    </svg>
+    <span class="brand-name">Clans vs Society</span>
+  </div>
+  <span class="eyebrow">Departing the Realm</span>
+</nav>
+
+<div class="stage">
+  <div class="card">
+
+    <div class="seal-wrap">
+      <svg viewBox="0 0 100 100" fill="none">
+        <!-- Outer ring -->
+        <circle cx="50" cy="50" r="46" fill="rgba(28,26,23,0.7)"/>
+        <circle cx="50" cy="50" r="46" stroke="var(--brass-dim)" stroke-width="1.5"/>
+        <circle cx="50" cy="50" r="38" stroke="var(--brass-dim)" stroke-width="1" opacity="0.4"/>
+        <!-- Open gate / portcullis motif -->
+        <line x1="34" y1="32" x2="34" y2="68" stroke="var(--ash)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="50" y1="32" x2="50" y2="68" stroke="var(--ash)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="66" y1="32" x2="66" y2="68" stroke="var(--ash)" stroke-width="2" stroke-linecap="round"/>
+        <line x1="30" y1="44" x2="70" y2="44" stroke="var(--ash)" stroke-width="1.4" stroke-linecap="round"/>
+        <line x1="30" y1="56" x2="70" y2="56" stroke="var(--ash)" stroke-width="1.4" stroke-linecap="round"/>
+        <!-- Arch above -->
+        <path d="M28 32 Q50 18 72 32" stroke="var(--brass-dim)" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+        <!-- Exit arrow — departing figure -->
+        <path d="M76 50 L86 50 M82 46 L86 50 L82 54" stroke="var(--rust)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <span class="card-eyebrow">The gates await</span>
+    <h1>Leave the Realm?</h1>
+    <p>Your deeds are recorded in the annals. When you return, the realm will remember what you have built — and what you have left unfinished.</p>
+
+    <div class="rule"></div>
+
+    <div class="btn-row" id="btn-row">
+      <button class="btn btn-danger" id="btn-logout" onclick="handleLogout()">
+        Sheathe the Blade &amp; Depart
+      </button>
+      <a class="btn btn-ghost" href="/dashboard" id="btn-stay">
+        Return to the Realm
+      </a>
+    </div>
+
+    <div class="confirm-notice" id="confirm-notice">
+      Click once more to confirm your departure
+    </div>
+    <div class="status-msg" id="status-msg"></div>
+
+  </div>
+</div>
+
+<footer>
+  <p>Clans vs Society — no king, no law, only what you can hold.</p>
+</footer>
+
+<script>
+  let clicks = 0;
+  let departing = false;
+
+  function handleLogout(){
+    if(departing) return;
+    clicks++;
+
+    const btn = document.getElementById('btn-logout');
+    const notice = document.getElementById('confirm-notice');
+    const status = document.getElementById('status-msg');
+
+    if(clicks === 1){
+      // First click: ask to confirm
+      btn.textContent = 'Confirm Departure';
+      btn.classList.add('confirming');
+      notice.classList.add('visible');
+      return;
+    }
+
+    // Second click: proceed
+    departing = true;
+    btn.disabled = true;
+    btn.classList.remove('confirming');
+    btn.textContent = 'Departing…';
+    document.getElementById('btn-stay').style.pointerEvents = 'none';
+    document.getElementById('btn-stay').style.opacity = '0.4';
+    notice.classList.remove('visible');
+    status.textContent = 'Striking your banner from the field…';
+    status.classList.add('active');
+
+    // POST to /api/logout — redirect to index on success
+    fetch('/api/logout', { method: 'POST', credentials: 'same-origin' })
+      .then(res => {
+        status.textContent = 'The gates close behind you. Fare well, lord.';
+        setTimeout(() => { window.location.href = '/'; }, 1400);
+      })
+      .catch(() => {
+        // Fallback: redirect anyway
+        status.textContent = 'The gates close behind you. Fare well, lord.';
+        setTimeout(() => { window.location.href = '/'; }, 1400);
+      });
+  }
+</script>
+
+</body>
+</html>

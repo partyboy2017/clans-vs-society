@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clans vs Society — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #1C1A17;
+    --bg-panel: #25211C;
+    --bg-panel-2: #2C2620;
+    --parchment: #DCCEA6;
+    --rust: #8B3A2A;
+    --rust-bright: #B0492F;
+    --brass: #B08D45;
+    --brass-dim: #8A6F3A;
+    --bone: #ECE4D2;
+    --ash: #93897A;
+    --green: #4A7C59;
+    --green-bright: #5C9E70;
+    --line: rgba(176,141,69,0.22);
+  }
+
+  *{ box-sizing: border-box; margin: 0; padding: 0; }
+
+  body{
+    background: var(--bg);
+    color: var(--bone);
+    font-family: 'EB Garamond', serif;
+    font-size: 17px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  .shell{
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows: 54px 1fr;
+    min-height: 100vh;
+  }
+
+  .topbar{
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.4rem;
+    background: rgba(28,26,23,0.95);
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .brand{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: 'Cinzel', serif;
+    font-size: 0.9rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .brand svg{ width: 24px; height: 24px; }
+  .topbar-right{
+    display: flex;
+    align-items: center;
+    gap: 1.2rem;
+  }
+  .player-name{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--brass);
+    letter-spacing: 0.08em;
+  }
+  .logout{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ash);
+    text-decoration: none;
+    border: 1px solid var(--line);
+    padding: 0.35rem 0.7rem;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .logout:hover{ color: var(--bone); border-color: var(--brass-dim); }
+
+  .sidebar{
+    background: var(--bg-panel);
+    border-right: 1px solid var(--line);
+    padding: 1.4rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .nav-label{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ash);
+    padding: 0.8rem 1.2rem 0.4rem;
+  }
+  .nav-item{
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.6rem 1.2rem;
+    color: var(--ash);
+    text-decoration: none;
+    font-family: 'EB Garamond', serif;
+    font-size: 1rem;
+    transition: color 0.15s, background 0.15s;
+    border-left: 2px solid transparent;
+    cursor: pointer;
+  }
+  .nav-item:hover{ color: var(--bone); background: rgba(176,141,69,0.06); }
+  .nav-item.active{ color: var(--parchment); border-left-color: var(--rust-bright); background: rgba(139,58,42,0.12); }
+  .nav-item svg{ width: 15px; height: 15px; flex-shrink: 0; opacity: 0.7; }
+  .nav-item.active svg{ opacity: 1; }
+  .nav-divider{ height: 1px; background: var(--line); margin: 0.6rem 1.2rem; }
+
+  .main{
+    padding: 1.8rem 2rem;
+    overflow-y: auto;
+  }
+
+  .page-title{
+    font-family: 'Cinzel', serif;
+    font-size: 1.3rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    color: var(--parchment);
+    margin-bottom: 0.3rem;
+  }
+  .page-sub{
+    font-size: 0.95rem;
+    color: var(--ash);
+    font-style: italic;
+    margin-bottom: 1.8rem;
+  }
+
+  /* LEVEL UP BANNER */
+  .levelup-banner{
+    display: none;
+    align-items: center;
+    gap: 1rem;
+    background: rgba(139,58,42,0.18);
+    border: 1px solid var(--rust-bright);
+    padding: 0.9rem 1.2rem;
+    margin-bottom: 1.4rem;
+  }
+  .levelup-banner.show{ display: flex; }
+  .levelup-banner .lu-title{
+    font-family: 'Cinzel', serif;
+    font-size: 1rem;
+    color: var(--parchment);
+    letter-spacing: 0.06em;
+  }
+  .levelup-banner .lu-sub{
+    font-size: 0.85rem;
+    color: var(--ash);
+    font-style: italic;
+  }
+  .levelup-banner .lu-icon{
+    font-size: 1.6rem;
+    flex-shrink: 0;
+  }
+
+  /* STAT POINTS BANNER */
+  .statpoints-banner{
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(74,124,89,0.12);
+    border: 1px solid var(--green-bright);
+    padding: 0.8rem 1.2rem;
+    margin-bottom: 1.4rem;
+    gap: 1rem;
+  }
+  .statpoints-banner.show{ display: flex; }
+  .statpoints-banner .sp-text{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--green-bright);
+    letter-spacing: 0.08em;
+  }
+  .statpoints-banner .sp-sub{
+    font-size: 0.85rem;
+    color: var(--ash);
+    font-style: italic;
+    margin-top: 0.2rem;
+  }
+
+  .resources{
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.8rem;
+  }
+  .resource-card{
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    padding: 1rem 1.1rem;
+  }
+  .resource-label{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ash);
+    margin-bottom: 0.5rem;
+    display: flex;
+    justify-content: space-between;
+  }
+  .resource-label span{ color: var(--brass); }
+  .bar-track{
+    height: 6px;
+    background: rgba(255,255,255,0.07);
+    overflow: hidden;
+    margin-bottom: 0.4rem;
+  }
+  .bar-fill{
+    height: 100%;
+    transition: width 0.6s ease;
+  }
+  .bar-health{ background: var(--rust-bright); }
+  .bar-energy{ background: var(--brass); }
+  .bar-xp{ background: var(--green-bright); }
+  .resource-value{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--bone);
+  }
+
+  .grid-1{ display:block; margin-bottom:1rem; }
+  .grid-2{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .panel{
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    padding: 1.2rem 1.3rem;
+  }
+  .panel-title{
+    font-family: 'Cinzel', serif;
+    font-size: 0.82rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--parchment);
+    margin-bottom: 1rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-badge{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    background: var(--rust);
+    color: var(--bone);
+    padding: 0.15rem 0.5rem;
+    letter-spacing: 0.08em;
+  }
+
+  .stat-row{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid rgba(176,141,69,0.1);
+  }
+  .stat-row:last-child{ border-bottom: none; }
+  .stat-name{
+    font-size: 0.95rem;
+    color: var(--ash);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .stat-name svg{ width: 13px; height: 13px; color: var(--brass); }
+  .stat-val{
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--bone);
+  }
+
+  /* SPEND BUTTON */
+  .spend-btn{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    background: var(--green);
+    color: var(--bone);
+    border: none;
+    padding: 0.2rem 0.5rem;
+    cursor: pointer;
+    display: none;
+    transition: background 0.15s;
+  }
+  .spend-btn:hover{ background: var(--green-bright); }
+  .spend-btn.visible{ display: inline-block; }
+
+  .action-list{
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .action-item{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.7rem 0.9rem;
+    background: var(--bg-panel-2);
+    border: 1px solid var(--line);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+  }
+  .action-item:hover:not(.disabled){ border-color: var(--brass-dim); background: rgba(176,141,69,0.06); }
+  .action-item.disabled{ opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+  .action-name{
+    font-family: 'Cinzel', serif;
+    font-size: 0.88rem;
+    color: var(--parchment);
+    margin-bottom: 0.15rem;
+  }
+  .action-desc{
+    font-size: 0.82rem;
+    color: var(--ash);
+    font-style: italic;
+  }
+  .action-cost{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--brass);
+    letter-spacing: 0.08em;
+    text-align: right;
+    white-space: nowrap;
+    margin-left: 1rem;
+  }
+
+  .log-list{
+    display: flex;
+    flex-direction: column;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  .log-entry{
+    padding: 0.55rem 0;
+    border-bottom: 1px solid rgba(176,141,69,0.08);
+    display: flex;
+    gap: 0.8rem;
+    font-size: 0.9rem;
+  }
+  .log-entry:last-child{ border-bottom: none; }
+  .log-time{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--ash);
+    white-space: nowrap;
+    padding-top: 0.15rem;
+    min-width: 48px;
+  }
+  .log-text{ color: var(--bone); }
+  .log-text .gain{ color: var(--green-bright); }
+  .log-text .loss{ color: var(--rust-bright); }
+  .log-text .levelup{ color: var(--brass); font-family: 'Cinzel', serif; }
+
+  .toast{
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    background: var(--bg-panel-2);
+    border: 1px solid var(--brass-dim);
+    padding: 0.8rem 1.2rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    color: var(--bone);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    max-width: 300px;
+    z-index: 100;
+  }
+  .toast.show{ opacity: 1; transform: translateY(0); }
+  .toast.levelup-toast{ border-color: var(--rust-bright); }
+
+  @media (max-width: 800px){
+    .shell{ grid-template-columns: 1fr; }
+    .sidebar{ display: none; }
+    .resources{ grid-template-columns: 1fr 1fr; }
+    .grid-1{ display:block; margin-bottom:1rem; }
+  .grid-2{ grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="18" stroke="var(--brass)" stroke-width="1.5"/>
+        <path d="M12 24 L14 14 L17 18 L20 12 L23 18 L26 14 L28 24 Z" stroke="var(--brass)" stroke-width="1.3" stroke-linejoin="round"/>
+      </svg>
+      Clans vs Society
+    </div>
+    <div class="topbar-right">
+      <span class="player-name" id="player-name">Loading...</span>
+      <a class="logout" href="/logout">Leave Realm</a>
+    </div>
+  </header>
+
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <main class="main">
+    <div class="page-title" id="greeting">Welcome back</div>
+    <div class="page-sub" id="level-line">Loading your character...</div>
+
+    <!-- LEVEL UP BANNER -->
+    <div class="levelup-banner" id="levelup-banner">
+      <div class="lu-icon">⚔</div>
+      <div>
+        <div class="lu-title" id="levelup-title">You have levelled up!</div>
+        <div class="lu-sub">Your power grows. Spend your stat points below.</div>
+      </div>
+    </div>
+
+    <!-- STAT POINTS BANNER -->
+    <div class="statpoints-banner" id="statpoints-banner">
+      <div>
+        <div class="sp-text" id="statpoints-text">— STAT POINTS AVAILABLE</div>
+        <div class="sp-sub">Click + next to a stat below to spend them.</div>
+      </div>
+    </div>
+
+    <!-- RESOURCE BARS -->
+    <div class="resources">
+      <div class="resource-card">
+        <div class="resource-label">Health <span id="hp-val">—</span></div>
+        <div class="bar-track"><div class="bar-fill bar-health" id="hp-bar" style="width:0%"></div></div>
+        <div class="resource-value" id="hp-text">— / —</div>
+      </div>
+      <div class="resource-card">
+        <div class="resource-label">Energy <span id="en-val">—</span></div>
+        <div class="bar-track"><div class="bar-fill bar-energy" id="en-bar" style="width:0%"></div></div>
+        <div class="resource-value" id="en-text">— / —</div>
+      </div>
+      <div class="resource-card">
+        <div class="resource-label">Experience <span id="xp-val">—</span></div>
+        <div class="bar-track"><div class="bar-fill bar-xp" id="xp-bar" style="width:0%"></div></div>
+        <div class="resource-value" id="xp-text">Level —</div>
+      </div>
+    </div>
+
+    <div class="grid-1">
+
+      <!-- STATS -->
+      <div class="panel">
+        <div class="panel-title">Combat Stats</div>
+        <div class="stat-row">
+          <span class="stat-name">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21V9M12 9l-5-5M12 9l5-5" stroke-linecap="round"/></svg>
+            Strength
+          </span>
+          <span class="stat-val">
+            <span id="stat-strength">—</span>
+            <button class="spend-btn" id="spend-strength" onclick="spendStat('strength')">+</button>
+          </span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4v5c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V7z" stroke-linecap="round"/></svg>
+            Defense
+          </span>
+          <span class="stat-val">
+            <span id="stat-defense">—</span>
+            <button class="spend-btn" id="spend-defense" onclick="spendStat('defense')">+</button>
+          </span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Speed
+          </span>
+          <span class="stat-val">
+            <span id="stat-speed">—</span>
+            <button class="spend-btn" id="spend-speed" onclick="spendStat('speed')">+</button>
+          </span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke-linecap="round"/></svg>
+            Dexterity
+          </span>
+          <span class="stat-val">
+            <span id="stat-dexterity">—</span>
+            <button class="spend-btn" id="spend-dexterity" onclick="spendStat('dexterity')">+</button>
+          </span>
+        </div>
+        <div class="stat-row" style="margin-top:0.6rem; border-top: 1px solid var(--line); padding-top:0.8rem;">
+          <span class="stat-name" style="color:var(--brass);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3" stroke-linecap="round"/></svg>
+            Gold
+          </span>
+          <span class="stat-val" style="color:var(--brass);" id="stat-gold">—</span>
+        </div>
+      </div>
+            <div class="action-cost">10 ENERGY<br>+20-60 GOLD</div>
+          </div>
+          <div class="action-item" id="action-train" onclick="doAction('train')">
+            <div class="action-info">
+              <div class="action-name">Visit the Training Yard</div>
+              <div class="action-desc">Sharpen your strength and form</div>
+            </div>
+            <div class="action-cost">20 ENERGY<br>+1-3 STR</div>
+          </div>
+          <div class="action-item" id="action-rest" onclick="doAction('rest')">
+            <div class="action-info">
+              <div class="action-name">Rest at the Inn</div>
+              <div class="action-desc">Restore health and recover energy</div>
+            </div>
+            <div class="action-cost">30 GOLD<br>FULL RESTORE</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ACTIVITY LOG -->
+    <div class="panel">
+      <div class="panel-title">Activity Log</div>
+      <div class="log-list" id="log-list">
+        <div class="log-entry">
+          <span class="log-time">now</span>
+          <span class="log-text">You have entered the realm. The road ahead is long.</span>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  let playerStats = null;
+
+  async function loadPlayer(){
+    try {
+      const res = await fetch('/api/me');
+      if (!res.ok){ window.location.href = '/'; return; }
+      const data = await res.json();
+      playerStats = data.stats;
+
+      document.getElementById('player-name').textContent = data.username;
+      document.getElementById('greeting').textContent = `Welcome back, ${data.username}`;
+      document.getElementById('level-line').textContent = `Level ${data.stats.level} — ${data.stats.xp} XP earned`;
+
+      // Health
+      const hpPct = Math.round((data.stats.health / data.stats.maxHealth) * 100);
+      document.getElementById('hp-bar').style.width = hpPct + '%';
+      document.getElementById('hp-val').textContent = hpPct + '%';
+      document.getElementById('hp-text').textContent = `${data.stats.health} / ${data.stats.maxHealth}`;
+
+      // Energy
+      const enPct = Math.round((data.stats.energy / data.stats.maxEnergy) * 100);
+      document.getElementById('en-bar').style.width = enPct + '%';
+      document.getElementById('en-val').textContent = enPct + '%';
+      document.getElementById('en-text').textContent = `${data.stats.energy} / ${data.stats.maxEnergy}`;
+
+      // XP
+      const xpNeeded = data.stats.level * 100;
+      const xpPct = Math.min(Math.round((data.stats.xp / xpNeeded) * 100), 100);
+      document.getElementById('xp-bar').style.width = xpPct + '%';
+      document.getElementById('xp-val').textContent = xpPct + '%';
+      document.getElementById('xp-text').textContent = `Level ${data.stats.level} — ${data.stats.xp}/${xpNeeded} XP`;
+
+      // Combat stats
+      document.getElementById('stat-strength').textContent = data.stats.strength;
+      document.getElementById('stat-defense').textContent = data.stats.defense;
+      document.getElementById('stat-speed').textContent = data.stats.speed;
+      document.getElementById('stat-dexterity').textContent = data.stats.dexterity;
+      document.getElementById('stat-gold').textContent = data.stats.gold.toLocaleString() + ' g';
+
+      // Stat points
+      updateStatPointUI(data.stats.statPoints);
+
+      // Disable actions based on resources
+      updateActionStates(data.stats);
+
+    } catch(e){
+      console.error(e);
+    }
+  }
+
+  function updateStatPointUI(statPoints){
+    const banner = document.getElementById('statpoints-banner');
+    const btns = document.querySelectorAll('.spend-btn');
+    if(statPoints > 0){
+      banner.classList.add('show');
+      document.getElementById('statpoints-text').textContent = `${statPoints} STAT POINT${statPoints !== 1 ? 'S' : ''} AVAILABLE`;
+      btns.forEach(b => b.classList.add('visible'));
+    } else {
+      banner.classList.remove('show');
+      btns.forEach(b => b.classList.remove('visible'));
+    }
+  }
+
+  function updateActionStates(stats){
+    document.getElementById('action-patrol').classList.toggle('disabled', stats.energy < 10);
+    document.getElementById('action-train').classList.toggle('disabled', stats.energy < 20);
+    document.getElementById('action-rest').classList.toggle('disabled', stats.gold < 30);
+  }
+
+  function addLog(text){
+    const list = document.getElementById('log-list');
+    const now = new Date();
+    const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.innerHTML = `<span class="log-time">${time}</span><span class="log-text">${text}</span>`;
+    list.insertBefore(entry, list.firstChild);
+  }
+
+  function showToast(msg, isLevelUp = false){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (isLevelUp ? ' levelup-toast' : '');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3200);
+  }
+
+  async function doAction(action){
+    if(!playerStats) return;
+
+    try {
+      const res = await fetch(`/api/action/${action}`, { method: 'POST' });
+      const data = await res.json();
+
+      if(!res.ok){
+        showToast(data.error);
+        return;
+      }
+
+      if(action === 'patrol'){
+        addLog(`You patrol the king's road and collect tolls. A merchant grumbles but pays. <span class="gain">+${data.goldGain} gold</span> <span class="gain">+${data.xpGain} xp</span>`);
+      } else if(action === 'train'){
+        addLog(`You spend an hour at the training yard. Your form improves. <span class="gain">+${data.strGain} Strength</span> <span class="gain">+${data.xpGain} xp</span>`);
+      } else if(action === 'rest'){
+        addLog(`You rest at the inn. The straw mattress is rough but the fire is warm. <span class="gain">Health & Energy restored</span>`);
+      }
+
+      if(data.leveledUp){
+        const banner = document.getElementById('levelup-banner');
+        document.getElementById('levelup-title').textContent = `You have reached Level ${data.newLevel}!`;
+        banner.classList.add('show');
+        addLog(`<span class="levelup">⚔ Level ${data.newLevel} achieved! You have been granted 3 stat points.</span>`);
+        showToast(`Level ${data.newLevel}! 3 stat points awarded.`, true);
+        setTimeout(() => banner.classList.remove('show'), 6000);
+      }
+
+      await loadPlayer();
+
+    } catch(e){
+      showToast('Something went wrong. Try again.');
+    }
+  }
+
+  async function spendStat(stat){
+    try {
+      const res = await fetch('/api/spend-stat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stat })
+      });
+      const data = await res.json();
+      if(!res.ok){ showToast(data.error); return; }
+      addLog(`You focus your gained strength into your <span class="gain">${stat}</span>. It is now ${data.newValue}.`);
+      await loadPlayer();
+    } catch(e){
+      showToast('Something went wrong.');
+    }
+  }
+
+  loadPlayer();
+</script>
+
+<script src="/nav.js"></script>
+</body>
+</html>
+

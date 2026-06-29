@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clans vs Society — Choose Your Name</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='18' fill='%231C1A17' stroke='%23B08D45' stroke-width='1.5'/%3E%3Cpath d='M12 24 L14 14 L17 18 L20 12 L23 18 L26 14 L28 24 Z' stroke='%23B08D45' stroke-width='1.3' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #1C1A17;
+    --bg-panel: #25211C;
+    --bg-panel-2: #2C2620;
+    --parchment: #DCCEA6;
+    --rust: #8B3A2A;
+    --rust-bright: #B0492F;
+    --brass: #B08D45;
+    --brass-dim: #8A6F3A;
+    --bone: #ECE4D2;
+    --ash: #93897A;
+    --green-bright: #5C9E70;
+    --line: rgba(176,141,69,0.22);
+  }
+
+  *{ box-sizing: border-box; margin: 0; padding: 0; }
+
+  body{
+    background:
+      radial-gradient(ellipse at top, rgba(176,141,69,0.07), transparent 60%),
+      var(--bg);
+    color: var(--bone);
+    font-family: 'EB Garamond', serif;
+    font-size: 19px;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  .seal{
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 2rem;
+    animation: stamp 0.6s cubic-bezier(.2,.9,.3,1.1) both;
+  }
+  @keyframes stamp{
+    0%{ transform: scale(1.4) translateY(-10px); opacity: 0; }
+    100%{ transform: scale(1) translateY(0); opacity: 1; }
+  }
+
+  .card{
+    width: 100%;
+    max-width: 460px;
+    background: var(--bg-panel-2);
+    border: 1px solid var(--line);
+    padding: 2.8rem 2.4rem;
+    position: relative;
+  }
+  .card::before, .card::after{
+    content:"";
+    position:absolute; left:0; right:0; height:5px;
+    background: linear-gradient(90deg, transparent, var(--brass-dim), transparent);
+    opacity: 0.5;
+  }
+  .card::before{ top:0; }
+  .card::after{ bottom:0; }
+
+  .eyebrow{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--brass);
+    display: block;
+    margin-bottom: 0.7rem;
+    text-align: center;
+  }
+
+  h1{
+    font-family: 'Cinzel', serif;
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: var(--parchment);
+    text-align: center;
+    margin-bottom: 0.6rem;
+    letter-spacing: 0.04em;
+  }
+
+  .subtitle{
+    text-align: center;
+    color: var(--ash);
+    font-style: italic;
+    font-size: 1rem;
+    margin-bottom: 2rem;
+    line-height: 1.6;
+  }
+
+  .divider{
+    height: 1px;
+    background: var(--line);
+    margin-bottom: 2rem;
+  }
+
+  .field{
+    margin-bottom: 1.4rem;
+  }
+  .field label{
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass);
+    margin-bottom: 0.5rem;
+  }
+  .field input{
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--bone);
+    font-family: 'Cinzel', serif;
+    font-size: 1.2rem;
+    padding: 0.8rem 1rem;
+    letter-spacing: 0.06em;
+    transition: border-color 0.2s;
+  }
+  .field input:focus{
+    outline: none;
+    border-color: var(--brass-dim);
+  }
+  .field input.error{
+    border-color: var(--rust-bright);
+  }
+  .field input.success{
+    border-color: var(--green-bright);
+  }
+
+  .hint{
+    font-size: 0.82rem;
+    color: var(--ash);
+    font-style: italic;
+    margin-top: 0.5rem;
+    min-height: 1.2em;
+  }
+  .hint.error{ color: var(--rust-bright); font-style: normal; }
+  .hint.success{ color: var(--green-bright); font-style: normal; }
+
+  .rules{
+    margin-bottom: 1.8rem;
+    padding: 1rem 1.1rem;
+    background: rgba(176,141,69,0.05);
+    border-left: 2px solid var(--brass-dim);
+  }
+  .rules p{
+    font-size: 0.88rem;
+    color: var(--ash);
+    margin-bottom: 0.3rem;
+    font-style: italic;
+  }
+  .rules p:last-child{ margin-bottom: 0; }
+
+  .btn{
+    width: 100%;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 1rem;
+    border: none;
+    cursor: pointer;
+    background: var(--rust);
+    color: var(--bone);
+    transition: background 0.2s, transform 0.15s;
+  }
+  .btn:hover:not(:disabled){ background: var(--rust-bright); transform: translateY(-1px); }
+  .btn:disabled{ opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .preview{
+    text-align: center;
+    margin-bottom: 1.6rem;
+    min-height: 2.2rem;
+    font-family: 'Cinzel', serif;
+    font-size: 1.3rem;
+    color: var(--parchment);
+    letter-spacing: 0.06em;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .preview.visible{ opacity: 1; }
+  .preview .title-suffix{
+    font-size: 0.85rem;
+    color: var(--brass);
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.1em;
+    margin-top: 0.2rem;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .seal{ animation: none; }
+    .btn{ transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="seal">
+  <svg viewBox="0 0 100 100" fill="none">
+    <circle cx="50" cy="50" r="46" fill="var(--rust)"/>
+    <circle cx="50" cy="50" r="46" stroke="var(--brass)" stroke-width="2"/>
+    <circle cx="50" cy="50" r="38" stroke="var(--brass)" stroke-width="1" opacity="0.6"/>
+    <path d="M30 58 L34 36 L40 44 L50 30 L60 44 L66 36 L70 58 Z" stroke="var(--parchment)" stroke-width="2.4" stroke-linejoin="round"/>
+    <line x1="32" y1="62" x2="68" y2="62" stroke="var(--parchment)" stroke-width="2.4"/>
+  </svg>
+</div>
+
+<div class="card">
+  <span class="eyebrow">Before you enter the realm</span>
+  <h1>Forge Your Name</h1>
+  <p class="subtitle">This is the name lords will fear, allies will follow, and history will remember. Choose wisely — it cannot be changed.</p>
+  <div class="divider"></div>
+
+  <div class="preview" id="preview">
+    <span id="preview-name"></span>
+    <span class="title-suffix">of Clans vs Society</span>
+  </div>
+
+  <div class="field">
+    <label for="name-input">Your Name in the Realm</label>
+    <input
+      type="text"
+      id="name-input"
+      maxlength="24"
+      autocomplete="off"
+      autocorrect="off"
+      spellcheck="false"
+      placeholder="Enter your name..."
+    >
+    <div class="hint" id="hint">Between 2 and 24 characters. Letters, numbers, spaces allowed.</div>
+  </div>
+
+  <div class="rules">
+    <p>No impersonation of other lords.</p>
+    <p>No profanity or offensive names.</p>
+    <p>Your name is permanent once chosen.</p>
+  </div>
+
+  <button class="btn" id="submit-btn" disabled onclick="submitName()">
+    Claim This Name
+  </button>
+</div>
+
+<script>
+  const input = document.getElementById('name-input');
+  const hint = document.getElementById('hint');
+  const btn = document.getElementById('submit-btn');
+  const preview = document.getElementById('preview');
+  const previewName = document.getElementById('preview-name');
+
+  const forbidden = /[<>"'%;()&+]/;
+
+  function validate(val){
+    const trimmed = val.trim();
+    if(trimmed.length === 0) return { ok: false, msg: 'Between 2 and 24 characters. Letters, numbers, spaces allowed.' };
+    if(trimmed.length < 2) return { ok: false, msg: 'Too short — at least 2 characters required.' };
+    if(forbidden.test(trimmed)) return { ok: false, msg: 'Name contains invalid characters.' };
+    return { ok: true, msg: `"${trimmed}" looks worthy of the realm.` };
+  }
+
+  input.addEventListener('input', () => {
+    const val = input.value;
+    const result = validate(val);
+    const trimmed = val.trim();
+
+    hint.className = 'hint';
+    input.className = '';
+
+    if(val.length === 0){
+      hint.textContent = 'Between 2 and 24 characters. Letters, numbers, spaces allowed.';
+      preview.classList.remove('visible');
+      btn.disabled = true;
+      return;
+    }
+
+    if(result.ok){
+      hint.className = 'hint success';
+      hint.textContent = result.msg;
+      input.className = 'success';
+      previewName.textContent = trimmed;
+      preview.classList.add('visible');
+      btn.disabled = false;
+    } else {
+      hint.className = 'hint error';
+      hint.textContent = result.msg;
+      input.className = 'error';
+      preview.classList.remove('visible');
+      btn.disabled = true;
+    }
+  });
+
+  async function submitName(){
+    const name = input.value.trim();
+    const result = validate(name);
+    if(!result.ok) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Claiming...';
+
+    try {
+      const res = await fetch('/api/choose-name', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ characterName: name })
+      });
+      const data = await res.json();
+
+      if(res.ok){
+        hint.className = 'hint success';
+        hint.textContent = 'Name claimed. Entering the realm...';
+        btn.textContent = 'Entering...';
+        setTimeout(() => window.location.href = '/dashboard', 900);
+      } else {
+        hint.className = 'hint error';
+        hint.textContent = data.error || 'Something went wrong. Try another name.';
+        input.className = 'error';
+        btn.disabled = false;
+        btn.textContent = 'Claim This Name';
+      }
+    } catch(e){
+      hint.className = 'hint error';
+      hint.textContent = 'Could not reach the realm. Try again.';
+      btn.disabled = false;
+      btn.textContent = 'Claim This Name';
+    }
+  }
+
+  input.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter' && !btn.disabled) submitName();
+  });
+
+  input.focus();
+</script>
+
+</body>
+</html>

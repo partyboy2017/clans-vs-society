@@ -1,0 +1,56 @@
+ Aspis
+ Hoplon
+ Scutum
+ Clipeus
+ Parma
+ Thureos
+ Pelta
+ Cetatus
+
+ Kite Shield
+ Heater Shield
+ Buckler
+ Pavise
+ Targe
+ Target
+ Bouche Shield
+ Rondache
+ Rotella
+ Lantern Shield
+ Adarga
+ Mantlet
+
+ Dhal
+ Sipar
+ Tengpai (Rattan Shield)
+ Gau
+ Tatami
+ Kura
+ Perisai
+ Salawaku
+ Kalasai
+
+ Nguni Shield
+ Isihlangu
+ Umumbzo
+ Gasha
+ Boer Shield
+ Tigray Shield
+
+ Chimali
+ Woomera Shield
+ Heitiki Shield
+ Pahu
+ Medicine Shield
+
+ Aegis
+ Ancile
+ Svalinn
+ Dubán
+ Pridwen
+ Shield of Achilles
+
+ Ballistic Shield
+ Riot Shield
+ Capture Shield
+ Vanguard Shield

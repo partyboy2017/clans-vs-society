@@ -1,0 +1,29 @@
+Wands (13 Names)
+
+Sleek, fast, and precise implements for rapid-fire casting and magical duels.
+
+    The Cinder-Spit (Quick fire-starter wand)
+
+    The Silver Needle (Piercing arcane bolts)
+
+    Marrow-Bite (Bone / Necrotic hexes)
+
+    The Zephyr Quill (Air manipulation and speed casting)
+
+    The Quick-Silver Conductor (Alchemical / Metal magic)
+
+    The Bramble-Spine (Nature / Poison magic)
+
+    The Twilight Flicker (Shadow-step and stealth magic)
+
+    The Pulse-Point (Force / Telekinesis magic)
+
+    The Glacial Sliver (Ice daggers and freezing charms)
+
+    The Paradox Rod (Chaos / Luck magic)
+
+    The Spell-Slinger's Thorn (Aggressive combat dueling)
+
+    The Viper’s Tongue (Corrosive or acid magic)
+
+    The Dawn-Ray (Blinding white light)

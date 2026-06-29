@@ -8,7 +8,7 @@
   "dev": "nodemon server.js",
   "build": "npx prisma generate",
   "start": "npx prisma migrate deploy && node server.js"
-}
+},
   "keywords": [],
   "author": "",
   "license": "ISC",

@@ -78,6 +78,16 @@
 
   @media(max-width:900px){.training-grid{grid-template-columns:1fr;}}
   @media(max-width:800px){.shell{grid-template-columns:1fr;}.sidebar{display:none;}}
+
+  /* ── MOBILE NAV ── */
+  .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(28,26,23,0.97);border-top:1px solid var(--line);z-index:20;padding-bottom:env(safe-area-inset-bottom);}
+  .mobile-nav-inner{display:flex;justify-content:space-around;align-items:stretch;}
+  .mn-item{display:flex;flex-direction:column;align-items:center;gap:0.25rem;padding:0.6rem 0.3rem;color:var(--ash);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;flex:1;transition:color 0.15s;-webkit-tap-highlight-color:transparent;}
+  .mn-item.active{color:var(--parchment);}
+  .mn-item:hover{color:var(--bone);}
+  .mn-item svg{width:20px;height:20px;flex-shrink:0;}
+  @media(max-width:800px){.mobile-nav{display:block;}.main{padding:1.2rem 1rem 5rem !important;}}
+
 </style>
 </head>
 <body>
@@ -375,5 +385,6 @@
 
   init();
 </script>
+<nav class="mobile-nav" id="mobile-nav"></nav>
 </body>
 </html>

@@ -56,9 +56,45 @@
     sidebar.innerHTML = html;
   }
 
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', buildNav);
-  } else {
+  function buildMobileNav(){
+    const mobileNav = document.getElementById('mobile-nav');
+    if(!mobileNav) return;
+
+    // Flatten all items from all groups
+    const allItems = links.flatMap(g => g.items);
+
+    const items = allItems.map(item => {
+      const active = path === item.href ? ' active' : '';
+      const soonBadge = item.soon
+        ? '<span style="font-family:JetBrains Mono,monospace;font-size:0.44rem;color:var(--rust-bright);display:block;letter-spacing:0.04em;">SOON</span>'
+        : '';
+
+      if(item.disabled){
+        return `
+          <span class="mn-item" style="opacity:0.32;cursor:not-allowed;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">${item.icon}</svg>
+            ${item.label}
+            ${soonBadge}
+          </span>`;
+      }
+      return `
+        <a class="mn-item${active}" href="${item.href}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">${item.icon}</svg>
+          ${item.label}
+        </a>`;
+    }).join('');
+
+    mobileNav.innerHTML = `<div class="mobile-nav-inner">${items}</div>`;
+  }
+
+  function init(){
     buildNav();
+    buildMobileNav();
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
   }
 })();

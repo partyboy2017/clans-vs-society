@@ -38,7 +38,7 @@ const CLASSES = {
     label: 'Necromancer',
     baseStats: { intelligence: 5, defense: 5, maxHealth: 20, health: 20 },
     perLevel:  { intelligence: 1, defense: 1 },
-    desc: 'Masters death itself. Can rest without spending gold.',
+    desc: 'Masters death itself. Rises from injury faster and grows stronger through attrition.',
   },
   SHADOWBLADE: {
     label: 'Shadowblade',
@@ -271,8 +271,6 @@ const SKILL_TREES = {
 // ─── Economy / cooldown constants ─────────────────────────────────────────────────
 
 // How long a player must wait between rests.
-// Necromancer rests free but shares the same cooldown window — the perk is
-// no gold cost, not infinite energy regeneration.
 const REST_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
 
 // Minimum gap between raids on the *same* NPC location.
@@ -697,12 +695,9 @@ app.post('/api/action/rest', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { characterClass } = req.user;
 
-  // Necromancer: rests free | Cleric: half price
-  // NOTE: free does NOT mean unlimited — the cooldown applies to everyone.
-  // The Necromancer perk is no gold cost, not infinite energy.
+  // Cleric: half price rest
   let goldCost = 30;
-  if (characterClass === 'NECROMANCER') goldCost = 0;
-  if (characterClass === 'CLERIC')      goldCost = 15;
+  if (characterClass === 'CLERIC') goldCost = 15;
 
   const now    = new Date();
   const cutoff = new Date(now.getTime() - REST_COOLDOWN_MS);
@@ -761,7 +756,7 @@ app.post('/api/action/rest', async (req, res) => {
   }
 
   const nextRestAt = new Date(now.getTime() + REST_COOLDOWN_MS);
-  res.json({ ok: true, free: goldCost === 0, discounted: goldCost === 15, goldCost, nextRestAt });
+  res.json({ ok: true, discounted: goldCost === 15, goldCost, nextRestAt });
 });
 
 // ─── API: skill tree ──────────────────────────────────────────────────────────

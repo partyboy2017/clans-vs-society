@@ -56,6 +56,11 @@ model Stats {
 jailUntil    DateTime?
 inHospital   Boolean   @default(false)
 hospitalUntil DateTime?
+lastRestAt         DateTime?
+lastRaidVillageAt  DateTime?
+lastRaidCaravanAt  DateTime?
+lastRaidManorAt    DateTime?
+lastRaidTreasuryAt DateTime?
 }
 
 model UserSkill {

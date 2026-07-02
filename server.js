@@ -268,7 +268,19 @@ const SKILL_TREES = {
   ],
 };
 
-// Helper: find a skill definition by its key across all trees
+// ─── Economy / cooldown constants ─────────────────────────────────────────────────
+
+// How long a player must wait between rests.
+// Necromancer rests free but shares the same cooldown window — the perk is
+// no gold cost, not infinite energy regeneration.
+const REST_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+
+// Minimum gap between raids on the *same* NPC location.
+// Players can still rotate through locations; this prevents hammering one
+// location until energy is dry then immediately restarting.
+const RAID_LOCATION_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes per location
+
+// ─── Helper: find a skill definition by its key across all trees ──────────────
 function getSkillByKey(key) {
   for (const tree of Object.values(SKILL_TREES)) {
     const found = tree.find(s => s.key === key);
@@ -434,16 +446,21 @@ app.post('/api/logout', (req, res) => {
 
 app.get('/api/me', (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const lastRestAt = req.user.stats?.lastRestAt;
+  const restCooldownMs = lastRestAt
+    ? Math.max(0, new Date(lastRestAt).getTime() + REST_COOLDOWN_MS - Date.now())
+    : 0;
   res.json({
-    username:       req.user.characterName || req.user.username,
-    googleName:     req.user.googleName,
-    email:          req.user.email,
-    avatar:         req.user.avatar,
-    characterClass: req.user.characterClass,
-    classLabel:     req.user.characterClass ? CLASSES[req.user.characterClass].label : null,
-    lastLoginAt:    req.user.lastLoginAt,
-    createdAt:      req.user.createdAt,
-    stats:          req.user.stats,
+    username:        req.user.characterName || req.user.username,
+    googleName:      req.user.googleName,
+    email:           req.user.email,
+    avatar:          req.user.avatar,
+    characterClass:  req.user.characterClass,
+    classLabel:      req.user.characterClass ? CLASSES[req.user.characterClass].label : null,
+    lastLoginAt:     req.user.lastLoginAt,
+    createdAt:       req.user.createdAt,
+    stats:           req.user.stats,
+    restCooldownMs,
   });
 });
 
@@ -680,33 +697,71 @@ app.post('/api/action/rest', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { characterClass } = req.user;
 
-  // Necromancer: rests free | Cleric: half cost
+  // Necromancer: rests free | Cleric: half price
+  // NOTE: free does NOT mean unlimited — the cooldown applies to everyone.
+  // The Necromancer perk is no gold cost, not infinite energy.
   let goldCost = 30;
   if (characterClass === 'NECROMANCER') goldCost = 0;
   if (characterClass === 'CLERIC')      goldCost = 15;
 
-  // Read maxHealth/maxEnergy for restoration targets (these don't change concurrently during rest).
+  const now    = new Date();
+  const cutoff = new Date(now.getTime() - REST_COOLDOWN_MS);
+
+  // Read stats for maxHealth/maxEnergy (safe — these only change on level-up,
+  // which doesn't run concurrently with rest).
   const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
 
-  // Blessing (CLERIC_3): rest restores extra 20 HP
-  let restoredHealth = stats.maxHealth;
-  if (characterClass === 'CLERIC' && await hasSkill(req.user.id, 'CLERIC_3')) {
-    restoredHealth = Math.min(stats.maxHealth + 20, stats.maxHealth); // capped at maxHealth
+  // Fast cooldown rejection before touching the DB write path.
+  if (stats.lastRestAt && stats.lastRestAt > cutoff) {
+    const remainingMs   = (stats.lastRestAt.getTime() + REST_COOLDOWN_MS) - now.getTime();
+    const remainingMins = Math.ceil(remainingMs / 60000);
+    return res.status(400).json({
+      error: `You need to recover before resting again — ${remainingMins} minute${remainingMins !== 1 ? 's' : ''} remaining`,
+      cooldownRemainingMs: remainingMs,
+    });
   }
 
-  // Atomic gold deduct — WHERE enforces the balance check so two concurrent rests
-  // can't both succeed when only one is affordable. goldCost === 0 always matches.
+  // Blessing (CLERIC_3): rest restores an extra 20 HP (capped at maxHealth)
+  let restoredHealth = stats.maxHealth;
+  if (characterClass === 'CLERIC' && await hasSkill(req.user.id, 'CLERIC_3')) {
+    restoredHealth = Math.min(stats.maxHealth + 20, stats.maxHealth);
+  }
+
+  // Atomically enforce both gold balance AND cooldown in the WHERE clause so
+  // two concurrent rests can't both slip through the pre-check above.
   const deducted = await prisma.stats.updateMany({
-    where: { userId: req.user.id, gold: { gte: goldCost } },
+    where: {
+      userId: req.user.id,
+      gold:   { gte: goldCost },
+      OR: [
+        { lastRestAt: null },
+        { lastRestAt: { lte: cutoff } },
+      ],
+    },
     data: {
-      gold:   { decrement: goldCost },
-      health: restoredHealth,
-      energy: stats.maxEnergy,
+      gold:       { decrement: goldCost },
+      health:     restoredHealth,
+      energy:     stats.maxEnergy,
+      lastRestAt: now,
     },
   });
-  if (deducted.count === 0) return res.status(400).json({ error: 'Not enough gold' });
 
-  res.json({ ok: true, free: goldCost === 0, discounted: goldCost === 15, goldCost });
+  if (deducted.count === 0) {
+    // The WHERE didn't match — either gold ran out or cooldown is active.
+    // Re-read once for a specific error message.
+    const fresh = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    if (fresh.lastRestAt && fresh.lastRestAt > cutoff) {
+      const remainingMs = (fresh.lastRestAt.getTime() + REST_COOLDOWN_MS) - now.getTime();
+      return res.status(400).json({
+        error: `You need to recover before resting again — ${Math.ceil(remainingMs / 60000)} minutes remaining`,
+        cooldownRemainingMs: remainingMs,
+      });
+    }
+    return res.status(400).json({ error: 'Not enough gold to rest' });
+  }
+
+  const nextRestAt = new Date(now.getTime() + REST_COOLDOWN_MS);
+  res.json({ ok: true, free: goldCost === 0, discounted: goldCost === 15, goldCost, nextRestAt });
 });
 
 // ─── API: skill tree ──────────────────────────────────────────────────────────
@@ -1274,13 +1329,28 @@ app.get('/api/raid/status', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const stats = await checkStatus(req.user.id);
   const now = new Date();
+
+  // Compute per-location cooldown remaining for the client.
+  const locationCooldowns = {};
+  for (const loc of NPC_LOCATIONS) {
+    const field = `lastRaid${loc.id.charAt(0).toUpperCase() + loc.id.slice(1)}At`;
+    const last  = stats[field];
+    locationCooldowns[loc.id] = last
+      ? Math.max(0, last.getTime() + RAID_LOCATION_COOLDOWN_MS - now.getTime())
+      : 0;
+  }
+
   res.json({
     stats,
     locations: NPC_LOCATIONS,
-    inJail: stats.inJail,
-    jailRemainingMs: stats.inJail && stats.jailUntil ? Math.max(0, stats.jailUntil - now) : 0,
-    inHospital: stats.inHospital,
+    inJail:              stats.inJail,
+    jailRemainingMs:     stats.inJail     && stats.jailUntil     ? Math.max(0, stats.jailUntil     - now) : 0,
+    inHospital:          stats.inHospital,
     hospitalRemainingMs: stats.inHospital && stats.hospitalUntil ? Math.max(0, stats.hospitalUntil - now) : 0,
+    restCooldownMs:      stats.lastRestAt
+      ? Math.max(0, stats.lastRestAt.getTime() + REST_COOLDOWN_MS - now.getTime())
+      : 0,
+    locationCooldowns,
   });
 });
 
@@ -1293,18 +1363,50 @@ app.post('/api/raid/npc', async (req, res) => {
   // Clear any expired jail/hospital timers first (idempotent write, benign if racy).
   await checkStatus(req.user.id);
 
+  // ── Per-location cooldown check ───────────────────────────────────────────────
+  // Each NPC location has its own cooldown field (e.g. lastRaidVillageAt) so
+  // players must rotate targets rather than farming one location back-to-back.
+  const cooldownField = `lastRaid${location.id.charAt(0).toUpperCase() + location.id.slice(1)}At`;
+  const now           = new Date();
+  const cutoff        = new Date(now.getTime() - RAID_LOCATION_COOLDOWN_MS);
+
+  const preCheck = await prisma.stats.findUnique({
+    where:  { userId: req.user.id },
+    select: { [cooldownField]: true, inJail: true, inHospital: true, energy: true },
+  });
+
+  if (preCheck.inJail)     return res.status(400).json({ error: 'You are in jail' });
+  if (preCheck.inHospital) return res.status(400).json({ error: 'You are in hospital' });
+
+  const lastRaid = preCheck[cooldownField];
+  if (lastRaid && lastRaid > cutoff) {
+    const remainingMs   = (lastRaid.getTime() + RAID_LOCATION_COOLDOWN_MS) - now.getTime();
+    const remainingSecs = Math.ceil(remainingMs / 1000);
+    return res.status(400).json({
+      error: `${location.name} is too alert right now — try again in ${remainingSecs}s`,
+      cooldownRemainingMs: remainingMs,
+    });
+  }
+
   // ── Critical section ──────────────────────────────────────────────────────────
-  // Enforce energy cost, jail, and hospital status atomically in the WHERE clause.
-  // With 20 concurrent requests at 80 energy and a cost of 10, exactly 8 will
-  // match and the rest get count === 0, preventing any phantom energy reads.
+  // Enforce energy cost, jail, hospital, AND location cooldown atomically.
+  // All five conditions live in the WHERE clause; count === 0 means at least
+  // one guard failed, which the pre-check above will clarify for the user.
   const deducted = await prisma.stats.updateMany({
     where: {
       userId:     req.user.id,
       energy:     { gte: location.energyCost },
       inJail:     false,
       inHospital: false,
+      OR: [
+        { [cooldownField]: null },
+        { [cooldownField]: { lte: cutoff } },
+      ],
     },
-    data: { energy: { decrement: location.energyCost } },
+    data: {
+      energy:          { decrement: location.energyCost },
+      [cooldownField]: now,
+    },
   });
 
   if (deducted.count === 0) {

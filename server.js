@@ -699,64 +699,62 @@ app.post('/api/action/rest', async (req, res) => {
   let goldCost = 30;
   if (characterClass === 'CLERIC') goldCost = 15;
 
-  const now    = new Date();
-  const cutoff = new Date(now.getTime() - REST_COOLDOWN_MS);
+  try {
+    const now    = new Date();
+    const cutoff = new Date(now.getTime() - REST_COOLDOWN_MS);
 
-  // Read stats for maxHealth/maxEnergy (safe — these only change on level-up,
-  // which doesn't run concurrently with rest).
-  const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
 
-  // Fast cooldown rejection before touching the DB write path.
-  if (stats.lastRestAt && stats.lastRestAt > cutoff) {
-    const remainingMs   = (stats.lastRestAt.getTime() + REST_COOLDOWN_MS) - now.getTime();
-    const remainingMins = Math.ceil(remainingMs / 60000);
-    return res.status(400).json({
-      error: `You need to recover before resting again — ${remainingMins} minute${remainingMins !== 1 ? 's' : ''} remaining`,
-      cooldownRemainingMs: remainingMs,
-    });
-  }
-
-  // Blessing (CLERIC_3): rest restores an extra 20 HP (capped at maxHealth)
-  let restoredHealth = stats.maxHealth;
-  if (characterClass === 'CLERIC' && await hasSkill(req.user.id, 'CLERIC_3')) {
-    restoredHealth = Math.min(stats.maxHealth + 20, stats.maxHealth);
-  }
-
-  // Atomically enforce both gold balance AND cooldown in the WHERE clause so
-  // two concurrent rests can't both slip through the pre-check above.
-  const deducted = await prisma.stats.updateMany({
-    where: {
-      userId: req.user.id,
-      gold:   { gte: goldCost },
-      OR: [
-        { lastRestAt: null },
-        { lastRestAt: { lte: cutoff } },
-      ],
-    },
-    data: {
-      gold:       { decrement: goldCost },
-      health:     restoredHealth,
-      energy:     stats.maxEnergy,
-      lastRestAt: now,
-    },
-  });
-
-  if (deducted.count === 0) {
-    // The WHERE didn't match — either gold ran out or cooldown is active.
-    // Re-read once for a specific error message.
-    const fresh = await prisma.stats.findUnique({ where: { userId: req.user.id } });
-    if (fresh.lastRestAt && fresh.lastRestAt > cutoff) {
-      const remainingMs = (fresh.lastRestAt.getTime() + REST_COOLDOWN_MS) - now.getTime();
+    if (stats.lastRestAt && stats.lastRestAt > cutoff) {
+      const remainingMs   = (stats.lastRestAt.getTime() + REST_COOLDOWN_MS) - now.getTime();
+      const remainingMins = Math.ceil(remainingMs / 60000);
       return res.status(400).json({
-        error: `You need to recover before resting again — ${Math.ceil(remainingMs / 60000)} minutes remaining`,
+        error: `You need to recover before resting again — ${remainingMins} minute${remainingMins !== 1 ? 's' : ''} remaining`,
         cooldownRemainingMs: remainingMs,
       });
     }
-    return res.status(400).json({ error: 'Not enough gold to rest' });
-  }
 
-  const nextRestAt = new Date(now.getTime() + REST_COOLDOWN_MS);
-  res.json({ ok: true, discounted: goldCost === 15, goldCost, nextRestAt });
+    // Blessing (CLERIC_3): rest restores an extra 20 HP (capped at maxHealth)
+    let restoredHealth = stats.maxHealth;
+    if (characterClass === 'CLERIC' && await hasSkill(req.user.id, 'CLERIC_3')) {
+      restoredHealth = Math.min(stats.maxHealth + 20, stats.maxHealth);
+    }
+
+    const deducted = await prisma.stats.updateMany({
+      where: {
+        userId: req.user.id,
+        gold:   { gte: goldCost },
+        OR: [
+          { lastRestAt: null },
+          { lastRestAt: { lte: cutoff } },
+        ],
+      },
+      data: {
+        gold:       { decrement: goldCost },
+        health:     restoredHealth,
+        energy:     stats.maxEnergy,
+        lastRestAt: now,
+      },
+    });
+
+    if (deducted.count === 0) {
+      const fresh = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+      if (fresh.lastRestAt && fresh.lastRestAt > cutoff) {
+        const remainingMs = (fresh.lastRestAt.getTime() + REST_COOLDOWN_MS) - now.getTime();
+        return res.status(400).json({
+          error: `You need to recover before resting again — ${Math.ceil(remainingMs / 60000)} minutes remaining`,
+          cooldownRemainingMs: remainingMs,
+        });
+      }
+      return res.status(400).json({ error: 'Not enough gold to rest' });
+    }
+
+    const nextRestAt = new Date(now.getTime() + REST_COOLDOWN_MS);
+    res.json({ ok: true, discounted: goldCost === 15, goldCost, nextRestAt });
+  } catch (e) {
+    console.error('/api/action/rest error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
 });
 
 // ─── API: skill tree ──────────────────────────────────────────────────────────

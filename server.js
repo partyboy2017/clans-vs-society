@@ -558,7 +558,6 @@ async function energyCost(base, characterClass, userId) {
 app.post('/api/action/patrol', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { characterClass } = req.user;
-  const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
 
   // Pathfinder (RANGER_3): patrol costs 5 less energy
   let baseCost = 10;
@@ -567,8 +566,14 @@ app.post('/api/action/patrol', async (req, res) => {
   }
   const cost = await energyCost(baseCost, characterClass, req.user.id);
 
-  if (stats.energy < cost) return res.status(400).json({ error: 'Not enough energy' });
+  // Atomically deduct energy. If the row doesn't match (insufficient energy) count === 0.
+  const deducted = await prisma.stats.updateMany({
+    where: { userId: req.user.id, energy: { gte: cost } },
+    data:  { energy: { decrement: cost } },
+  });
+  if (deducted.count === 0) return res.status(400).json({ error: 'Not enough energy' });
 
+  // Compute rewards — no current-stat reads needed here, all values are incremental.
   let goldGain = Math.floor(Math.random() * 41) + 20;
 
   // Ranger: +50% gold
@@ -582,8 +587,8 @@ app.post('/api/action/patrol', async (req, res) => {
   // Shadowblade: 30% chance to strike lucky and double gold
   let luckyStrike = false;
   if (characterClass === 'SHADOWBLADE' && Math.random() < 0.3) {
-    goldGain    *= 2;
-    luckyStrike  = true;
+    goldGain   *= 2;
+    luckyStrike = true;
   }
 
   // Bard: 20% charm bonus — extra 10–25 gold
@@ -599,9 +604,10 @@ app.post('/api/action/patrol', async (req, res) => {
     xpGain = Math.floor(xpGain * 1.1);
   }
 
+  // Increment rewards — safe to run even if another write landed between the two updates.
   await prisma.stats.update({
     where: { userId: req.user.id },
-    data:  { energy: stats.energy - cost, gold: stats.gold + goldGain, xp: stats.xp + xpGain },
+    data:  { gold: { increment: goldGain }, xp: { increment: xpGain } },
   });
 
   const levelResult = await checkLevelUp(req.user.id);
@@ -611,10 +617,14 @@ app.post('/api/action/patrol', async (req, res) => {
 app.post('/api/action/train', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { characterClass } = req.user;
-  const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
-  const cost  = await energyCost(20, characterClass, req.user.id);
+  const cost = await energyCost(20, characterClass, req.user.id);
 
-  if (stats.energy < cost) return res.status(400).json({ error: 'Not enough energy' });
+  // Atomic energy deduct — rejects if energy is insufficient.
+  const deducted = await prisma.stats.updateMany({
+    where: { userId: req.user.id, energy: { gte: cost } },
+    data:  { energy: { decrement: cost } },
+  });
+  if (deducted.count === 0) return res.status(400).json({ error: 'Not enough energy' });
 
   let strGain = Math.floor(Math.random() * 3) + 1;
   let defGain = 0;
@@ -650,15 +660,15 @@ app.post('/api/action/train', async (req, res) => {
     xpGain = Math.floor(xpGain * 1.1);
   }
 
+  // All stat gains are incremental — safe regardless of concurrent writes.
   await prisma.stats.update({
     where: { userId: req.user.id },
     data: {
-      energy:       stats.energy - cost,
-      strength:     stats.strength     + strGain,
-      defense:      stats.defense      + defGain,
-      intelligence: stats.intelligence + intGain,
-      dexterity:    stats.dexterity    + dexGain,
-      xp:           stats.xp           + xpGain,
+      strength:     { increment: strGain },
+      defense:      { increment: defGain },
+      intelligence: { increment: intGain },
+      dexterity:    { increment: dexGain },
+      xp:           { increment: xpGain },
     },
   });
 
@@ -669,14 +679,14 @@ app.post('/api/action/train', async (req, res) => {
 app.post('/api/action/rest', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { characterClass } = req.user;
-  const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
 
   // Necromancer: rests free | Cleric: half cost
   let goldCost = 30;
   if (characterClass === 'NECROMANCER') goldCost = 0;
   if (characterClass === 'CLERIC')      goldCost = 15;
 
-  if (stats.gold < goldCost) return res.status(400).json({ error: 'Not enough gold' });
+  // Read maxHealth/maxEnergy for restoration targets (these don't change concurrently during rest).
+  const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
 
   // Blessing (CLERIC_3): rest restores extra 20 HP
   let restoredHealth = stats.maxHealth;
@@ -684,14 +694,18 @@ app.post('/api/action/rest', async (req, res) => {
     restoredHealth = Math.min(stats.maxHealth + 20, stats.maxHealth); // capped at maxHealth
   }
 
-  await prisma.stats.update({
-    where: { userId: req.user.id },
+  // Atomic gold deduct — WHERE enforces the balance check so two concurrent rests
+  // can't both succeed when only one is affordable. goldCost === 0 always matches.
+  const deducted = await prisma.stats.updateMany({
+    where: { userId: req.user.id, gold: { gte: goldCost } },
     data: {
-      gold:   stats.gold - goldCost,
+      gold:   { decrement: goldCost },
       health: restoredHealth,
       energy: stats.maxEnergy,
     },
   });
+  if (deducted.count === 0) return res.status(400).json({ error: 'Not enough gold' });
+
   res.json({ ok: true, free: goldCost === 0, discounted: goldCost === 15, goldCost });
 });
 
@@ -747,20 +761,37 @@ app.post('/api/skills/unlock', async (req, res) => {
   if (stats.statPoints < skill.cost)
     return res.status(400).json({ error: 'Not enough stat points' });
 
-  // Deduct points and apply any passive onUnlock stat bonuses
-  const statDelta = { statPoints: stats.statPoints - skill.cost };
+  // Build incremental onUnlock deltas (e.g. { maxHealth: { increment: 10 } })
+  const onUnlockIncrements = {};
   if (skill.onUnlock) {
     for (const [k, v] of Object.entries(skill.onUnlock)) {
-      statDelta[k] = (stats[k] ?? 0) + v;
+      onUnlockIncrements[k] = { increment: v };
     }
   }
 
-  await prisma.$transaction([
-    prisma.stats.update({ where: { userId: req.user.id }, data: statDelta }),
-    prisma.userSkill.create({ data: { userId: req.user.id, skillKey } }),
-  ]);
+  try {
+    // Interactive transaction: deduct points atomically, then create the skill row.
+    // If userSkill.create throws P2002 (duplicate), the transaction rolls back so
+    // no points are lost even if two requests race through the pre-checks above.
+    const updatedStats = await prisma.$transaction(async (tx) => {
+      const result = await tx.stats.updateMany({
+        where: { userId: req.user.id, statPoints: { gte: skill.cost } },
+        data:  { statPoints: { decrement: skill.cost }, ...onUnlockIncrements },
+      });
+      if (result.count === 0) {
+        throw Object.assign(new Error('NOT_ENOUGH_POINTS'), { code: 'NOT_ENOUGH_POINTS' });
+      }
+      await tx.userSkill.create({ data: { userId: req.user.id, skillKey } });
+      return tx.stats.findUnique({ where: { userId: req.user.id } });
+    });
 
-  res.json({ ok: true, skill: skill.name, statPointsRemaining: statDelta.statPoints });
+    res.json({ ok: true, skill: skill.name, statPointsRemaining: updatedStats.statPoints });
+  } catch (e) {
+    if (e.code === 'NOT_ENOUGH_POINTS') return res.status(400).json({ error: 'Not enough stat points' });
+    if (e.code === 'P2002')             return res.status(409).json({ error: 'Skill already unlocked' });
+    console.error(e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
 });
 
 // POST /api/action/skill — fire an active skill
@@ -778,72 +809,66 @@ app.post('/api/action/skill', async (req, res) => {
 
   const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
 
+  // Helper: atomically deduct energy, returns false if insufficient.
+  async function deductEnergy(cost) {
+    const r = await prisma.stats.updateMany({
+      where: { userId: req.user.id, energy: { gte: cost } },
+      data:  { energy: { decrement: cost } },
+    });
+    return r.count > 0;
+  }
+
   switch (skillKey) {
     case 'WARRIOR_2': { // Shield Bash — 15 energy, 15 dmg placeholder
-      if (stats.energy < 15) return res.status(400).json({ error: 'Not enough energy' });
-      await prisma.stats.update({
-        where: { userId: req.user.id },
-        data:  { energy: stats.energy - 15 },
-      });
+      if (!await deductEnergy(15)) return res.status(400).json({ error: 'Not enough energy' });
       return res.json({ ok: true, message: 'Shield Bash connects — 15 damage dealt!', energyCost: 15 });
     }
 
     case 'RANGER_2': { // Ambush — 18 energy, 25 dmg
-      if (stats.energy < 18) return res.status(400).json({ error: 'Not enough energy' });
-      await prisma.stats.update({
-        where: { userId: req.user.id },
-        data:  { energy: stats.energy - 18 },
-      });
+      if (!await deductEnergy(18)) return res.status(400).json({ error: 'Not enough energy' });
       return res.json({ ok: true, message: 'You strike from the shadows — 25 damage!', energyCost: 18 });
     }
 
     case 'MAGICIAN_2': { // Fireball — 12 energy, 35 dmg
-      if (stats.energy < 12) return res.status(400).json({ error: 'Not enough energy' });
-      await prisma.stats.update({
-        where: { userId: req.user.id },
-        data:  { energy: stats.energy - 12 },
-      });
+      if (!await deductEnergy(12)) return res.status(400).json({ error: 'Not enough energy' });
       return res.json({ ok: true, message: 'Fireball erupts — 35 damage!', energyCost: 12 });
     }
 
     case 'NECROMANCER_2': { // Soul Drain — 20 energy, heal 25 HP
-      if (stats.energy < 20) return res.status(400).json({ error: 'Not enough energy' });
-      const newHp     = Math.min(stats.health + 25, stats.maxHealth);
-      const healAmount = newHp - stats.health;
-      await prisma.stats.update({
-        where: { userId: req.user.id },
-        data:  { energy: stats.energy - 20, health: newHp },
-      });
+      if (!await deductEnergy(20)) return res.status(400).json({ error: 'Not enough energy' });
+      // Read fresh health after energy is safely deducted, then cap heal at maxHealth.
+      const fresh      = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+      const newHp      = Math.min(fresh.health + 25, fresh.maxHealth);
+      const healAmount = newHp - fresh.health;
+      await prisma.stats.update({ where: { userId: req.user.id }, data: { health: newHp } });
       return res.json({ ok: true, message: `Soul Drain — you absorb ${healAmount} HP.`, energyCost: 20, healAmount });
     }
 
     case 'SHADOWBLADE_2': { // Backstab — 15 energy, bonus gold
-      if (stats.energy < 15) return res.status(400).json({ error: 'Not enough energy' });
+      if (!await deductEnergy(15)) return res.status(400).json({ error: 'Not enough energy' });
       const bonusGold = Math.floor(Math.random() * 30) + 20;
       await prisma.stats.update({
         where: { userId: req.user.id },
-        data:  { energy: stats.energy - 15, gold: stats.gold + bonusGold },
+        data:  { gold: { increment: bonusGold } },
       });
       return res.json({ ok: true, message: `Backstab lands true — ${bonusGold} gold looted!`, energyCost: 15, goldGain: bonusGold });
     }
 
     case 'CLERIC_2': { // Holy Light — 20 energy, heal 40 HP
-      if (stats.energy < 20) return res.status(400).json({ error: 'Not enough energy' });
-      const newHp     = Math.min(stats.health + 40, stats.maxHealth);
-      const healAmount = newHp - stats.health;
-      await prisma.stats.update({
-        where: { userId: req.user.id },
-        data:  { energy: stats.energy - 20, health: newHp },
-      });
+      if (!await deductEnergy(20)) return res.status(400).json({ error: 'Not enough energy' });
+      const fresh      = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+      const newHp      = Math.min(fresh.health + 40, fresh.maxHealth);
+      const healAmount = newHp - fresh.health;
+      await prisma.stats.update({ where: { userId: req.user.id }, data: { health: newHp } });
       return res.json({ ok: true, message: `Holy Light heals you for ${healAmount} HP.`, energyCost: 20, healAmount });
     }
 
     case 'BARD_2': { // Ballad of Greed — 10 energy, 25–50 gold
-      if (stats.energy < 10) return res.status(400).json({ error: 'Not enough energy' });
+      if (!await deductEnergy(10)) return res.status(400).json({ error: 'Not enough energy' });
       const charmGold = Math.floor(Math.random() * 26) + 25;
       await prisma.stats.update({
         where: { userId: req.user.id },
-        data:  { energy: stats.energy - 10, gold: stats.gold + charmGold },
+        data:  { gold: { increment: charmGold } },
       });
       return res.json({ ok: true, message: `The crowd weeps and pays — ${charmGold} gold collected!`, energyCost: 10, goldGain: charmGold });
     }
@@ -864,13 +889,15 @@ async function checkLevelUp(userId) {
 
   const cls      = user.characterClass ? CLASSES[user.characterClass] : {};
   const perLevel = cls.perLevel || {};
-  const newLevel      = stats.level + 1;
-  const newXp         = stats.xp - xpNeeded;
-  const newMaxHealth  = stats.maxHealth + 20 + (perLevel.maxHealth || 0);
-  const newMaxEnergy  = stats.maxEnergy + 10;
+  const newLevel     = stats.level + 1;
+  const newXp        = stats.xp - xpNeeded;
+  const newMaxHealth = stats.maxHealth + 20 + (perLevel.maxHealth || 0);
+  const newMaxEnergy = stats.maxEnergy + 10;
 
-  await prisma.stats.update({
-    where: { userId },
+  // Guard with the current level in the WHERE clause so that if two concurrent
+  // requests both see enough XP, only one UPDATE wins (the other matches 0 rows).
+  const result = await prisma.stats.updateMany({
+    where: { userId, level: stats.level, xp: { gte: xpNeeded } },
     data: {
       level:        newLevel,
       xp:           newXp,
@@ -878,14 +905,16 @@ async function checkLevelUp(userId) {
       health:       newMaxHealth,
       maxEnergy:    newMaxEnergy,
       energy:       newMaxEnergy,
-      statPoints:   stats.statPoints + 3,
-      strength:     stats.strength     + (perLevel.strength     || 0),
-      defense:      stats.defense      + (perLevel.defense      || 0),
-      speed:        stats.speed        + (perLevel.speed        || 0),
-      dexterity:    stats.dexterity    + (perLevel.dexterity    || 0),
-      intelligence: stats.intelligence + (perLevel.intelligence || 0),
+      statPoints:   { increment: 3 },
+      strength:     { increment: perLevel.strength     || 0 },
+      defense:      { increment: perLevel.defense      || 0 },
+      speed:        { increment: perLevel.speed        || 0 },
+      dexterity:    { increment: perLevel.dexterity    || 0 },
+      intelligence: { increment: perLevel.intelligence || 0 },
     },
   });
+
+  if (result.count === 0) return { leveledUp: false }; // another concurrent request won the race
   return { leveledUp: true, newLevel, statPoints: stats.statPoints + 3 };
 }
 
@@ -897,14 +926,16 @@ app.post('/api/spend-stat', async (req, res) => {
   const allowed = ['strength', 'defense', 'speed', 'dexterity', 'intelligence'];
   if (!allowed.includes(stat)) return res.status(400).json({ error: 'Invalid stat' });
 
-  const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
-  if (stats.statPoints < 1) return res.status(400).json({ error: 'No stat points available' });
-
-  await prisma.stats.update({
-    where: { userId: req.user.id },
-    data:  { [stat]: stats[stat] + 1, statPoints: stats.statPoints - 1 },
+  // Atomic: deduct a stat point and increment the chosen stat in one shot.
+  // The WHERE guard (statPoints >= 1) means count === 0 → genuinely out of points.
+  const result = await prisma.stats.updateMany({
+    where: { userId: req.user.id, statPoints: { gte: 1 } },
+    data:  { [stat]: { increment: 1 }, statPoints: { decrement: 1 } },
   });
-  res.json({ ok: true, stat, newValue: stats[stat] + 1 });
+  if (result.count === 0) return res.status(400).json({ error: 'No stat points available' });
+
+  const updated = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+  res.json({ ok: true, stat, newValue: updated[stat] });
 });
 
 // ─── Start ────────────────────────────────────────────────────────────────────
@@ -958,21 +989,29 @@ app.post('/api/house/create', async (req, res) => {
   if (!name || name.trim().length < 2) return res.status(400).json({ error: 'House name must be at least 2 characters' });
   const existing = await prisma.houseMember.findUnique({ where: { userId: req.user.id } });
   if (existing) return res.status(400).json({ error: 'You already belong to a house' });
-  const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
-  if (stats.gold < 500) return res.status(400).json({ error: 'Founding a house costs 500 gold' });
   try {
-    const house = await prisma.house.create({
-      data: {
-        name: name.trim(),
-        motto: motto?.trim() || 'Strength through unity.',
-        leaderId: req.user.id,
-        members: { create: { userId: req.user.id, rank: 'Lord' } }
-      }
+    const house = await prisma.$transaction(async (tx) => {
+      // Atomically deduct 500 gold — rolls back house creation if insufficient.
+      const deducted = await tx.stats.updateMany({
+        where: { userId: req.user.id, gold: { gte: 500 } },
+        data:  { gold: { decrement: 500 } },
+      });
+      if (deducted.count === 0) throw Object.assign(new Error('Not enough gold'), { code: 'NO_GOLD' });
+
+      return tx.house.create({
+        data: {
+          name:    name.trim(),
+          motto:   motto?.trim() || 'Strength through unity.',
+          leaderId: req.user.id,
+          members: { create: { userId: req.user.id, rank: 'Lord' } },
+        },
+      });
     });
-    await prisma.stats.update({ where: { userId: req.user.id }, data: { gold: stats.gold - 500 } });
     res.json({ ok: true, house });
   } catch (e) {
-    if (e.code === 'P2002') return res.status(409).json({ error: 'That house name is already taken' });
+    if (e.code === 'NO_GOLD') return res.status(400).json({ error: 'Founding a house costs 500 gold' });
+    if (e.code === 'P2002')   return res.status(409).json({ error: 'That house name is already taken' });
+    console.error(e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
@@ -1023,27 +1062,52 @@ app.get('/api/market/inventory', async (req, res) => {
 app.post('/api/market/buy', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { listingId } = req.body;
-  const listing = await prisma.listing.findUnique({ where: { id: listingId }, include: { item: true } });
-  if (!listing) return res.status(404).json({ error: 'Listing not found' });
-  if (listing.sellerId === req.user.id) return res.status(400).json({ error: 'You cannot buy your own listing' });
-  const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
-  if (stats.gold < listing.price) return res.status(400).json({ error: 'Not enough gold' });
 
-  // Transfer gold
-  await prisma.stats.update({ where: { userId: req.user.id }, data: { gold: stats.gold - listing.price } });
-  await prisma.stats.update({ where: { userId: listing.sellerId }, data: { gold: { increment: listing.price } } });
+  try {
+    const listing = await prisma.$transaction(async (tx) => {
+      // Fetch and immediately delete the listing inside the transaction.
+      // This is the serialization lock: the second concurrent buyer's DELETE
+      // will throw P2025 (record not found), rolling back their transaction
+      // before any gold or inventory changes are made.
+      const found = await tx.listing.findUnique({ where: { id: listingId }, include: { item: true } });
+      if (!found) throw Object.assign(new Error('Listing not found'), { code: 'NOT_FOUND' });
+      if (found.sellerId === req.user.id) throw Object.assign(new Error('Cannot buy own listing'), { code: 'OWN_LISTING' });
 
-  // Add item to buyer inventory
-  const existing = await prisma.inventory.findFirst({ where: { userId: req.user.id, itemId: listing.itemId } });
-  if (existing) {
-    await prisma.inventory.update({ where: { id: existing.id }, data: { quantity: existing.quantity + listing.quantity } });
-  } else {
-    await prisma.inventory.create({ data: { userId: req.user.id, itemId: listing.itemId, quantity: listing.quantity } });
+      await tx.listing.delete({ where: { id: listingId } });
+
+      // Atomically deduct buyer gold — rolls back everything if insufficient.
+      const deducted = await tx.stats.updateMany({
+        where: { userId: req.user.id, gold: { gte: found.price } },
+        data:  { gold: { decrement: found.price } },
+      });
+      if (deducted.count === 0) throw Object.assign(new Error('Not enough gold'), { code: 'NO_GOLD' });
+
+      // Credit the seller.
+      await tx.stats.update({
+        where: { userId: found.sellerId },
+        data:  { gold: { increment: found.price } },
+      });
+
+      // Add item to buyer inventory (upsert-style).
+      const existing = await tx.inventory.findFirst({ where: { userId: req.user.id, itemId: found.itemId } });
+      if (existing) {
+        await tx.inventory.update({ where: { id: existing.id }, data: { quantity: { increment: found.quantity } } });
+      } else {
+        await tx.inventory.create({ data: { userId: req.user.id, itemId: found.itemId, quantity: found.quantity } });
+      }
+
+      return found;
+    });
+
+    res.json({ ok: true, item: listing.item.name });
+  } catch (e) {
+    if (e.code === 'NOT_FOUND')   return res.status(404).json({ error: 'Listing no longer available' });
+    if (e.code === 'OWN_LISTING') return res.status(400).json({ error: 'You cannot buy your own listing' });
+    if (e.code === 'NO_GOLD')     return res.status(400).json({ error: 'Not enough gold' });
+    if (e.code === 'P2025')       return res.status(404).json({ error: 'Listing no longer available' });
+    console.error(e);
+    res.status(500).json({ error: 'Something went wrong' });
   }
-
-  // Remove listing
-  await prisma.listing.delete({ where: { id: listingId } });
-  res.json({ ok: true, item: listing.item.name });
 });
 
 app.post('/api/market/list', async (req, res) => {
@@ -1091,26 +1155,42 @@ app.post('/api/training/train', async (req, res) => {
   const cfg = TRAINING_CONFIG[stat];
   if (!cfg) return res.status(400).json({ error: 'Invalid stat' });
 
-  const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
-  if (stats.energy < cfg.energyCost) return res.status(400).json({ error: 'Not enough energy' });
+  const now    = new Date();
+  const cutoff = new Date(now.getTime() - TRAINING_COOLDOWN_MS);
 
-  const now = Date.now();
-  const last = stats[cfg.cooldownField];
-  const elapsed = last ? now - new Date(last).getTime() : TRAINING_COOLDOWN_MS + 1;
-  if (elapsed < TRAINING_COOLDOWN_MS) {
+  // Atomically enforce both the energy requirement AND the cooldown in a single
+  // WHERE clause — two concurrent requests can't both slip through.
+  const deducted = await prisma.stats.updateMany({
+    where: {
+      userId: req.user.id,
+      energy: { gte: cfg.energyCost },
+      OR: [
+        { [cfg.cooldownField]: null },
+        { [cfg.cooldownField]: { lte: cutoff } },
+      ],
+    },
+    data: {
+      energy:             { decrement: cfg.energyCost },
+      xp:                 { increment: cfg.xpGain },
+      [cfg.cooldownField]: now,
+    },
+  });
+
+  if (deducted.count === 0) {
+    // Re-read once to return a specific error message.
+    const s = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    if (s.energy < cfg.energyCost) return res.status(400).json({ error: 'Not enough energy' });
+    const last      = s[cfg.cooldownField];
+    const elapsed   = last ? now - new Date(last).getTime() : TRAINING_COOLDOWN_MS + 1;
     const remaining = Math.ceil((TRAINING_COOLDOWN_MS - elapsed) / 1000);
     return res.status(400).json({ error: `Still recovering — ${remaining}s remaining` });
   }
 
-  const gain = Math.floor(Math.random() * 2) + 1;
+  // Stat gain is random and incremental — safe to apply in a second write.
+  const gain    = Math.floor(Math.random() * 2) + 1;
   const updated = await prisma.stats.update({
     where: { userId: req.user.id },
-    data: {
-      energy: stats.energy - cfg.energyCost,
-      [cfg.statField]: stats[cfg.statField] + gain,
-      xp: stats.xp + cfg.xpGain,
-      [cfg.cooldownField]: new Date()
-    }
+    data:  { [cfg.statField]: { increment: gain } },
   });
 
   const levelUp = await checkLevelUp(req.user.id);
@@ -1210,61 +1290,73 @@ app.post('/api/raid/npc', async (req, res) => {
   const location = NPC_LOCATIONS.find(l => l.id === locationId);
   if (!location) return res.status(400).json({ error: 'Invalid location' });
 
-  const stats = await checkStatus(req.user.id);
-  if (stats.inJail) return res.status(400).json({ error: 'You are in jail' });
-  if (stats.inHospital) return res.status(400).json({ error: 'You are in hospital' });
-  if (stats.energy < location.energyCost) return res.status(400).json({ error: 'Not enough energy' });
+  // Clear any expired jail/hospital timers first (idempotent write, benign if racy).
+  await checkStatus(req.user.id);
 
-  // Combat calculation
-  const attackPower = stats.strength + stats.speed + Math.floor(Math.random() * 15);
+  // ── Critical section ──────────────────────────────────────────────────────────
+  // Enforce energy cost, jail, and hospital status atomically in the WHERE clause.
+  // With 20 concurrent requests at 80 energy and a cost of 10, exactly 8 will
+  // match and the rest get count === 0, preventing any phantom energy reads.
+  const deducted = await prisma.stats.updateMany({
+    where: {
+      userId:     req.user.id,
+      energy:     { gte: location.energyCost },
+      inJail:     false,
+      inHospital: false,
+    },
+    data: { energy: { decrement: location.energyCost } },
+  });
+
+  if (deducted.count === 0) {
+    // Re-read once only to surface a useful error message.
+    const s = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    if (s.inJail)     return res.status(400).json({ error: 'You are in jail' });
+    if (s.inHospital) return res.status(400).json({ error: 'You are in hospital' });
+    return res.status(400).json({ error: 'Not enough energy' });
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Read fresh stats for the combat roll (energy is already deducted above).
+  const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+
+  const attackPower  = stats.strength + stats.speed + Math.floor(Math.random() * 15);
   const defensePower = location.difficulty + Math.floor(Math.random() * 10);
-  const won = attackPower >= defensePower;
+  const won          = attackPower >= defensePower;
 
   const goldGain = won ? Math.floor(Math.random() * (location.goldMax - location.goldMin + 1)) + location.goldMin : 0;
-  const xpGain = won ? location.xpGain : Math.floor(location.xpGain * 0.2);
+  const xpGain   = won ? location.xpGain : Math.floor(location.xpGain * 0.2);
 
-  const updateData = {
-    energy: stats.energy - location.energyCost,
-    xp: stats.xp + xpGain,
-  };
+  // All outcome writes use increments so they compose correctly with any other
+  // concurrent writes that landed between the two DB round-trips above.
+  const outcomeData = { xp: { increment: xpGain } };
 
-  let jailMins = 0;
+  let jailMins     = 0;
   let hospitalMins = 0;
 
   if (won) {
-    updateData.gold = stats.gold + goldGain;
+    outcomeData.gold = { increment: goldGain };
   } else {
-    // Check if jailed or hospitalized
     const caught = Math.random() < location.jailChance;
     if (caught) {
-      jailMins = location.jailMins;
-      updateData.inJail = true;
-      updateData.jailUntil = new Date(Date.now() + jailMins * 60 * 1000);
+      jailMins              = location.jailMins;
+      outcomeData.inJail    = true;
+      outcomeData.jailUntil = new Date(Date.now() + jailMins * 60 * 1000);
     } else {
-      // Injured - hospital
       hospitalMins = Math.ceil(location.jailMins / 2);
       const newHealth = Math.max(1, stats.health - Math.floor(stats.maxHealth * 0.3));
-      updateData.health = newHealth;
+      outcomeData.health = newHealth;
       if (newHealth <= 10) {
-        updateData.inHospital = true;
-        updateData.hospitalUntil = new Date(Date.now() + hospitalMins * 60 * 1000);
-        updateData.health = 1;
+        outcomeData.inHospital    = true;
+        outcomeData.hospitalUntil = new Date(Date.now() + hospitalMins * 60 * 1000);
+        outcomeData.health        = 1;
       }
     }
   }
 
-  await prisma.stats.update({ where: { userId: req.user.id }, data: updateData });
+  await prisma.stats.update({ where: { userId: req.user.id }, data: outcomeData });
   const levelUp = won ? await checkLevelUp(req.user.id) : { leveledUp: false };
 
-  res.json({
-    won,
-    goldGain,
-    xpGain,
-    jailMins,
-    hospitalMins,
-    location: location.name,
-    ...levelUp
-  });
+  res.json({ won, goldGain, xpGain, jailMins, hospitalMins, location: location.name, ...levelUp });
 });
 
 app.post('/api/raid/player', async (req, res) => {
@@ -1272,14 +1364,32 @@ app.post('/api/raid/player', async (req, res) => {
   const { targetId } = req.body;
   if (targetId === req.user.id) return res.status(400).json({ error: 'You cannot attack yourself' });
 
-  const attackerStats = await checkStatus(req.user.id);
-  if (attackerStats.inJail) return res.status(400).json({ error: 'You are in jail' });
-  if (attackerStats.inHospital) return res.status(400).json({ error: 'You are in hospital' });
-  if (attackerStats.energy < 20) return res.status(400).json({ error: 'Not enough energy — attacks cost 20 energy' });
+  // Clear expired status flags (idempotent, benign if racy).
+  await checkStatus(req.user.id);
+
+  // Atomically deduct energy, enforcing all preconditions in WHERE.
+  const deducted = await prisma.stats.updateMany({
+    where: {
+      userId:     req.user.id,
+      energy:     { gte: 20 },
+      inJail:     false,
+      inHospital: false,
+    },
+    data: { energy: { decrement: 20 } },
+  });
+
+  if (deducted.count === 0) {
+    const s = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    if (s.inJail)     return res.status(400).json({ error: 'You are in jail' });
+    if (s.inHospital) return res.status(400).json({ error: 'You are in hospital' });
+    return res.status(400).json({ error: 'Not enough energy — attacks cost 20 energy' });
+  }
 
   const target = await prisma.user.findUnique({ where: { id: targetId }, include: { stats: true } });
   if (!target || !target.stats) return res.status(404).json({ error: 'Target not found' });
 
+  // Read fresh snapshots for the combat roll.
+  const attackerStats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
   const defenderStats = await checkStatus(targetId);
 
   // Combat
@@ -1287,38 +1397,36 @@ app.post('/api/raid/player', async (req, res) => {
   const defensePower = defenderStats.defense   + defenderStats.dexterity + Math.floor(Math.random() * 20);
   const won = attackPower >= defensePower;
 
-  const xpGain = won ? 30 : 10;
+  const xpGain     = won ? 30 : 10;
   const goldStolen = won ? Math.floor(defenderStats.gold * (Math.random() * 0.1 + 0.05)) : 0;
 
+  // Attacker reward/penalty — use increments so any concurrent write doesn't clobber.
   const attackerUpdate = {
-    energy: attackerStats.energy - 20,
-    xp: attackerStats.xp + xpGain,
-    gold: attackerStats.gold + goldStolen,
+    xp:   { increment: xpGain },
+    gold: { increment: goldStolen }, // 0 on loss, no harm
   };
 
   const defenderUpdate = {};
-  let defenderJailed = false;
   let defenderHospitalized = false;
 
   if (won) {
-    defenderUpdate.gold = defenderStats.gold - goldStolen;
-    // Injure defender
+    defenderUpdate.gold = { decrement: goldStolen };
     const newHealth = Math.max(1, defenderStats.health - Math.floor(defenderStats.maxHealth * 0.25));
     defenderUpdate.health = newHealth;
     if (newHealth <= 10) {
-      defenderUpdate.inHospital = true;
+      defenderUpdate.inHospital    = true;
       defenderUpdate.hospitalUntil = new Date(Date.now() + 10 * 60 * 1000);
-      defenderUpdate.health = 1;
-      defenderHospitalized = true;
+      defenderUpdate.health        = 1;
+      defenderHospitalized         = true;
     }
   } else {
-    // Attacker loses and gets caught
+    // Attacker loses and is injured.
     const newHealth = Math.max(1, attackerStats.health - Math.floor(attackerStats.maxHealth * 0.2));
     attackerUpdate.health = newHealth;
     if (newHealth <= 10) {
-      attackerUpdate.inHospital = true;
+      attackerUpdate.inHospital    = true;
       attackerUpdate.hospitalUntil = new Date(Date.now() + 8 * 60 * 1000);
-      attackerUpdate.health = 1;
+      attackerUpdate.health        = 1;
     }
   }
 

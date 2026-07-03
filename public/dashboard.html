@@ -537,13 +537,6 @@
       </div>
             <div class="action-cost">10 ENERGY<br>+20-60 GOLD</div>
           </div>
-          <div class="action-item" id="action-train" onclick="doAction('train')">
-            <div class="action-info">
-              <div class="action-name">Visit the Training Yard</div>
-              <div class="action-desc">Sharpen your strength and form</div>
-            </div>
-            <div class="action-cost">20 ENERGY<br>+1-3 STR</div>
-          </div>
           <div class="action-item" id="action-rest" onclick="doAction('rest')">
             <div class="action-info">
               <div class="action-name">Rest at the Inn</div>
@@ -638,7 +631,6 @@
 
   function updateActionStates(stats){
     document.getElementById('action-patrol').classList.toggle('disabled', stats.energy < 10);
-    document.getElementById('action-train').classList.toggle('disabled', stats.energy < 20);
     document.getElementById('action-rest').classList.toggle('disabled', stats.gold < 30);
   }
 
@@ -674,8 +666,6 @@
 
       if(action === 'patrol'){
         addLog(`You patrol the king's road and collect tolls. A merchant grumbles but pays. <span class="gain">+${data.goldGain} gold</span> <span class="gain">+${data.xpGain} xp</span>`);
-      } else if(action === 'train'){
-        addLog(`You spend an hour at the training yard. Your form improves. <span class="gain">+${data.strGain} Strength</span> <span class="gain">+${data.xpGain} xp</span>`);
       } else if(action === 'rest'){
         addLog(`You rest at the inn. The straw mattress is rough but the fire is warm. <span class="gain">Health & Energy restored</span>`);
       }

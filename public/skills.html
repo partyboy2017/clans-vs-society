@@ -37,160 +37,88 @@
 
   /* POINTS BANNER */
   .points-bar{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    background:var(--bg-panel);
-    border:1px solid var(--line);
-    padding:1rem 1.4rem;
-    margin-bottom:1.8rem;
+    display:flex;align-items:center;justify-content:space-between;
+    background:var(--bg-panel);border:1px solid var(--line);
+    padding:1rem 1.4rem;margin-bottom:1.8rem;
   }
-  .points-left{}
-  .points-label{
-    font-family:'JetBrains Mono',monospace;
-    font-size:0.62rem;
-    letter-spacing:0.16em;
-    text-transform:uppercase;
-    color:var(--ash);
-    margin-bottom:0.3rem;
-  }
-  .points-count{
-    font-family:'Cinzel',serif;
-    font-size:1.8rem;
-    color:var(--green-bright);
-    letter-spacing:0.04em;
-  }
+  .points-label{font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--ash);margin-bottom:0.3rem;}
+  .points-count{font-family:'Cinzel',serif;font-size:1.8rem;color:var(--green-bright);letter-spacing:0.04em;}
   .points-count.none{color:var(--ash);}
-  .points-hint{
-    font-size:0.88rem;
-    color:var(--ash);
-    font-style:italic;
-    text-align:right;
-  }
+  .points-hint{font-size:0.88rem;color:var(--ash);font-style:italic;text-align:right;}
 
-  /* SKILL TREES */
-  .trees{
-    display:grid;
-    grid-template-columns:repeat(2,1fr);
-    gap:1.2rem;
-    margin-bottom:1.2rem;
-  }
-
-  .tree{
-    background:var(--bg-panel);
-    border:1px solid var(--line);
-    padding:1.4rem;
-  }
+  /* SKILL TREE */
+  .tree-panel{background:var(--bg-panel);border:1px solid var(--line);padding:1.4rem;max-width:640px;}
   .tree-header{
-    display:flex;
-    align-items:center;
-    gap:0.8rem;
-    margin-bottom:1.2rem;
-    padding-bottom:0.9rem;
-    border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:0.8rem;
+    margin-bottom:1.4rem;padding-bottom:1rem;border-bottom:1px solid var(--line);
   }
   .tree-icon{
-    width:38px;height:38px;
-    background:var(--bg-panel-2);
-    border:1px solid var(--line);
-    display:flex;align-items:center;justify-content:center;
-    flex-shrink:0;
-    color:var(--brass);
+    width:44px;height:44px;background:var(--bg-panel-2);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--brass);
   }
-  .tree-icon svg{width:18px;height:18px;}
-  .tree-name{
-    font-family:'Cinzel',serif;
-    font-size:1rem;
-    color:var(--parchment);
-    letter-spacing:0.06em;
-  }
-  .tree-desc{
-    font-size:0.85rem;
-    color:var(--ash);
-    font-style:italic;
-  }
+  .tree-icon svg{width:22px;height:22px;}
+  .tree-class{font-family:'Cinzel',serif;font-size:1.1rem;color:var(--parchment);letter-spacing:0.06em;}
+  .tree-sub{font-size:0.88rem;color:var(--ash);font-style:italic;margin-top:0.15rem;}
 
   /* SKILL NODES */
-  .skill-nodes{
-    display:flex;
-    flex-direction:column;
-    gap:0.6rem;
-  }
+  .skill-nodes{display:flex;flex-direction:column;gap:0.8rem;}
+
   .skill-node{
-    display:flex;
-    align-items:center;
-    gap:0.9rem;
-    padding:0.7rem 0.8rem;
+    display:flex;align-items:flex-start;gap:1rem;
+    padding:1rem 1rem;border:1px solid var(--line);
     background:var(--bg-panel-2);
-    border:1px solid var(--line);
-    transition:border-color 0.15s;
+    transition:border-color 0.15s,opacity 0.15s;
+    position:relative;
   }
-  .skill-node:hover{ border-color:var(--brass-dim); }
+  .skill-node.locked{opacity:0.45;}
+  .skill-node.unlocked{border-color:var(--brass-dim);}
 
-  .node-rank{
-    display:flex;
-    gap:3px;
-    flex-shrink:0;
-  }
-  .rank-pip{
-    width:9px;height:9px;
-    background:rgba(255,255,255,0.07);
-    border:1px solid var(--line);
-  }
-  .rank-pip.filled{
-    background:var(--brass);
-    border-color:var(--brass);
-  }
-  .rank-pip.filled.maxed{
-    background:var(--rust-bright);
-    border-color:var(--rust-bright);
+  /* connector line between tiers */
+  .skill-node + .skill-node::before{
+    content:'';
+    display:block;
+    position:absolute;
+    left:28px;top:-9px;
+    width:1px;height:9px;
+    background:var(--line);
   }
 
-  .node-info{flex:1;}
-  .node-name{
-    font-family:'Cinzel',serif;
-    font-size:0.88rem;
-    color:var(--parchment);
-    margin-bottom:0.1rem;
+  .node-status{
+    width:32px;height:32px;border:1px solid var(--line);
+    background:var(--bg);display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;margin-top:2px;
   }
-  .node-effect{
-    font-family:'JetBrains Mono',monospace;
-    font-size:0.62rem;
-    color:var(--green-bright);
-    letter-spacing:0.06em;
+  .node-status svg{width:15px;height:15px;}
+  .skill-node.unlocked .node-status{background:rgba(176,141,69,0.12);border-color:var(--brass-dim);}
+  .skill-node.unlocked .node-status svg{color:var(--brass);}
+  .skill-node.locked   .node-status svg{color:var(--ash);}
+
+  .node-body{flex:1;min-width:0;}
+  .node-top{display:flex;align-items:baseline;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.25rem;}
+  .node-name{font-family:'Cinzel',serif;font-size:0.95rem;color:var(--parchment);letter-spacing:0.04em;}
+  .node-type{
+    font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:0.1em;
+    text-transform:uppercase;padding:0.15rem 0.45rem;border:1px solid;
   }
-  .node-desc{
-    font-size:0.82rem;
-    color:var(--ash);
-    font-style:italic;
+  .node-type.passive{color:var(--brass);border-color:var(--brass-dim);}
+  .node-type.active {color:var(--green-bright);border-color:var(--green);}
+  .node-desc{font-size:0.88rem;color:var(--ash);font-style:italic;line-height:1.55;}
+  .node-prereq{
+    margin-top:0.4rem;
+    font-family:'JetBrains Mono',monospace;font-size:0.6rem;
+    letter-spacing:0.08em;color:var(--rust-bright);
   }
 
+  .node-action{flex-shrink:0;margin-top:2px;}
   .node-btn{
-    font-family:'JetBrains Mono',monospace;
-    font-size:0.68rem;
-    letter-spacing:0.08em;
-    padding:0.4rem 0.8rem;
-    border:1px solid var(--green);
-    background:transparent;
-    color:var(--green-bright);
-    cursor:pointer;
-    transition:background 0.15s,color 0.15s;
-    white-space:nowrap;
-    flex-shrink:0;
+    font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:0.08em;
+    padding:0.45rem 0.9rem;border:1px solid var(--green);
+    background:transparent;color:var(--green-bright);cursor:pointer;
+    transition:background 0.15s,color 0.15s;white-space:nowrap;
   }
   .node-btn:hover:not(:disabled){background:var(--green);color:var(--bone);}
-  .node-btn:disabled{
-    opacity:0.35;
-    cursor:not-allowed;
-    border-color:var(--line);
-    color:var(--ash);
-  }
-  .node-btn.maxed{
-    border-color:var(--rust);
-    color:var(--rust-bright);
-    cursor:default;
-    pointer-events:none;
-  }
+  .node-btn:disabled{opacity:0.35;cursor:not-allowed;border-color:var(--line);color:var(--ash);}
+  .node-btn.owned{border-color:var(--brass-dim);color:var(--brass);pointer-events:none;}
 
   /* TOAST */
   .toast{
@@ -203,29 +131,26 @@
   }
   .toast.show{opacity:1;transform:translateY(0);}
 
-  @media(max-width:900px){.trees{grid-template-columns:1fr;}}
-  @media(max-width:800px){.shell{grid-template-columns:1fr;}.sidebar{display:none;}}
-
-  /* ── MOBILE NAV ── */
+  /* MOBILE NAV */
   .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(28,26,23,0.97);border-top:1px solid var(--line);z-index:20;padding-bottom:env(safe-area-inset-bottom);}
   .mobile-nav-inner{display:flex;justify-content:space-around;align-items:stretch;}
   .mn-item{display:flex;flex-direction:column;align-items:center;gap:0.25rem;padding:0.6rem 0.3rem;color:var(--ash);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;flex:1;transition:color 0.15s;-webkit-tap-highlight-color:transparent;}
   .mn-item.active{color:var(--parchment);}
-  .mn-item:hover{color:var(--bone);}
   .mn-item svg{width:20px;height:20px;flex-shrink:0;}
-  @media(max-width:800px){.mobile-nav{display:block;}.main{padding:1.2rem 1rem 5rem !important;}}
-
+  @media(max-width:800px){
+    .mobile-nav{display:block;}
+    .main{padding:1.2rem 1rem 5rem !important;}
+    .shell{grid-template-columns:1fr;}
+    .sidebar{display:none;}
+    .tree-panel{max-width:100%;}
+  }
 </style>
 </head>
 <body>
-
 <div class="shell">
   <header class="topbar">
     <div class="brand">
-      <svg viewBox="0 0 40 40" fill="none">
-        <circle cx="20" cy="20" r="18" stroke="var(--brass)" stroke-width="1.5"/>
-        <path d="M12 24 L14 14 L17 18 L20 12 L23 18 L26 14 L28 24 Z" stroke="var(--brass)" stroke-width="1.3" stroke-linejoin="round"/>
-      </svg>
+      <svg viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="18" stroke="var(--brass)" stroke-width="1.5"/><path d="M12 24 L14 14 L17 18 L20 12 L23 18 L26 14 L28 24 Z" stroke="var(--brass)" stroke-width="1.3" stroke-linejoin="round"/></svg>
       Clans vs Society
     </div>
     <div class="topbar-right">
@@ -238,113 +163,30 @@
 
   <main class="main">
     <div class="page-title">Skills</div>
-    <div class="page-sub">Spend your earned points to shape your legend.</div>
+    <div class="page-sub">Spend your earned points to shape your legend. Skills persist across sessions.</div>
 
-    <!-- POINTS BANNER -->
     <div class="points-bar">
-      <div class="points-left">
+      <div>
         <div class="points-label">Available Stat Points</div>
         <div class="points-count" id="points-count">—</div>
       </div>
       <div class="points-hint" id="points-hint">Earn more by levelling up.</div>
     </div>
 
-    <!-- SKILL TREES -->
-    <div class="trees">
-
-      <!-- STRENGTH -->
-      <div class="tree">
-        <div class="tree-header">
-          <div class="tree-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21V9M12 9l-5-5M12 9l5-5" stroke-linecap="round"/></svg>
-          </div>
-          <div>
-            <div class="tree-name">Strength</div>
-            <div class="tree-desc">Raw power — improves attack damage</div>
-          </div>
-        </div>
-        <div class="skill-nodes" id="nodes-strength"></div>
-      </div>
-
-      <!-- DEFENSE -->
-      <div class="tree">
-        <div class="tree-header">
-          <div class="tree-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l8 4v5c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V7z" stroke-linecap="round"/></svg>
-          </div>
-          <div>
-            <div class="tree-name">Defense</div>
-            <div class="tree-desc">Iron will — reduces damage taken</div>
-          </div>
-        </div>
-        <div class="skill-nodes" id="nodes-defense"></div>
-      </div>
-
-      <!-- SPEED -->
-      <div class="tree">
-        <div class="tree-header">
-          <div class="tree-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <div>
-            <div class="tree-name">Speed</div>
-            <div class="tree-desc">Swift feet — improves action success rate</div>
-          </div>
-        </div>
-        <div class="skill-nodes" id="nodes-speed"></div>
-      </div>
-
-      <!-- DEXTERITY -->
-      <div class="tree">
-        <div class="tree-header">
-          <div class="tree-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" stroke-linecap="round"/></svg>
-          </div>
-          <div>
-            <div class="tree-name">Dexterity</div>
-            <div class="tree-desc">Cunning hands — improves loot and gold gains</div>
-          </div>
-        </div>
-        <div class="skill-nodes" id="nodes-dexterity"></div>
-      </div>
-
+    <div id="tree-container">
+      <div style="color:var(--ash);font-style:italic;">Loading your skill tree...</div>
     </div>
   </main>
 </div>
 
 <div class="toast" id="toast"></div>
+<nav class="mobile-nav" id="mobile-nav"></nav>
 
 <script src="/nav.js"></script>
 <script>
-  // Skill tree definitions — each stat has 5 upgrade tiers
-  const TREES = {
-    strength: [
-      { name: 'Sturdy Arms',    desc: 'Your arms grow used to the weight of steel.',       effect: '+2 Strength', cost: 1, maxRank: 3 },
-      { name: 'Warrior\'s Grip', desc: 'Your grip tightens. Weapons feel like extensions of your will.', effect: '+3 Strength', cost: 1, maxRank: 3 },
-      { name: 'Iron Fury',      desc: 'In battle your strikes carry the weight of thunder.', effect: '+5 Strength', cost: 2, maxRank: 2 },
-    ],
-    defense: [
-      { name: 'Thick Hide',     desc: 'Scars teach lessons no trainer can.',               effect: '+2 Defense', cost: 1, maxRank: 3 },
-      { name: 'Shield Mastery', desc: 'You read attacks before they land.',                 effect: '+3 Defense', cost: 1, maxRank: 3 },
-      { name: 'Unyielding',     desc: 'You have stared death down and laughed.',            effect: '+5 Defense', cost: 2, maxRank: 2 },
-    ],
-    speed: [
-      { name: 'Light Step',     desc: 'You move without sound across cobblestones.',        effect: '+2 Speed', cost: 1, maxRank: 3 },
-      { name: 'Fleet Footed',   desc: 'Few can match your pace on road or field.',          effect: '+3 Speed', cost: 1, maxRank: 3 },
-      { name: 'Shadow Runner',  desc: 'You are gone before they know you were there.',      effect: '+5 Speed', cost: 2, maxRank: 2 },
-    ],
-    dexterity: [
-      { name: 'Nimble Fingers', desc: 'Coins and daggers both find your hands first.',      effect: '+2 Dexterity', cost: 1, maxRank: 3 },
-      { name: 'Pickpocket\'s Eye', desc: 'You see the weight of a purse from ten paces.',  effect: '+3 Dexterity', cost: 1, maxRank: 3 },
-      { name: 'Ghost Hand',     desc: 'Lords have lost rings without ever feeling it.',     effect: '+5 Dexterity', cost: 2, maxRank: 2 },
-    ],
-  };
-
-  let playerStats = null;
-  // Track how many ranks player has spent on each skill node
-  // Stored as skillRanks[stat][nodeIndex] = rank
-  // We derive this from the stat value since we don't have a separate skills table yet
-  const skillRanks = { strength: [0,0,0], defense: [0,0,0], speed: [0,0,0], dexterity: [0,0,0] };
+  let statPoints   = 0;
+  let unlockedKeys = [];
+  let tree         = [];
 
   function showToast(msg){
     const t = document.getElementById('toast');
@@ -353,98 +195,144 @@
     setTimeout(() => t.classList.remove('show'), 2800);
   }
 
-  function renderPips(current, max, stat){
-    let html = '';
-    for(let i = 0; i < max; i++){
-      const filled = i < current;
-      const maxed = filled && current === max;
-      html += `<div class="rank-pip ${filled ? 'filled' : ''} ${maxed ? 'maxed' : ''}"></div>`;
+  function updatePointsDisplay(){
+    const el = document.getElementById('points-count');
+    el.textContent = statPoints;
+    el.className = 'points-count' + (statPoints === 0 ? ' none' : '');
+    document.getElementById('points-hint').textContent = statPoints > 0
+      ? 'Click Unlock below to spend points.'
+      : 'Earn more by levelling up on the dashboard.';
+  }
+
+  function renderTree(){
+    const container = document.getElementById('tree-container');
+    if(!tree.length){
+      container.innerHTML = '<div style="color:var(--ash);font-style:italic;">No skill tree found for your class.</div>';
+      return;
     }
-    return html;
-  }
 
-  function renderTrees(){
-    if(!playerStats) return;
-    const pts = playerStats.statPoints;
+    // Derive class label from first key (e.g. WARRIOR_1 → Warrior)
+    const classKey = tree[0].key.split('_')[0];
+    const classLabel = classKey.charAt(0) + classKey.slice(1).toLowerCase();
 
-    ['strength','defense','speed','dexterity'].forEach(stat => {
-      const container = document.getElementById(`nodes-${stat}`);
-      container.innerHTML = '';
+    const nodesHtml = tree.map(skill => {
+      const owned    = unlockedKeys.includes(skill.key);
+      const prereqMet = !skill.requires || unlockedKeys.includes(skill.requires);
+      const canAfford = statPoints >= skill.cost;
+      const canUnlock = !owned && prereqMet && canAfford;
 
-      TREES[stat].forEach((skill, i) => {
-        const rank = skillRanks[stat][i];
-        const isMaxed = rank >= skill.maxRank;
-        const canAfford = pts >= skill.cost;
-        const canUpgrade = !isMaxed && canAfford;
+      // Status icon
+      const iconPath = owned
+        ? '<path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'
+        : '<rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="1.4"/><path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>';
 
-        const node = document.createElement('div');
-        node.className = 'skill-node';
-        node.innerHTML = `
-          <div class="node-rank">${renderPips(rank, skill.maxRank, stat)}</div>
-          <div class="node-info">
-            <div class="node-name">${skill.name}</div>
-            <div class="node-effect">${skill.effect} per rank &nbsp;·&nbsp; ${rank}/${skill.maxRank}</div>
-            <div class="node-desc">${skill.desc}</div>
+      const prereqNote = (!owned && !prereqMet && skill.requires)
+        ? `<div class="node-prereq">Requires: ${skill.requires.replace('_', ' ')}</div>`
+        : '';
+
+      let btnLabel, btnClass, btnDisabled;
+      if(owned){
+        btnLabel = 'UNLOCKED'; btnClass = 'owned'; btnDisabled = true;
+      } else if(!prereqMet){
+        btnLabel = 'LOCKED'; btnClass = ''; btnDisabled = true;
+      } else if(!canAfford){
+        btnLabel = `${skill.cost} PTS`; btnClass = ''; btnDisabled = true;
+      } else {
+        btnLabel = `Unlock (${skill.cost} pt${skill.cost > 1 ? 's' : ''})`; btnClass = ''; btnDisabled = false;
+      }
+
+      return `
+        <div class="skill-node ${owned ? 'unlocked' : 'locked'}">
+          <div class="node-status">
+            <svg viewBox="0 0 24 24" fill="none">${iconPath}</svg>
           </div>
-          <button
-            class="node-btn ${isMaxed ? 'maxed' : ''}"
-            ${isMaxed ? '' : (canUpgrade ? '' : 'disabled')}
-            onclick="upgradeSkill('${stat}', ${i})"
-          >
-            ${isMaxed ? 'MASTERED' : `+1 (${skill.cost} pt${skill.cost > 1 ? 's' : ''})`}
-          </button>
-        `;
-        container.appendChild(node);
-      });
-    });
+          <div class="node-body">
+            <div class="node-top">
+              <span class="node-name">${skill.name}</span>
+              <span class="node-type ${skill.type}">${skill.type}</span>
+            </div>
+            <div class="node-desc">${skill.desc}</div>
+            ${prereqNote}
+          </div>
+          <div class="node-action">
+            <button
+              class="node-btn ${btnClass}"
+              ${btnDisabled ? 'disabled' : ''}
+              onclick="unlockSkill('${skill.key}')"
+            >${btnLabel}</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="tree-panel">
+        <div class="tree-header">
+          <div class="tree-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+              <path d="M12 2l2 7h7l-5.5 4 2 7L12 16l-5.5 4 2-7L3 9h7z" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <div class="tree-class">${classLabel} Skills</div>
+            <div class="tree-sub">${unlockedKeys.length} of ${tree.length} unlocked</div>
+          </div>
+        </div>
+        <div class="skill-nodes">${nodesHtml}</div>
+      </div>`;
   }
 
-  async function upgradeSkill(stat, nodeIndex){
-    const skill = TREES[stat][nodeIndex];
+  async function unlockSkill(skillKey){
     try {
-      const res = await fetch('/api/spend-stat', {
-        method: 'POST',
+      const res  = await fetch('/api/skills/unlock', {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stat })
+        body:    JSON.stringify({ skillKey }),
       });
       const data = await res.json();
-      if(!res.ok){ showToast(data.error); return; }
+      if(!res.ok){ showToast(data.error || 'Could not unlock skill.'); return; }
 
-      skillRanks[stat][nodeIndex]++;
-      playerStats.statPoints -= skill.cost;
-      playerStats[stat] = data.newValue;
-
+      unlockedKeys.push(skillKey);
+      statPoints = data.statPointsRemaining;
       updatePointsDisplay();
-      renderTrees();
-      showToast(`${skill.name} upgraded — ${stat} is now ${data.newValue}.`);
+      renderTree();
+      showToast(`${data.skill} unlocked.`);
     } catch(e){
       showToast('Something went wrong.');
     }
   }
 
-  function updatePointsDisplay(){
-    const pts = playerStats.statPoints;
-    const el = document.getElementById('points-count');
-    el.textContent = pts;
-    el.className = 'points-count' + (pts === 0 ? ' none' : '');
-    document.getElementById('points-hint').textContent = pts > 0
-      ? 'Click a skill below to spend points.'
-      : 'Earn more by levelling up on the dashboard.';
+  async function load(){
+    try {
+      const [meRes, skillsRes] = await Promise.all([
+        fetch('/api/me'),
+        fetch('/api/skills'),
+      ]);
+
+      if(!meRes.ok){ window.location.href = '/'; return; }
+      const me = await meRes.json();
+      document.getElementById('player-name').textContent = me.username;
+
+      if(!skillsRes.ok){
+        const err = await skillsRes.json();
+        document.getElementById('tree-container').innerHTML =
+          `<div style="color:var(--ash);font-style:italic;">${err.error || 'Could not load skills.'}</div>`;
+        return;
+      }
+
+      const data   = await skillsRes.json();
+      tree         = data.tree;
+      unlockedKeys = data.unlockedKeys;
+      statPoints   = data.statPoints;
+
+      updatePointsDisplay();
+      renderTree();
+    } catch(e){
+      document.getElementById('tree-container').innerHTML =
+        '<div style="color:var(--ash);font-style:italic;">Failed to load skills. Please refresh.</div>';
+    }
   }
 
-  async function loadPlayer(){
-    const res = await fetch('/api/me');
-    if(!res.ok){ window.location.href='/'; return; }
-    const data = await res.json();
-    playerStats = data.stats;
-    document.getElementById('player-name').textContent = data.username;
-    updatePointsDisplay();
-    renderTrees();
-  }
-
-  loadPlayer();
+  load();
 </script>
-
-<nav class="mobile-nav" id="mobile-nav"></nav>
 </body>
 </html>

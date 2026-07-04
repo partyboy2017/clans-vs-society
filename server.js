@@ -270,16 +270,12 @@ const SKILL_TREES = {
 
 // ─── Economy / cooldown constants ─────────────────────────────────────────────────
 
-// Passive energy regeneration — calculated lazily on every action.
-// lastEnergyAt on Stats tracks when energy was last ticked forward.
-const ENERGY_REGEN_AMOUNT      = 5;               // energy per tick
-const ENERGY_REGEN_INTERVAL_MS = 5 * 60 * 1000;  // tick every 5 minutes
-
-// Rest only restores health now — energy comes from passive regen above.
-// Short cooldown prevents spamming the inn for free healing.
-const REST_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+// How long a player must wait between rests.
+const REST_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
 
 // Minimum gap between raids on the *same* NPC location.
+// Players can still rotate through locations; this prevents hammering one
+// location until energy is dry then immediately restarting.
 const RAID_LOCATION_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes per location
 
 // ─── Helper: find a skill definition by its key across all trees ──────────────
@@ -448,20 +444,10 @@ app.post('/api/logout', (req, res) => {
 
 app.get('/api/me', (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
-  const stats      = req.user.stats;
-  const now        = Date.now();
-  const lastRestAt = stats?.lastRestAt;
-  const lastEnergyAt = stats?.lastEnergyAt;
-
+  const lastRestAt = req.user.stats?.lastRestAt;
   const restCooldownMs = lastRestAt
-    ? Math.max(0, new Date(lastRestAt).getTime() + REST_COOLDOWN_MS - now)
+    ? Math.max(0, new Date(lastRestAt).getTime() + REST_COOLDOWN_MS - Date.now())
     : 0;
-
-  // How many ms until the next energy tick (for UI countdown)
-  const nextEnergyTickMs = lastEnergyAt && stats.energy < stats.maxEnergy
-    ? Math.max(0, new Date(lastEnergyAt).getTime() + ENERGY_REGEN_INTERVAL_MS - now)
-    : null;
-
   res.json({
     username:        req.user.characterName || req.user.username,
     googleName:      req.user.googleName,
@@ -471,13 +457,8 @@ app.get('/api/me', (req, res) => {
     classLabel:      req.user.characterClass ? CLASSES[req.user.characterClass].label : null,
     lastLoginAt:     req.user.lastLoginAt,
     createdAt:       req.user.createdAt,
-    stats,
+    stats:           req.user.stats,
     restCooldownMs,
-    energyRegen: {
-      amount:       ENERGY_REGEN_AMOUNT,
-      intervalMs:   ENERGY_REGEN_INTERVAL_MS,
-      nextTickMs:   nextEnergyTickMs,
-    },
   });
 });
 
@@ -714,8 +695,7 @@ app.post('/api/action/rest', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { characterClass } = req.user;
 
-  // Rest now restores health only — energy regenerates passively over time.
-  // Cleric: half price
+  // Cleric: half price rest
   let goldCost = 30;
   if (characterClass === 'CLERIC') goldCost = 15;
 
@@ -726,21 +706,20 @@ app.post('/api/action/rest', async (req, res) => {
     const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
 
     if (stats.lastRestAt && stats.lastRestAt > cutoff) {
-      const remainingMs  = (stats.lastRestAt.getTime() + REST_COOLDOWN_MS) - now.getTime();
-      const remainingSecs = Math.ceil(remainingMs / 1000);
+      const remainingMs   = (stats.lastRestAt.getTime() + REST_COOLDOWN_MS) - now.getTime();
+      const remainingMins = Math.ceil(remainingMs / 60000);
       return res.status(400).json({
-        error: `You must wait ${remainingSecs}s before resting again`,
+        error: `You need to recover before resting again — ${remainingMins} minute${remainingMins !== 1 ? 's' : ''} remaining`,
         cooldownRemainingMs: remainingMs,
       });
     }
 
-    // Blessing (CLERIC_3): rest restores an extra 20 HP (still capped at maxHealth)
+    // Blessing (CLERIC_3): rest restores an extra 20 HP (capped at maxHealth)
     let restoredHealth = stats.maxHealth;
     if (characterClass === 'CLERIC' && await hasSkill(req.user.id, 'CLERIC_3')) {
       restoredHealth = Math.min(stats.maxHealth + 20, stats.maxHealth);
     }
 
-    // Atomically enforce gold balance AND cooldown — no energy field touched here.
     const deducted = await prisma.stats.updateMany({
       where: {
         userId: req.user.id,
@@ -753,6 +732,7 @@ app.post('/api/action/rest', async (req, res) => {
       data: {
         gold:       { decrement: goldCost },
         health:     restoredHealth,
+        energy:     stats.maxEnergy,
         lastRestAt: now,
       },
     });
@@ -762,7 +742,7 @@ app.post('/api/action/rest', async (req, res) => {
       if (fresh.lastRestAt && fresh.lastRestAt > cutoff) {
         const remainingMs = (fresh.lastRestAt.getTime() + REST_COOLDOWN_MS) - now.getTime();
         return res.status(400).json({
-          error: `You must wait ${Math.ceil(remainingMs / 1000)}s before resting again`,
+          error: `You need to recover before resting again — ${Math.ceil(remainingMs / 60000)} minutes remaining`,
           cooldownRemainingMs: remainingMs,
         });
       }
@@ -1319,40 +1299,7 @@ const NPC_LOCATIONS = [
 ];
 
 // Helper: check and clear jail/hospital status
-// Passive energy regen — call before any action that reads or spends energy.
-// Calculates how many full 5-minute intervals have passed since lastEnergyAt,
-// adds 5 energy per interval (capped at maxEnergy), and advances lastEnergyAt
-// by the exact time consumed so partial intervals carry over correctly.
-async function regenEnergy(userId) {
-  const stats = await prisma.stats.findUnique({
-    where:  { userId },
-    select: { energy: true, maxEnergy: true, lastEnergyAt: true },
-  });
-
-  if (stats.energy >= stats.maxEnergy) return; // already full, nothing to do
-
-  const now       = new Date();
-  const lastAt    = stats.lastEnergyAt ?? now;
-  const elapsed   = now - lastAt;
-  const intervals = Math.floor(elapsed / ENERGY_REGEN_INTERVAL_MS);
-
-  if (intervals === 0) return; // not enough time has passed yet
-
-  const gained    = intervals * ENERGY_REGEN_AMOUNT;
-  const newEnergy = Math.min(stats.energy + gained, stats.maxEnergy);
-  // Advance lastEnergyAt by exactly the intervals consumed — preserves leftover time.
-  const newLastAt = new Date(lastAt.getTime() + intervals * ENERGY_REGEN_INTERVAL_MS);
-
-  await prisma.stats.update({
-    where: { userId },
-    data:  { energy: newEnergy, lastEnergyAt: newLastAt },
-  });
-}
-
 async function checkStatus(userId) {
-  // Apply any pending energy regen ticks first.
-  await regenEnergy(userId);
-
   const stats = await prisma.stats.findUnique({ where: { userId } });
   const now = new Date();
   const updates = {};

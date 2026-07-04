@@ -351,6 +351,7 @@ passport.deserializeUser(async (id, done) => {
     });
     done(null, user);
   } catch (err) {
+    console.error('[deserializeUser] error for id', id, err);
     done(err, null);
   }
 });
@@ -720,19 +721,7 @@ app.post('/api/action/rest', async (req, res) => {
   if (characterClass === 'CLERIC') goldCost = 15;
 
   try {
-    const now    = new Date();
-    const cutoff = new Date(now.getTime() - REST_COOLDOWN_MS);
-
     const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
-
-    if (stats.lastRestAt && stats.lastRestAt > cutoff) {
-      const remainingMs  = (stats.lastRestAt.getTime() + REST_COOLDOWN_MS) - now.getTime();
-      const remainingSecs = Math.ceil(remainingMs / 1000);
-      return res.status(400).json({
-        error: `You must wait ${remainingSecs}s before resting again`,
-        cooldownRemainingMs: remainingMs,
-      });
-    }
 
     // Blessing (CLERIC_3): rest restores an extra 20 HP (still capped at maxHealth)
     let restoredHealth = stats.maxHealth;
@@ -740,37 +729,23 @@ app.post('/api/action/rest', async (req, res) => {
       restoredHealth = Math.min(stats.maxHealth + 20, stats.maxHealth);
     }
 
-    // Atomically enforce gold balance AND cooldown — no energy field touched here.
+    // Atomically enforce gold balance — no cooldown field since lastRestAt was removed.
     const deducted = await prisma.stats.updateMany({
       where: {
         userId: req.user.id,
         gold:   { gte: goldCost },
-        OR: [
-          { lastRestAt: null },
-          { lastRestAt: { lte: cutoff } },
-        ],
       },
       data: {
-        gold:       { decrement: goldCost },
-        health:     restoredHealth,
-        lastRestAt: now,
+        gold:   { decrement: goldCost },
+        health: restoredHealth,
       },
     });
 
     if (deducted.count === 0) {
-      const fresh = await prisma.stats.findUnique({ where: { userId: req.user.id } });
-      if (fresh.lastRestAt && fresh.lastRestAt > cutoff) {
-        const remainingMs = (fresh.lastRestAt.getTime() + REST_COOLDOWN_MS) - now.getTime();
-        return res.status(400).json({
-          error: `You must wait ${Math.ceil(remainingMs / 1000)}s before resting again`,
-          cooldownRemainingMs: remainingMs,
-        });
-      }
       return res.status(400).json({ error: 'Not enough gold to rest' });
     }
 
-    const nextRestAt = new Date(now.getTime() + REST_COOLDOWN_MS);
-    res.json({ ok: true, discounted: goldCost === 15, goldCost, nextRestAt });
+    res.json({ ok: true, discounted: goldCost === 15, goldCost });
   } catch (e) {
     console.error('/api/action/rest error:', e);
     res.status(500).json({ error: 'Something went wrong' });
@@ -1373,31 +1348,21 @@ async function checkStatus(userId) {
 
 app.get('/api/raid/status', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
-  const stats = await checkStatus(req.user.id);
-  const now = new Date();
-
-  // Compute per-location cooldown remaining for the client.
-  const locationCooldowns = {};
-  for (const loc of NPC_LOCATIONS) {
-    const field = `lastRaid${loc.id.charAt(0).toUpperCase() + loc.id.slice(1)}At`;
-    const last  = stats[field];
-    locationCooldowns[loc.id] = last
-      ? Math.max(0, last.getTime() + RAID_LOCATION_COOLDOWN_MS - now.getTime())
-      : 0;
+  try {
+    const stats = await checkStatus(req.user.id);
+    const now = new Date();
+    res.json({
+      stats,
+      locations:           NPC_LOCATIONS,
+      inJail:              stats.inJail,
+      jailRemainingMs:     stats.inJail     && stats.jailUntil     ? Math.max(0, stats.jailUntil     - now) : 0,
+      inHospital:          stats.inHospital,
+      hospitalRemainingMs: stats.inHospital && stats.hospitalUntil ? Math.max(0, stats.hospitalUntil - now) : 0,
+    });
+  } catch (e) {
+    console.error('/api/raid/status error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
   }
-
-  res.json({
-    stats,
-    locations: NPC_LOCATIONS,
-    inJail:              stats.inJail,
-    jailRemainingMs:     stats.inJail     && stats.jailUntil     ? Math.max(0, stats.jailUntil     - now) : 0,
-    inHospital:          stats.inHospital,
-    hospitalRemainingMs: stats.inHospital && stats.hospitalUntil ? Math.max(0, stats.hospitalUntil - now) : 0,
-    restCooldownMs:      stats.lastRestAt
-      ? Math.max(0, stats.lastRestAt.getTime() + REST_COOLDOWN_MS - now.getTime())
-      : 0,
-    locationCooldowns,
-  });
 });
 
 app.post('/api/raid/npc', async (req, res) => {
@@ -1409,54 +1374,23 @@ app.post('/api/raid/npc', async (req, res) => {
   // Clear any expired jail/hospital timers first (idempotent write, benign if racy).
   await checkStatus(req.user.id);
 
-  // ── Per-location cooldown check ───────────────────────────────────────────────
-  // Each NPC location has its own cooldown field (e.g. lastRaidVillageAt) so
-  // players must rotate targets rather than farming one location back-to-back.
-  const cooldownField = `lastRaid${location.id.charAt(0).toUpperCase() + location.id.slice(1)}At`;
-  const now           = new Date();
-  const cutoff        = new Date(now.getTime() - RAID_LOCATION_COOLDOWN_MS);
-
-  const preCheck = await prisma.stats.findUnique({
-    where:  { userId: req.user.id },
-    select: { [cooldownField]: true, inJail: true, inHospital: true, energy: true },
-  });
-
-  if (preCheck.inJail)     return res.status(400).json({ error: 'You are in jail' });
-  if (preCheck.inHospital) return res.status(400).json({ error: 'You are in hospital' });
-
-  const lastRaid = preCheck[cooldownField];
-  if (lastRaid && lastRaid > cutoff) {
-    const remainingMs   = (lastRaid.getTime() + RAID_LOCATION_COOLDOWN_MS) - now.getTime();
-    const remainingSecs = Math.ceil(remainingMs / 1000);
-    return res.status(400).json({
-      error: `${location.name} is too alert right now — try again in ${remainingSecs}s`,
-      cooldownRemainingMs: remainingMs,
-    });
-  }
+  const now = new Date();
 
   // ── Critical section ──────────────────────────────────────────────────────────
-  // Enforce energy cost, jail, hospital, AND location cooldown atomically.
-  // All five conditions live in the WHERE clause; count === 0 means at least
-  // one guard failed, which the pre-check above will clarify for the user.
+  // Atomically enforce energy cost, jail, and hospital in the WHERE clause.
   const deducted = await prisma.stats.updateMany({
     where: {
       userId:     req.user.id,
       energy:     { gte: location.energyCost },
       inJail:     false,
       inHospital: false,
-      OR: [
-        { [cooldownField]: null },
-        { [cooldownField]: { lte: cutoff } },
-      ],
     },
     data: {
-      energy:          { decrement: location.energyCost },
-      [cooldownField]: now,
+      energy: { decrement: location.energyCost },
     },
   });
 
   if (deducted.count === 0) {
-    // Re-read once only to surface a useful error message.
     const s = await prisma.stats.findUnique({ where: { userId: req.user.id } });
     if (s.inJail)     return res.status(400).json({ error: 'You are in jail' });
     if (s.inHospital) return res.status(400).json({ error: 'You are in hospital' });

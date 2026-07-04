@@ -31,26 +31,26 @@ model User {
 }
 
 model Stats {
-  id                 Int    @id @default(autoincrement())
-  userId             Int    @unique
+  id     Int @id @default(autoincrement())
+  userId Int @unique
 
-  user               User   @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
-  strength           Int    @default(0)
-  defense            Int    @default(0)
-  speed              Int    @default(0)
-  dexterity          Int    @default(0)
+  strength  Int @default(0)
+  defense   Int @default(0)
+  speed     Int @default(0)
+  dexterity Int @default(0)
 
-  lastStrengthTrain  DateTime?
-  lastDefenseTrain   DateTime?
-  lastSpeedTrain     DateTime?
-  lastDexTrain       DateTime?
+  lastStrengthTrain DateTime?
+  lastDefenseTrain  DateTime?
+  lastSpeedTrain    DateTime?
+  lastDexTrain      DateTime?
 
-  inJail             Boolean @default(false)
-  jailUntil          DateTime?
-  inHospital         Boolean @default(false)
-  hospitalUntil      DateTime?
-  lastEnergyAt       DateTime?
+  inJail        Boolean   @default(false)
+  jailUntil     DateTime?
+  inHospital    Boolean   @default(false)
+  hospitalUntil DateTime?
+  lastEnergyAt  DateTime?
 
   lastRaidVillageAt  DateTime?
   lastRaidCaravanAt  DateTime?

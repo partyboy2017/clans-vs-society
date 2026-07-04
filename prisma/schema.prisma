@@ -30,37 +30,28 @@ model User {
   userSkills     UserSkill[]
 }
 
-
 model Stats {
-  id                Int       @id @default(autoincrement())
-  userId            Int       @unique
-  user              User      @relation(fields: [userId], references: [id])
-  strength          Int       @default(10)
-  defense           Int       @default(10)
-  speed             Int       @default(10)
-  dexterity         Int       @default(10)
-  intelligence      Int       @default(5)
-  health            Int       @default(100)
-  maxHealth         Int       @default(100)
-  energy            Int       @default(100)
-  maxEnergy         Int       @default(100)
-  gold              Int       @default(500)
-  level             Int       @default(1)
-  xp                Int       @default(0)
-  statPoints        Int       @default(0)
-  lastStrengthTrain DateTime?
-  lastDefenseTrain  DateTime?
-  lastSpeedTrain    DateTime?
-  lastDexTrain      DateTime?
-  inJail       Boolean   @default(false)
-jailUntil    DateTime?
-inHospital   Boolean   @default(false)
-hospitalUntil DateTime?
-lastRestAt         DateTime?
-lastRaidVillageAt  DateTime?
-lastRaidCaravanAt  DateTime?
-lastRaidManorAt    DateTime?
-lastRaidTreasuryAt DateTime?
+  id                 Int       @id @default(autoincrement())
+  userId             Int       @unique
+  strength           Int       @default(0)
+  defense            Int       @default(0)
+  speed              Int       @default(0)
+  dexterity          Int       @default(0)
+  lastStrengthTrain  DateTime?
+  lastDefenseTrain   DateTime?
+  lastSpeedTrain     DateTime?
+  lastDexTrain       DateTime?
+
+  inJail             Boolean   @default(false)
+  jailUntil          DateTime?
+  inHospital         Boolean   @default(false)
+  hospitalUntil      DateTime?
+  lastEnergyAt       DateTime?
+
+  lastRaidVillageAt  DateTime?
+  lastRaidCaravanAt  DateTime?
+  lastRaidManorAt    DateTime?
+  lastRaidTreasuryAt DateTime?
 }
 
 model UserSkill {

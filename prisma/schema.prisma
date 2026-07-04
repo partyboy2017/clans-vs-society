@@ -60,16 +60,17 @@ model UserSkill {
   user       User     @relation(fields: [userId], references: [id])
   skillKey   String
   unlockedAt DateTime @default(now())
+
   @@unique([userId, skillKey])
 }
 
 model House {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  motto     String   @default("Strength through unity.")
-  gold      Int      @default(0)
-  leaderId  Int      @unique
-  createdAt DateTime @default(now())
+  id        Int           @id @default(autoincrement())
+  name      String        @unique
+  motto     String        @default("Strength through unity.")
+  gold      Int           @default(0)
+  leaderId  Int           @unique
+  createdAt DateTime      @default(now())
   members   HouseMember[]
 }
 
@@ -83,7 +84,7 @@ model HouseMember {
 }
 
 model Item {
-  id          Int       @id @default(autoincrement())
+  id          Int         @id @default(autoincrement())
   name        String
   description String
   type        String

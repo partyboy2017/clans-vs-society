@@ -413,6 +413,13 @@ app.get('/raids', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'raids.html'));
 });
 
+app.get('/monsters', (req, res) => {
+  if (!req.isAuthenticated())   return res.redirect('/');
+  if (!req.user.characterName)  return res.redirect('/choose-name');
+  if (!req.user.characterClass) return res.redirect('/choose-class');
+  res.sendFile(path.join(__dirname, 'public', 'monsters.html'));
+});
+
 app.get('/house', (req, res) => {
   if (!req.isAuthenticated())   return res.redirect('/');
   if (!req.user.characterName)  return res.redirect('/choose-name');
@@ -1535,6 +1542,243 @@ app.post('/api/raid/player', async (req, res) => {
 
 
 
+
+// ─── MONSTERS ─────────────────────────────────────────────────────────────────
+
+const MONSTER_ZONES = [
+  {
+    id: 'woods',
+    name: 'Cursed Woods',
+    desc: 'A shadowed forest on the edge of the realm. Wolves and goblins prowl the treeline.',
+    levelMin: 1,
+    levelMax: 10,
+    energyCost: 15,
+    monsters: [
+      { name: 'Feral Wolf', hpBase: 35, atkBase: 5, defBase: 1 },
+      { name: 'Bog Goblin', hpBase: 45, atkBase: 6, defBase: 2 },
+    ],
+  },
+  {
+    id: 'marsh',
+    name: 'Blighted Marsh',
+    desc: 'Sickly waters hide things that used to be human. The air itself feels hostile.',
+    levelMin: 8,
+    levelMax: 20,
+    energyCost: 22,
+    monsters: [
+      { name: 'Marsh Wretch', hpBase: 70, atkBase: 9, defBase: 4 },
+      { name: 'Bloated Leech', hpBase: 90, atkBase: 7, defBase: 6 },
+    ],
+  },
+  {
+    id: 'ruins',
+    name: 'Frostpeak Ruins',
+    desc: 'The frozen remains of a fallen kingdom. Something still guards its halls.',
+    levelMin: 18,
+    levelMax: 35,
+    energyCost: 30,
+    monsters: [
+      { name: 'Frost Wraith', hpBase: 140, atkBase: 14, defBase: 8 },
+      { name: 'Ruin Golem', hpBase: 180, atkBase: 12, defBase: 12 },
+    ],
+  },
+  {
+    id: 'rift',
+    name: 'The Abyssal Rift',
+    desc: 'A tear in the world where nightmares crawl through. Only the strongest lords return.',
+    levelMin: 30,
+    levelMax: 50,
+    energyCost: 40,
+    monsters: [
+      { name: 'Rift Stalker', hpBase: 240, atkBase: 20, defBase: 14 },
+      { name: 'Voidbound Horror', hpBase: 300, atkBase: 18, defBase: 18 },
+    ],
+  },
+];
+
+// Threshold below which a losing fighter is considered defeated (mirrors raid hospital logic).
+const COMBAT_DEFEAT_HEALTH = 10;
+
+function scaleMonster(template, level) {
+  return {
+    name:      template.name,
+    level,
+    maxHealth: template.hpBase + level * 8,
+    attack:    template.atkBase + level * 2,
+    defense:   template.defBase + Math.floor(level * 1.2),
+    goldReward: 10 + level * 4,
+    xpReward:   8 + level * 3,
+  };
+}
+
+app.get('/api/monsters/zones', (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  res.json({ zones: MONSTER_ZONES.map(z => ({
+    id: z.id, name: z.name, desc: z.desc,
+    levelMin: z.levelMin, levelMax: z.levelMax, energyCost: z.energyCost,
+  })) });
+});
+
+app.get('/api/monsters/session', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const session = await prisma.combatSession.findUnique({ where: { userId: req.user.id } });
+  res.json({ session });
+});
+
+app.post('/api/monsters/start', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const { zoneId } = req.body;
+  const zone = MONSTER_ZONES.find(z => z.id === zoneId);
+  if (!zone) return res.status(400).json({ error: 'Invalid zone' });
+
+  await checkStatus(req.user.id);
+
+  const existing = await prisma.combatSession.findUnique({ where: { userId: req.user.id } });
+  if (existing) return res.status(400).json({ error: 'You are already in a fight. Finish or flee first.' });
+
+  try {
+    const session = await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw`
+        SELECT * FROM "Stats" WHERE "userId" = ${req.user.id} FOR UPDATE
+      `;
+      const stats = rows[0];
+      if (!stats) throw { code: 'NO_STATS' };
+      if (stats.inJail)     throw { code: 'JAILED' };
+      if (stats.inHospital) throw { code: 'HOSPITAL' };
+      if (stats.energy < zone.energyCost) throw { code: 'NO_ENERGY' };
+
+      await tx.stats.update({
+        where: { userId: req.user.id },
+        data: { energy: { decrement: zone.energyCost } },
+      });
+
+      const template = zone.monsters[Math.floor(Math.random() * zone.monsters.length)];
+      const level = zone.levelMin + Math.floor(Math.random() * (zone.levelMax - zone.levelMin + 1));
+      const monster = scaleMonster(template, level);
+
+      return tx.combatSession.create({
+        data: {
+          userId:           req.user.id,
+          zoneId:           zone.id,
+          monsterName:      monster.name,
+          monsterLevel:      monster.level,
+          monsterMaxHealth: monster.maxHealth,
+          monsterHealth:    monster.maxHealth,
+          monsterAttack:    monster.attack,
+          monsterDefense:   monster.defense,
+        },
+      });
+    });
+
+    res.json({ session });
+  } catch (e) {
+    if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
+    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
+    if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy' });
+    console.error('/api/monsters/start error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+app.post('/api/monsters/turn', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const { action } = req.body;
+  if (!['attack', 'defend', 'flee'].includes(action)) {
+    return res.status(400).json({ error: 'Invalid action' });
+  }
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // Lock both the session and the stats row so concurrent turn spam
+      // can't double-apply damage or race the win/loss check.
+      const statsRows = await tx.$queryRaw`
+        SELECT * FROM "Stats" WHERE "userId" = ${req.user.id} FOR UPDATE
+      `;
+      const stats = statsRows[0];
+      if (!stats) throw { code: 'NO_STATS' };
+
+      const sessionRows = await tx.$queryRaw`
+        SELECT * FROM "CombatSession" WHERE "userId" = ${req.user.id} FOR UPDATE
+      `;
+      const session = sessionRows[0];
+      if (!session) throw { code: 'NO_SESSION' };
+
+      if (action === 'flee') {
+        await tx.combatSession.delete({ where: { userId: req.user.id } });
+        return { fled: true };
+      }
+
+      const log = [];
+      let monsterHealth = session.monsterHealth;
+      let playerHealth   = stats.health;
+
+      // Player's turn
+      if (action === 'attack') {
+        const dmg = Math.max(1, stats.strength + Math.floor(Math.random() * 10) - session.monsterDefense);
+        monsterHealth = Math.max(0, monsterHealth - dmg);
+        log.push({ actor: 'player', action: 'attack', amount: dmg });
+      } else {
+        log.push({ actor: 'player', action: 'defend', amount: 0 });
+      }
+
+      // Check for victory before the monster retaliates
+      if (monsterHealth <= 0) {
+        const goldReward = 10 + session.monsterLevel * 4 + Math.floor(Math.random() * 10);
+        const xpReward   = 8 + session.monsterLevel * 3;
+
+        await tx.stats.update({
+          where: { userId: req.user.id },
+          data: { gold: { increment: goldReward }, xp: { increment: xpReward } },
+        });
+        await tx.combatSession.delete({ where: { userId: req.user.id } });
+
+        return { won: true, log, goldReward, xpReward, monsterName: session.monsterName };
+      }
+
+      // Monster's turn
+      let monsterDmg = Math.max(1, session.monsterAttack + Math.floor(Math.random() * 6) - stats.defense);
+      if (action === 'defend') monsterDmg = Math.ceil(monsterDmg / 2);
+      playerHealth = Math.max(0, playerHealth - monsterDmg);
+      log.push({ actor: 'monster', action: 'attack', amount: monsterDmg });
+
+      // Defeat check
+      if (playerHealth <= COMBAT_DEFEAT_HEALTH) {
+        const hospitalMins = 5 + Math.ceil(session.monsterLevel / 5);
+        await tx.stats.update({
+          where: { userId: req.user.id },
+          data: {
+            health:        1,
+            inHospital:    true,
+            hospitalUntil: new Date(Date.now() + hospitalMins * 60 * 1000),
+          },
+        });
+        await tx.combatSession.delete({ where: { userId: req.user.id } });
+
+        return { lost: true, log, hospitalMins, monsterName: session.monsterName };
+      }
+
+      // Fight continues — persist both updated health values
+      await tx.stats.update({ where: { userId: req.user.id }, data: { health: playerHealth } });
+      const updatedSession = await tx.combatSession.update({
+        where: { userId: req.user.id },
+        data: { monsterHealth, turnCount: { increment: 1 } },
+      });
+
+      return { ongoing: true, log, session: updatedSession, playerHealth };
+    });
+
+    if (result.won) {
+      const levelUp = await checkLevelUp(req.user.id);
+      return res.json({ ...result, ...levelUp });
+    }
+    res.json(result);
+
+  } catch (e) {
+    if (e && e.code === 'NO_SESSION') return res.status(400).json({ error: 'No fight in progress' });
+    console.error('/api/monsters/turn error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {

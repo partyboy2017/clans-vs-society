@@ -28,6 +28,7 @@ model User {
   inventory      Inventory[]
   listings       Listing[]
   userSkills     UserSkill[]
+  combatSession  CombatSession?
 }
 
 model Stats {
@@ -128,4 +129,21 @@ model Listing {
   createdAt DateTime @default(now())
   seller    User     @relation(fields: [sellerId], references: [id])
   item      Item     @relation(fields: [itemId], references: [id])
+}
+
+model CombatSession {
+  id               Int      @id @default(autoincrement())
+  userId           Int      @unique
+  user             User     @relation(fields: [userId], references: [id])
+
+  zoneId           String
+  monsterName      String
+  monsterLevel     Int
+  monsterMaxHealth Int
+  monsterHealth    Int
+  monsterAttack    Int
+  monsterDefense   Int
+
+  turnCount        Int      @default(0)
+  createdAt        DateTime @default(now())
 }

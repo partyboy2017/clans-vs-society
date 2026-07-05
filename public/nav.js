@@ -10,6 +10,7 @@
         { href: '/skills',    label: 'Skills',    icon: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M4.93 19.07l2.12-2.12M16.95 7.05l2.12-2.12" stroke-linecap="round"/>' },
         { href: '/raids',     label: 'Raids',     icon: '<path d="M4 12c2-5 6-8 8-8s6 3 8 8c-2 5-6 8-8 8s-6-3-8-8z" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.4"/>' },
         { href: '/monsters',  label: 'Monsters',  icon: '<path d="M12 2c-4 0-7 3-7 7v6a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V9c0-4-3-7-7-7z" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 10v2M15 10v2M9 18l1 2M15 18l-1 2" stroke-linecap="round"/>' },
+        { href: '/inventory', label: 'Inventory', icon: '<path d="M3 7l2-4h14l2 4M3 7v12a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V7M3 7h18" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 11a3 3 0 0 0 6 0" stroke-linecap="round"/>' },
       ]
     },
     {

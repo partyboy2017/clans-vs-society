@@ -420,6 +420,13 @@ app.get('/monsters', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'monsters.html'));
 });
 
+app.get('/inventory', (req, res) => {
+  if (!req.isAuthenticated())   return res.redirect('/');
+  if (!req.user.characterName)  return res.redirect('/choose-name');
+  if (!req.user.characterClass) return res.redirect('/choose-class');
+  res.sendFile(path.join(__dirname, 'public', 'inventory.html'));
+});
+
 app.get('/house', (req, res) => {
   if (!req.isAuthenticated())   return res.redirect('/');
   if (!req.user.characterName)  return res.redirect('/choose-name');
@@ -1174,6 +1181,141 @@ app.post('/api/market/list', async (req, res) => {
     await prisma.inventory.update({ where: { id: inv.id }, data: { quantity: inv.quantity - quantity } });
   }
   res.json({ ok: true });
+});
+
+// ─── INVENTORY & GENERAL STORE ──────────────────────────────────────────────────
+
+// Parses an effect string like "health:30,energy:20" into { health: 30, energy: 20 }.
+function parseItemEffect(effectStr) {
+  const result = {};
+  if (!effectStr) return result;
+  effectStr.split(',').forEach(pair => {
+    const [k, v] = pair.split(':').map(s => s && s.trim());
+    const n = parseInt(v, 10);
+    if (k && !Number.isNaN(n)) result[k] = n;
+  });
+  return result;
+}
+
+app.get('/api/inventory', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const inventory = await prisma.inventory.findMany({
+    where: { userId: req.user.id },
+    include: { item: true },
+    orderBy: { id: 'asc' },
+  });
+  res.json({ inventory });
+});
+
+app.post('/api/inventory/use', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const { inventoryId } = req.body;
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // Row-lock the player's Stats so a used item's effect can't race with
+      // any other concurrent action that reads/writes health, energy, etc.
+      const statsRows = await tx.$queryRaw`
+        SELECT * FROM "Stats" WHERE "userId" = ${req.user.id} FOR UPDATE
+      `;
+      const stats = statsRows[0];
+      if (!stats) throw { code: 'NO_STATS' };
+
+      const inv = await tx.inventory.findFirst({
+        where: { id: inventoryId, userId: req.user.id },
+        include: { item: true },
+      });
+      if (!inv) throw { code: 'NOT_FOUND' };
+      if (inv.item.type !== 'consumable') throw { code: 'NOT_USABLE' };
+
+      const effect = parseItemEffect(inv.item.effect);
+      const statsUpdate = {};
+      const applied = [];
+
+      if (effect.health) {
+        const newHealth = Math.min(stats.maxHealth, stats.health + effect.health);
+        statsUpdate.health = newHealth;
+        applied.push({ stat: 'health', amount: newHealth - stats.health });
+      }
+      if (effect.energy) {
+        const newEnergy = Math.min(stats.maxEnergy, stats.energy + effect.energy);
+        statsUpdate.energy = newEnergy;
+        applied.push({ stat: 'energy', amount: newEnergy - stats.energy });
+      }
+      if (effect.xp) {
+        statsUpdate.xp = { increment: effect.xp };
+        applied.push({ stat: 'xp', amount: effect.xp });
+      }
+      if (effect.gold) {
+        statsUpdate.gold = { increment: effect.gold };
+        applied.push({ stat: 'gold', amount: effect.gold });
+      }
+
+      if (Object.keys(statsUpdate).length > 0) {
+        await tx.stats.update({ where: { userId: req.user.id }, data: statsUpdate });
+      }
+
+      if (inv.quantity - 1 <= 0) {
+        await tx.inventory.delete({ where: { id: inv.id } });
+      } else {
+        await tx.inventory.update({ where: { id: inv.id }, data: { quantity: { decrement: 1 } } });
+      }
+
+      return { itemName: inv.item.name, applied };
+    });
+
+    const levelUp = await checkLevelUp(req.user.id);
+    res.json({ ...result, ...levelUp });
+
+  } catch (e) {
+    if (e && e.code === 'NOT_FOUND')  return res.status(404).json({ error: 'Item not found in your inventory' });
+    if (e && e.code === 'NOT_USABLE') return res.status(400).json({ error: 'That item cannot be used' });
+    console.error('/api/inventory/use error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+app.get('/api/shop/items', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const items = await prisma.item.findMany({
+    where: { type: 'consumable' },
+    orderBy: { basePrice: 'asc' },
+  });
+  res.json({ items });
+});
+
+app.post('/api/shop/buy', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const { itemId, quantity } = req.body;
+  const qty = Math.max(1, Math.min(99, parseInt(quantity, 10) || 1));
+
+  const item = await prisma.item.findUnique({ where: { id: itemId } });
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+
+  const cost = item.basePrice * qty;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const deducted = await tx.stats.updateMany({
+        where: { userId: req.user.id, gold: { gte: cost } },
+        data:  { gold: { decrement: cost } },
+      });
+      if (deducted.count === 0) throw { code: 'NO_GOLD' };
+
+      const existing = await tx.inventory.findFirst({ where: { userId: req.user.id, itemId: item.id } });
+      if (existing) {
+        await tx.inventory.update({ where: { id: existing.id }, data: { quantity: { increment: qty } } });
+      } else {
+        await tx.inventory.create({ data: { userId: req.user.id, itemId: item.id, quantity: qty } });
+      }
+    });
+
+    res.json({ ok: true, itemName: item.name, quantity: qty, cost });
+  } catch (e) {
+    if (e && e.code === 'NO_GOLD') return res.status(400).json({ error: 'Not enough gold' });
+    console.error('/api/shop/buy error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
 });
 
 const TRAINING_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes

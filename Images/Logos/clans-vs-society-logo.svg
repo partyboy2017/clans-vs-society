@@ -1,0 +1,33 @@
+<svg width="640" height="260" viewBox="0 0 640 260" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Clans vs Society</title>
+<desc>Game logo for Clans vs Society, a medieval RPG</desc>
+<defs>
+<linearGradient id="crestGrad" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#B0492F"/>
+<stop offset="1" stop-color="#8B3A2A"/>
+</linearGradient>
+</defs>
+
+<rect x="0" y="0" width="640" height="260" fill="#1A1712"/>
+
+<line x1="60" y1="40" x2="60" y2="220" stroke="rgba(176,141,69,0.22)" stroke-width="1"/>
+<line x1="580" y1="40" x2="580" y2="220" stroke="rgba(176,141,69,0.22)" stroke-width="1"/>
+
+<g transform="translate(320,60)">
+<path d="M0,-38 L26,-24 L26,10 C26,32 12,44 0,50 C-12,44 -26,32 -26,10 L-26,-24 Z"
+fill="url(#crestGrad)" stroke="#B08D45" stroke-width="1.5"/>
+<path d="M-13,-6 L-4,-6 L-4,-15 L4,-15 L4,-6 L13,-6 L13,3 L4,3 L4,20 L-4,20 L-4,3 L-13,3 Z"
+fill="#ECE4D2"/>
+</g>
+
+<text x="320" y="158" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="46" letter-spacing="4" fill="#ECE4D2" font-weight="700">CLANS</text>
+
+<g transform="translate(320,180)">
+<line x1="-96" y1="0" x2="-24" y2="0" stroke="#8A6F3A" stroke-width="1"/>
+<text x="0" y="5" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="13" letter-spacing="3" fill="#B0492F" font-style="italic">versus</text>
+<line x1="24" y1="0" x2="96" y2="0" stroke="#8A6F3A" stroke-width="1"/>
+</g>
+
+<text x="320" y="222" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="38" letter-spacing="10" fill="#B08D45" font-weight="700">SOCIETY</text>
+
+</svg>

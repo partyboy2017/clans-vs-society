@@ -628,10 +628,13 @@
     }
   }
 
-  function updateActionStates(stats){
-    document.getElementById('action-patrol').classList.toggle('disabled', stats.energy < 10);
-    document.getElementById('action-rest').classList.toggle('disabled', stats.gold < 30);
-  }
+ function updateActionStates(stats){
+  const patrolEl = document.getElementById('action-patrol');
+  if (patrolEl) patrolEl.classList.toggle('disabled', stats.energy < 10);
+
+  const restEl = document.getElementById('action-rest');
+  if (restEl) restEl.classList.toggle('disabled', stats.gold < 30);
+}
 
   function addLog(text){
     const list = document.getElementById('log-list');

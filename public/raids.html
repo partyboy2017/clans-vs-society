@@ -288,26 +288,32 @@
   }
 
   function renderLocations(locations){
-    const grid = document.getElementById('locations-grid');
-    grid.innerHTML = locations.map(loc => {
-      const disabled = isRestricted || (myStats && myStats.energy < loc.energyCost);
-      return `
-        <div class="location-card">
-          <div class="loc-risk ${loc.risk}">${loc.risk} RISK</div>
-          <div class="loc-name">${loc.name}</div>
-          <div class="loc-desc">${loc.desc}</div>
-          <div class="loc-rewards">
-            <span class="reward-pill gold">${loc.goldMin}–${loc.goldMax} GOLD</span>
-            <span class="reward-pill xp">+${loc.xpGain} XP</span>
-            <span class="reward-pill energy">${loc.energyCost} ENERGY</span>
-            <span class="reward-pill risk">${Math.round(loc.jailChance*100)}% JAIL CHANCE</span>
-          </div>
-          <button class="raid-btn" ${disabled?'disabled':''} onclick="raidNPC('${loc.id}', '${loc.name}')">
-            ${isRestricted ? 'Unavailable' : disabled ? 'Not enough energy' : 'Raid This Location'}
-          </button>
-        </div>`;
-    }).join('');
-  }
+  const grid = document.getElementById('locations-grid');
+  grid.innerHTML = locations.map(loc => {
+    const disabled = isRestricted || (myStats && myStats.energy < loc.energyCost);
+    return `
+      <div class="location-card">
+        <div class="loc-risk ${loc.risk}">${loc.risk} RISK</div>
+        <div class="loc-name">${loc.name}</div>
+        <div class="loc-desc">${loc.desc}</div>
+        <div class="loc-rewards">
+          <span class="reward-pill gold">${loc.goldMin}–${loc.goldMax} GOLD</span>
+          <span class="reward-pill xp">+${loc.xpGain} XP</span>
+          <span class="reward-pill energy">${loc.energyCost} ENERGY</span>
+          <span class="reward-pill risk">${Math.round(loc.jailChance*100)}% JAIL CHANCE</span>
+        </div>
+        <button class="raid-btn" ${disabled?'disabled':''} data-location-id="${loc.id}" data-location-name="${loc.name.replace(/"/g,'&quot;')}">
+          ${isRestricted ? 'Unavailable' : disabled ? 'Not enough energy' : 'Raid This Location'}
+        </button>
+      </div>`;
+  }).join('');
+
+  grid.querySelectorAll('.raid-btn[data-location-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      raidNPC(btn.dataset.locationId, btn.dataset.locationName);
+    });
+  });
+}
 
   function filterPlayers(){
     const q = document.getElementById('search-players').value.toLowerCase();

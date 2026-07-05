@@ -730,18 +730,16 @@ app.post('/api/action/rest', async (req, res) => {
     }
 
     // Atomically enforce gold balance — no cooldown field since lastRestAt was removed.
-const deducted = await prisma.stats.updateMany({
-  where: {
-    userId: req.user.id,
-    gold:   { gte: goldCost },
-  },
-  data: {
-    gold:         { decrement: goldCost },
-    health:       restoredHealth,
-    energy:       stats.maxEnergy,
-    lastEnergyAt: new Date(),
-  },
-});
+    const deducted = await prisma.stats.updateMany({
+      where: {
+        userId: req.user.id,
+        gold:   { gte: goldCost },
+      },
+      data: {
+        gold:   { decrement: goldCost },
+        health: restoredHealth,
+      },
+    });
 
     if (deducted.count === 0) {
       return res.status(400).json({ error: 'Not enough gold to rest' });
@@ -1376,71 +1374,69 @@ app.post('/api/raid/npc', async (req, res) => {
   // Clear any expired jail/hospital timers first (idempotent write, benign if racy).
   await checkStatus(req.user.id);
 
-  const now = new Date();
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // Row-lock this user's Stats row for the whole transaction so concurrent
+      // raid requests from the same user fully serialize instead of racing on
+      // stale reads (fixes duplicate wins / lost damage / corrupted energy).
+      const rows = await tx.$queryRaw`
+        SELECT * FROM "Stats" WHERE "userId" = ${req.user.id} FOR UPDATE
+      `;
+      const stats = rows[0];
+      if (!stats) throw { code: 'NO_STATS' };
+      if (stats.inJail)     throw { code: 'JAILED' };
+      if (stats.inHospital) throw { code: 'HOSPITAL' };
+      if (stats.energy < location.energyCost) throw { code: 'NO_ENERGY' };
 
-  // ── Critical section ──────────────────────────────────────────────────────────
-  // Atomically enforce energy cost, jail, and hospital in the WHERE clause.
-  const deducted = await prisma.stats.updateMany({
-    where: {
-      userId:     req.user.id,
-      energy:     { gte: location.energyCost },
-      inJail:     false,
-      inHospital: false,
-    },
-    data: {
-      energy: { decrement: location.energyCost },
-    },
-  });
+      const attackPower  = stats.strength + stats.speed + Math.floor(Math.random() * 15);
+      const defensePower = location.difficulty + Math.floor(Math.random() * 10);
+      const won          = attackPower >= defensePower;
 
-  if (deducted.count === 0) {
-    const s = await prisma.stats.findUnique({ where: { userId: req.user.id } });
-    if (s.inJail)     return res.status(400).json({ error: 'You are in jail' });
-    if (s.inHospital) return res.status(400).json({ error: 'You are in hospital' });
-    return res.status(400).json({ error: 'Not enough energy' });
-  }
-  // ─────────────────────────────────────────────────────────────────────────────
+      const goldGain = won ? Math.floor(Math.random() * (location.goldMax - location.goldMin + 1)) + location.goldMin : 0;
+      const xpGain   = won ? location.xpGain : Math.floor(location.xpGain * 0.2);
 
-  // Read fresh stats for the combat roll (energy is already deducted above).
-  const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+      const outcomeData = {
+        energy: { decrement: location.energyCost },
+        xp:     { increment: xpGain },
+      };
 
-  const attackPower  = stats.strength + stats.speed + Math.floor(Math.random() * 15);
-  const defensePower = location.difficulty + Math.floor(Math.random() * 10);
-  const won          = attackPower >= defensePower;
+      let jailMins     = 0;
+      let hospitalMins = 0;
 
-  const goldGain = won ? Math.floor(Math.random() * (location.goldMax - location.goldMin + 1)) + location.goldMin : 0;
-  const xpGain   = won ? location.xpGain : Math.floor(location.xpGain * 0.2);
-
-  // All outcome writes use increments so they compose correctly with any other
-  // concurrent writes that landed between the two DB round-trips above.
-  const outcomeData = { xp: { increment: xpGain } };
-
-  let jailMins     = 0;
-  let hospitalMins = 0;
-
-  if (won) {
-    outcomeData.gold = { increment: goldGain };
-  } else {
-    const caught = Math.random() < location.jailChance;
-    if (caught) {
-      jailMins              = location.jailMins;
-      outcomeData.inJail    = true;
-      outcomeData.jailUntil = new Date(Date.now() + jailMins * 60 * 1000);
-    } else {
-      hospitalMins = Math.ceil(location.jailMins / 2);
-      const newHealth = Math.max(1, stats.health - Math.floor(stats.maxHealth * 0.3));
-      outcomeData.health = newHealth;
-      if (newHealth <= 10) {
-        outcomeData.inHospital    = true;
-        outcomeData.hospitalUntil = new Date(Date.now() + hospitalMins * 60 * 1000);
-        outcomeData.health        = 1;
+      if (won) {
+        outcomeData.gold = { increment: goldGain };
+      } else {
+        const caught = Math.random() < location.jailChance;
+        if (caught) {
+          jailMins              = location.jailMins;
+          outcomeData.inJail    = true;
+          outcomeData.jailUntil = new Date(Date.now() + jailMins * 60 * 1000);
+        } else {
+          hospitalMins = Math.ceil(location.jailMins / 2);
+          const newHealth = Math.max(1, stats.health - Math.floor(stats.maxHealth * 0.3));
+          outcomeData.health = newHealth;
+          if (newHealth <= 10) {
+            outcomeData.inHospital    = true;
+            outcomeData.hospitalUntil = new Date(Date.now() + hospitalMins * 60 * 1000);
+            outcomeData.health        = 1;
+          }
+        }
       }
-    }
+
+      await tx.stats.update({ where: { userId: req.user.id }, data: outcomeData });
+      return { won, goldGain, xpGain, jailMins, hospitalMins };
+    });
+
+    const levelUp = result.won ? await checkLevelUp(req.user.id) : { leveledUp: false };
+    res.json({ ...result, location: location.name, ...levelUp });
+
+  } catch (e) {
+    if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
+    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
+    if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy' });
+    console.error('/api/raid/npc error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
   }
-
-  await prisma.stats.update({ where: { userId: req.user.id }, data: outcomeData });
-  const levelUp = won ? await checkLevelUp(req.user.id) : { leveledUp: false };
-
-  res.json({ won, goldGain, xpGain, jailMins, hospitalMins, location: location.name, ...levelUp });
 });
 
 app.post('/api/raid/player', async (req, res) => {
@@ -1450,85 +1446,89 @@ app.post('/api/raid/player', async (req, res) => {
 
   // Clear expired status flags (idempotent, benign if racy).
   await checkStatus(req.user.id);
-
-  // Atomically deduct energy, enforcing all preconditions in WHERE.
-  const deducted = await prisma.stats.updateMany({
-    where: {
-      userId:     req.user.id,
-      energy:     { gte: 20 },
-      inJail:     false,
-      inHospital: false,
-    },
-    data: { energy: { decrement: 20 } },
-  });
-
-  if (deducted.count === 0) {
-    const s = await prisma.stats.findUnique({ where: { userId: req.user.id } });
-    if (s.inJail)     return res.status(400).json({ error: 'You are in jail' });
-    if (s.inHospital) return res.status(400).json({ error: 'You are in hospital' });
-    return res.status(400).json({ error: 'Not enough energy — attacks cost 20 energy' });
-  }
+  await checkStatus(targetId);
 
   const target = await prisma.user.findUnique({ where: { id: targetId }, include: { stats: true } });
   if (!target || !target.stats) return res.status(404).json({ error: 'Target not found' });
 
-  // Read fresh snapshots for the combat roll.
-  const attackerStats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
-  const defenderStats = await checkStatus(targetId);
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // Lock both rows for the duration of the transaction, always in ascending
+      // userId order, so two players attacking each other simultaneously can't
+      // deadlock and can't interleave on stale reads.
+      const ids = [req.user.id, targetId].sort((a, b) => a - b);
+      const rows = await tx.$queryRaw`
+        SELECT * FROM "Stats" WHERE "userId" IN (${ids[0]}, ${ids[1]}) ORDER BY "userId" FOR UPDATE
+      `;
+      const attackerStats = rows.find(r => r.userId === req.user.id);
+      const defenderStats = rows.find(r => r.userId === targetId);
+      if (!attackerStats || !defenderStats) throw { code: 'NO_STATS' };
 
-  // Combat
-  const attackPower  = attackerStats.strength + attackerStats.speed     + Math.floor(Math.random() * 20);
-  const defensePower = defenderStats.defense   + defenderStats.dexterity + Math.floor(Math.random() * 20);
-  const won = attackPower >= defensePower;
+      if (attackerStats.inJail)     throw { code: 'JAILED' };
+      if (attackerStats.inHospital) throw { code: 'HOSPITAL' };
+      if (attackerStats.energy < 20) throw { code: 'NO_ENERGY' };
 
-  const xpGain     = won ? 30 : 10;
-  const goldStolen = won ? Math.floor(defenderStats.gold * (Math.random() * 0.1 + 0.05)) : 0;
+      // Combat
+      const attackPower  = attackerStats.strength + attackerStats.speed     + Math.floor(Math.random() * 20);
+      const defensePower = defenderStats.defense   + defenderStats.dexterity + Math.floor(Math.random() * 20);
+      const won = attackPower >= defensePower;
 
-  // Attacker reward/penalty — use increments so any concurrent write doesn't clobber.
-  const attackerUpdate = {
-    xp:   { increment: xpGain },
-    gold: { increment: goldStolen }, // 0 on loss, no harm
-  };
+      const xpGain     = won ? 30 : 10;
+      const goldStolen = won ? Math.floor(defenderStats.gold * (Math.random() * 0.1 + 0.05)) : 0;
 
-  const defenderUpdate = {};
-  let defenderHospitalized = false;
+      const attackerUpdate = {
+        energy: { decrement: 20 },
+        xp:     { increment: xpGain },
+        gold:   { increment: goldStolen }, // 0 on loss, no harm
+      };
 
-  if (won) {
-    defenderUpdate.gold = { decrement: goldStolen };
-    const newHealth = Math.max(1, defenderStats.health - Math.floor(defenderStats.maxHealth * 0.25));
-    defenderUpdate.health = newHealth;
-    if (newHealth <= 10) {
-      defenderUpdate.inHospital    = true;
-      defenderUpdate.hospitalUntil = new Date(Date.now() + 10 * 60 * 1000);
-      defenderUpdate.health        = 1;
-      defenderHospitalized         = true;
-    }
-  } else {
-    // Attacker loses and is injured.
-    const newHealth = Math.max(1, attackerStats.health - Math.floor(attackerStats.maxHealth * 0.2));
-    attackerUpdate.health = newHealth;
-    if (newHealth <= 10) {
-      attackerUpdate.inHospital    = true;
-      attackerUpdate.hospitalUntil = new Date(Date.now() + 8 * 60 * 1000);
-      attackerUpdate.health        = 1;
-    }
+      const defenderUpdate = {};
+      let defenderHospitalized = false;
+
+      if (won) {
+        defenderUpdate.gold = { decrement: goldStolen };
+        const newHealth = Math.max(1, defenderStats.health - Math.floor(defenderStats.maxHealth * 0.25));
+        defenderUpdate.health = newHealth;
+        if (newHealth <= 10) {
+          defenderUpdate.inHospital    = true;
+          defenderUpdate.hospitalUntil = new Date(Date.now() + 10 * 60 * 1000);
+          defenderUpdate.health        = 1;
+          defenderHospitalized         = true;
+        }
+      } else {
+        // Attacker loses and is injured.
+        const newHealth = Math.max(1, attackerStats.health - Math.floor(attackerStats.maxHealth * 0.2));
+        attackerUpdate.health = newHealth;
+        if (newHealth <= 10) {
+          attackerUpdate.inHospital    = true;
+          attackerUpdate.hospitalUntil = new Date(Date.now() + 8 * 60 * 1000);
+          attackerUpdate.health        = 1;
+        }
+      }
+
+      await tx.stats.update({ where: { userId: req.user.id }, data: attackerUpdate });
+      if (Object.keys(defenderUpdate).length > 0) {
+        await tx.stats.update({ where: { userId: targetId }, data: defenderUpdate });
+      }
+
+      return { won, goldStolen, xpGain, defenderHospitalized };
+    });
+
+    const levelUp = await checkLevelUp(req.user.id);
+
+    res.json({
+      ...result,
+      targetName: target.characterName,
+      ...levelUp
+    });
+
+  } catch (e) {
+    if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
+    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
+    if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy — attacks cost 20 energy' });
+    console.error('/api/raid/player error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
   }
-
-  await prisma.stats.update({ where: { userId: req.user.id }, data: attackerUpdate });
-  if (Object.keys(defenderUpdate).length > 0) {
-    await prisma.stats.update({ where: { userId: targetId }, data: defenderUpdate });
-  }
-
-  const levelUp = await checkLevelUp(req.user.id);
-
-  res.json({
-    won,
-    goldStolen,
-    xpGain,
-    targetName: target.characterName,
-    defenderHospitalized,
-    ...levelUp
-  });
 });
 
 

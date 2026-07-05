@@ -730,16 +730,18 @@ app.post('/api/action/rest', async (req, res) => {
     }
 
     // Atomically enforce gold balance — no cooldown field since lastRestAt was removed.
-    const deducted = await prisma.stats.updateMany({
-      where: {
-        userId: req.user.id,
-        gold:   { gte: goldCost },
-      },
-      data: {
-        gold:   { decrement: goldCost },
-        health: restoredHealth,
-      },
-    });
+const deducted = await prisma.stats.updateMany({
+  where: {
+    userId: req.user.id,
+    gold:   { gte: goldCost },
+  },
+  data: {
+    gold:         { decrement: goldCost },
+    health:       restoredHealth,
+    energy:       stats.maxEnergy,
+    lastEnergyAt: new Date(),
+  },
+});
 
     if (deducted.count === 0) {
       return res.status(400).json({ error: 'Not enough gold to rest' });

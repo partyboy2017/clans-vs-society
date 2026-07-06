@@ -5,6 +5,7 @@ const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { PrismaClient } = require('@prisma/client');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -311,6 +312,95 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+// ─── Email ────────────────────────────────────────────────────────────────────
+
+// Configured via env vars so it works with any SMTP provider (Gmail app
+// password, SendGrid, Resend, Mailgun, etc.). If SMTP_HOST isn't set, email
+// sending is silently skipped rather than crashing the app.
+let mailTransporter = null;
+if (process.env.SMTP_HOST) {
+  mailTransporter = nodemailer.createTransport({
+    host:   process.env.SMTP_HOST,
+    port:   parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: process.env.SMTP_SECURE === 'true', // true for port 465, false for 587/25
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+}
+
+const APP_URL = process.env.APP_URL || 'https://clans-vs-society-production.up.railway.app';
+
+function welcomeEmailHtml(username) {
+  return `
+  <div style="background:#1C1A17;padding:32px 16px;font-family:Georgia,'Times New Roman',serif;">
+    <table role="presentation" width="100%" style="max-width:520px;margin:0 auto;border-collapse:collapse;">
+      <tr>
+        <td style="background:#25211C;border:1px solid rgba(176,141,69,0.3);padding:36px 32px;">
+          <div style="text-align:center;margin-bottom:24px;">
+            <div style="font-family:Georgia,serif;font-size:22px;letter-spacing:2px;text-transform:uppercase;color:#ECE4D2;font-weight:bold;">Clans vs Society</div>
+          </div>
+          <h1 style="color:#DCCEA6;font-size:22px;text-align:center;margin:0 0 8px;">Welcome, ${username}!</h1>
+          <p style="color:#93897A;font-style:italic;text-align:center;font-size:15px;margin:0 0 28px;">Your name has been entered into the annals of the realm.</p>
+
+          <p style="color:#ECE4D2;font-size:15px;line-height:1.6;margin:0 0 20px;">
+            The realm is unforgiving, but fortune favors the bold. Here's how to get started:
+          </p>
+
+          <table role="presentation" width="100%" style="border-collapse:collapse;margin-bottom:24px;">
+            <tr>
+              <td style="padding:10px 0;border-bottom:1px solid rgba(176,141,69,0.15);color:#ECE4D2;font-size:14px;">
+                <strong style="color:#B08D45;">Train</strong> — build strength, defense, speed, and dexterity.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:10px 0;border-bottom:1px solid rgba(176,141,69,0.15);color:#ECE4D2;font-size:14px;">
+                <strong style="color:#B08D45;">Raid</strong> — strike NPC locations or rival lords for gold.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:10px 0;border-bottom:1px solid rgba(176,141,69,0.15);color:#ECE4D2;font-size:14px;">
+                <strong style="color:#B08D45;">Fight Monsters</strong> — battle creatures across four tiers of danger.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:10px 0;color:#ECE4D2;font-size:14px;">
+                <strong style="color:#B08D45;">Rest at the Inn</strong> — spend gold to fully restore health and energy.
+              </td>
+            </tr>
+          </table>
+
+          <div style="text-align:center;">
+            <a href="${APP_URL}/dashboard" style="display:inline-block;background:#8B3A2A;color:#ECE4D2;text-decoration:none;padding:12px 32px;font-family:'Courier New',monospace;font-size:13px;letter-spacing:1px;text-transform:uppercase;">
+              Enter the Realm
+            </a>
+          </div>
+
+          <p style="color:#93897A;font-size:12px;text-align:center;margin:28px 0 0;font-style:italic;">
+            May your blade stay sharp and your coffers stay full.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </div>`;
+}
+
+async function sendWelcomeEmail(toEmail, username) {
+  if (!mailTransporter || !toEmail) return;
+  try {
+    await mailTransporter.sendMail({
+      from:    process.env.FROM_EMAIL || '"Clans vs Society" <no-reply@clansvssociety.com>',
+      to:      toEmail,
+      subject: `Welcome to Clans vs Society, ${username}!`,
+      html:    welcomeEmailHtml(username),
+    });
+    console.log(`Welcome email sent to ${toEmail}`);
+  } catch (err) {
+    console.error('Failed to send welcome email:', err);
+  }
+}
+
 // ─── Passport ─────────────────────────────────────────────────────────────────
 
 passport.use(new GoogleStrategy({
@@ -319,6 +409,9 @@ passport.use(new GoogleStrategy({
   callbackURL:  process.env.CALLBACK_URL || '/auth/google/callback',
 }, async (accessToken, refreshToken, profile, done) => {
   try {
+    const existing = await prisma.user.findUnique({ where: { googleId: profile.id } });
+    const isNewUser = !existing;
+
     const user = await prisma.user.upsert({
       where:  { googleId: profile.id },
       update: {
@@ -335,6 +428,14 @@ passport.use(new GoogleStrategy({
         avatar:     profile.photos?.[0]?.value  || null,
       },
     });
+
+    if (isNewUser && user.email) {
+      // Fire-and-forget — a slow or failing mail provider should never block login.
+      sendWelcomeEmail(user.email, user.username).catch(err =>
+        console.error('Welcome email error:', err)
+      );
+    }
+
     done(null, user);
   } catch (err) {
     done(err, null);

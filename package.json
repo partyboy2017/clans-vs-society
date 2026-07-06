@@ -17,7 +17,6 @@
     "dotenv": "^16.0.0",
     "express": "^5.2.1",
     "express-session": "^1.18.1",
-    "nodemailer": "^9.0.3",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "prisma": "^6.19.3"

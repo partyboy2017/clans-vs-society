@@ -5,7 +5,6 @@ const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { PrismaClient } = require('@prisma/client');
-const nodemailer = require('nodemailer');
 
 const app = express();
 const prisma = new PrismaClient();
@@ -314,23 +313,38 @@ app.use(passport.session());
 
 // ─── Email ────────────────────────────────────────────────────────────────────
 
-// Configured via env vars so it works with any SMTP provider (Gmail app
-// password, SendGrid, Resend, Mailgun, etc.). If SMTP_HOST isn't set, email
-// sending is silently skipped rather than crashing the app.
-let mailTransporter = null;
-if (process.env.SMTP_HOST) {
-  mailTransporter = nodemailer.createTransport({
-    host:   process.env.SMTP_HOST,
-    port:   parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_SECURE === 'true', // true for port 465, false for 587/25
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
-}
-
+// Railway blocks outbound SMTP on Free/Trial/Hobby plans, so we send email
+// via Resend's HTTPS API instead of SMTP (HTTPS traffic is never blocked).
+// If RESEND_API_KEY isn't set, sending is silently skipped rather than
+// crashing the app.
 const APP_URL = process.env.APP_URL || 'https://clans-vs-society-production.up.railway.app';
+
+async function sendWelcomeEmail(toEmail, username) {
+  if (!process.env.RESEND_API_KEY || !toEmail) return;
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify({
+        from:    process.env.FROM_EMAIL || 'Clans vs Society <onboarding@resend.dev>',
+        to:      toEmail,
+        subject: `Welcome to Clans vs Society, ${username}!`,
+        html:    welcomeEmailHtml(username),
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.error('Resend API error:', res.status, body);
+      return;
+    }
+    console.log(`Welcome email sent to ${toEmail}`);
+  } catch (err) {
+    console.error('Failed to send welcome email:', err);
+  }
+}
 
 function welcomeEmailHtml(username) {
   return `
@@ -384,21 +398,6 @@ function welcomeEmailHtml(username) {
       </tr>
     </table>
   </div>`;
-}
-
-async function sendWelcomeEmail(toEmail, username) {
-  if (!mailTransporter || !toEmail) return;
-  try {
-    await mailTransporter.sendMail({
-      from:    process.env.FROM_EMAIL || '"Clans vs Society" <no-reply@clansvssociety.com>',
-      to:      toEmail,
-      subject: `Welcome to Clans vs Society, ${username}!`,
-      html:    welcomeEmailHtml(username),
-    });
-    console.log(`Welcome email sent to ${toEmail}`);
-  } catch (err) {
-    console.error('Failed to send welcome email:', err);
-  }
 }
 
 // ─── Passport ─────────────────────────────────────────────────────────────────

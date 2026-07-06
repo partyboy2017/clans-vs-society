@@ -142,6 +142,15 @@
     margin-bottom: 1.8rem;
   }
 
+  /* JAIL / HOSPITAL STATUS BANNER */
+  .status-banner{display:none;align-items:center;gap:1rem;padding:1rem 1.4rem;margin-bottom:1.4rem;border:1px solid;}
+  .status-banner.show{display:flex;}
+  .status-banner.jail{background:rgba(139,58,42,0.15);border-color:var(--rust-bright);}
+  .status-banner.hospital{background:rgba(74,124,89,0.12);border-color:var(--green);}
+  .status-icon{font-size:1.6rem;flex-shrink:0;}
+  .status-title{font-family:'Cinzel',serif;font-size:1rem;color:var(--parchment);margin-bottom:0.2rem;}
+  .status-timer{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--ash);letter-spacing:0.08em;}
+
   /* LEVEL UP BANNER */
   .levelup-banner{
     display: none;
@@ -447,6 +456,24 @@
     <div class="page-title" id="greeting">Welcome back</div>
     <div class="page-sub" id="level-line">Loading your character...</div>
 
+    <!-- JAIL BANNER -->
+    <div class="status-banner jail" id="jail-banner">
+      <div class="status-icon">⛓</div>
+      <div>
+        <div class="status-title">You are in jail</div>
+        <div class="status-timer" id="jail-timer">Released in —</div>
+      </div>
+    </div>
+
+    <!-- HOSPITAL BANNER -->
+    <div class="status-banner hospital" id="hospital-banner">
+      <div class="status-icon">🏥</div>
+      <div>
+        <div class="status-title">You are recovering in hospital</div>
+        <div class="status-timer" id="hospital-timer">Discharged in —</div>
+      </div>
+    </div>
+
     <!-- LEVEL UP BANNER -->
     <div class="levelup-banner" id="levelup-banner">
       <div class="lu-icon">⚔</div>
@@ -566,6 +593,53 @@
 
 <script>
   let playerStats = null;
+  let jailInterval = null;
+  let jailRemainingMs = 0;
+  let hospitalRemainingMs = 0;
+
+  function formatMs(ms){
+    if(ms <= 0) return '0s';
+    const s = Math.ceil(ms/1000), m = Math.floor(s/60), sec = s%60;
+    return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  }
+
+  function updateStatusBanners(stats){
+    const now = Date.now();
+    const jailBanner = document.getElementById('jail-banner');
+    const hospitalBanner = document.getElementById('hospital-banner');
+
+    if(stats.inJail && stats.jailUntil){
+      jailBanner.classList.add('show');
+      jailRemainingMs = Math.max(0, new Date(stats.jailUntil).getTime() - now);
+      document.getElementById('jail-timer').textContent = `Released in ${formatMs(jailRemainingMs)}`;
+    } else {
+      jailBanner.classList.remove('show');
+      jailRemainingMs = 0;
+    }
+
+    if(stats.inHospital && stats.hospitalUntil){
+      hospitalBanner.classList.add('show');
+      hospitalRemainingMs = Math.max(0, new Date(stats.hospitalUntil).getTime() - now);
+      document.getElementById('hospital-timer').textContent = `Discharged in ${formatMs(hospitalRemainingMs)}`;
+    } else {
+      hospitalBanner.classList.remove('show');
+      hospitalRemainingMs = 0;
+    }
+
+    if(jailInterval) clearInterval(jailInterval);
+    jailInterval = setInterval(() => {
+      if(jailRemainingMs > 0){
+        jailRemainingMs = Math.max(0, jailRemainingMs - 1000);
+        document.getElementById('jail-timer').textContent = `Released in ${formatMs(jailRemainingMs)}`;
+        if(jailRemainingMs === 0){ loadPlayer(); }
+      }
+      if(hospitalRemainingMs > 0){
+        hospitalRemainingMs = Math.max(0, hospitalRemainingMs - 1000);
+        document.getElementById('hospital-timer').textContent = `Discharged in ${formatMs(hospitalRemainingMs)}`;
+        if(hospitalRemainingMs === 0){ loadPlayer(); }
+      }
+    }, 1000);
+  }
 
   async function loadPlayer(){
     try {
@@ -577,6 +651,8 @@
       document.getElementById('player-name').textContent = data.username;
       document.getElementById('greeting').textContent = `Welcome back, ${data.username}`;
       document.getElementById('level-line').textContent = `Level ${data.stats.level} — ${data.stats.xp} XP earned`;
+
+      updateStatusBanners(data.stats);
 
       // Health
       const hpPct = Math.round((data.stats.health / data.stats.maxHealth) * 100);
@@ -628,13 +704,13 @@
     }
   }
 
- function updateActionStates(stats){
-  const patrolEl = document.getElementById('action-patrol');
-  if (patrolEl) patrolEl.classList.toggle('disabled', stats.energy < 10);
+  function updateActionStates(stats){
+    const patrolEl = document.getElementById('action-patrol');
+    if (patrolEl) patrolEl.classList.toggle('disabled', stats.energy < 10);
 
-  const restEl = document.getElementById('action-rest');
-  if (restEl) restEl.classList.toggle('disabled', stats.gold < 30);
-}
+    const restEl = document.getElementById('action-rest');
+    if (restEl) restEl.classList.toggle('disabled', stats.gold < 30);
+  }
 
   function addLog(text){
     const list = document.getElementById('log-list');

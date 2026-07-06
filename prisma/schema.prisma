@@ -107,6 +107,7 @@ model Item {
   type        String
   effect      String
   basePrice   Int
+  icon        String      @default("/assets/items/_fallback/default-item.png")
   listings    Listing[]
   inventory   Inventory[]
 }

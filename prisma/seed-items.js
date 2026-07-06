@@ -16,6 +16,7 @@ const STARTER_ITEMS = [
     type: 'consumable',
     effect: 'health:30',
     basePrice: 15,
+    icon: '/assets/items/consumables/potion-minor-healing.png',
   },
   {
     name: 'Healing Potion',
@@ -23,6 +24,7 @@ const STARTER_ITEMS = [
     type: 'consumable',
     effect: 'health:75',
     basePrice: 35,
+    icon: '/assets/items/consumables/potion-healing.png',
   },
   {
     name: 'Energy Draught',
@@ -30,6 +32,7 @@ const STARTER_ITEMS = [
     type: 'consumable',
     effect: 'energy:40',
     basePrice: 20,
+    icon: '/assets/items/consumables/draught-energy.png',
   },
   {
     name: 'Elixir of Vigor',
@@ -37,6 +40,7 @@ const STARTER_ITEMS = [
     type: 'consumable',
     effect: 'health:50,energy:50',
     basePrice: 60,
+    icon: '/assets/items/consumables/elixir-vigor.png',
   },
   {
     name: 'Scroll of Wisdom',
@@ -44,6 +48,7 @@ const STARTER_ITEMS = [
     type: 'consumable',
     effect: 'xp:25',
     basePrice: 40,
+    icon: '/assets/items/consumables/scroll-wisdom.png',
   },
   {
     name: 'Wolf Pelt',
@@ -51,6 +56,7 @@ const STARTER_ITEMS = [
     type: 'material',
     effect: '',
     basePrice: 8,
+    icon: '/assets/items/materials/pelt-wolf.png',
   },
   {
     name: 'Goblin Tooth',
@@ -58,6 +64,7 @@ const STARTER_ITEMS = [
     type: 'material',
     effect: '',
     basePrice: 5,
+    icon: '/assets/items/materials/tooth-goblin.png',
   },
   {
     name: 'Ancient Coin',
@@ -65,24 +72,28 @@ const STARTER_ITEMS = [
     type: 'material',
     effect: '',
     basePrice: 25,
+    icon: '/assets/items/materials/coin-ancient.png',
   },
 ];
 
 async function main() {
   let created = 0;
-  let skipped = 0;
+  let updated = 0;
 
   for (const item of STARTER_ITEMS) {
     const existing = await prisma.item.findFirst({ where: { name: item.name } });
     if (existing) {
-      skipped++;
+      if (existing.icon !== item.icon) {
+        await prisma.item.update({ where: { id: existing.id }, data: { icon: item.icon } });
+        updated++;
+      }
       continue;
     }
     await prisma.item.create({ data: item });
     created++;
   }
 
-  console.log(`Seed complete: ${created} item(s) created, ${skipped} already existed.`);
+  console.log(`Seed complete: ${created} item(s) created, ${updated} existing item(s) had their icon path updated.`);
 }
 
 main()

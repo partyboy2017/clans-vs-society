@@ -47,8 +47,8 @@
 
   .items-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;}
   .item-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.1rem;display:flex;flex-direction:column;transition:border-color 0.15s;}
-  .item-icon-wrap{width:52px;height:52px;margin:0 0 0.7rem;display:flex;align-items:center;justify-content:center;background:var(--bg-panel-2);border:1px solid var(--line);}
-  .item-icon-wrap svg{width:28px;height:28px;}
+  .item-icon-wrap{width:52px;height:52px;margin:0 0 0.7rem;display:flex;align-items:center;justify-content:center;background:var(--bg-panel-2);border:1px solid var(--line);overflow:hidden;}
+  .item-icon-wrap img{width:100%;height:100%;object-fit:contain;image-rendering:-webkit-optimize-contrast;}
   .item-card:hover{border-color:var(--brass-dim);}
   .item-type{font-family:'JetBrains Mono',monospace;font-size:0.56rem;letter-spacing:0.16em;margin-bottom:0.4rem;text-transform:uppercase;}
   .item-type.consumable{color:var(--green-bright);}
@@ -285,21 +285,11 @@
     document.getElementById('pane-equipment').style.display = tab === 'equipment' ? 'block' : 'none';
   }
 
-  const ITEM_ICONS = {
-    'Minor Healing Potion': { color: 'var(--green-bright)', svg: '<path d="M9 2h6M10 2v5.5L6 15a3 3 0 0 0 3 5h6a3 3 0 0 0 3-5l-4-7.5V2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 16h8" stroke-linecap="round"/>' },
-    'Healing Potion': { color: 'var(--rust-bright)', svg: '<path d="M9 2h6M10 2v5.5L6 15a3 3 0 0 0 3 5h6a3 3 0 0 0 3-5l-4-7.5V2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 16h8" stroke-linecap="round"/>' },
-    'Energy Draught': { color: 'var(--brass)', svg: '<path d="M9 2h6M10 2v5.5L6 15a3 3 0 0 0 3 5h6a3 3 0 0 0 3-5l-4-7.5V2" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 11l-3.5 5h2.2l-1 3.5L15 14h-2.2z" fill="currentColor" stroke="none"/>' },
-    'Elixir of Vigor': { color: '#C77DFF', svg: '<path d="M9 2h6M10 2v5.5L6 15a3 3 0 0 0 3 5h6a3 3 0 0 0 3-5l-4-7.5V2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 11.5l1 2 2 1-2 1-1 2-1-2-2-1 2-1z" fill="currentColor" stroke="none"/>' },
-    'Scroll of Wisdom': { color: 'var(--brass)', svg: '<path d="M8 4h9a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2" stroke-linecap="round"/><line x1="9" y1="8" x2="15" y2="8" stroke-linecap="round"/><line x1="9" y1="12" x2="15" y2="12" stroke-linecap="round"/>' },
-    'Wolf Pelt': { color: 'var(--ash)', svg: '<circle cx="12" cy="15.5" r="4"/><circle cx="6.5" cy="8" r="1.7"/><circle cx="10.5" cy="4.5" r="1.7"/><circle cx="14.5" cy="4.5" r="1.7"/><circle cx="18" cy="8" r="1.7"/>' },
-    'Goblin Tooth': { color: 'var(--ash)', svg: '<path d="M8 3c-2 0-4 2-4 5 0 4 2 6 2 9a2 2 0 0 0 4 0c0-2 1-3 2-3s2 1 2 3a2 2 0 0 0 4 0c0-3 2-5 2-9 0-3-2-5-4-5-2 0-2 2-4 2s-2-2-4-2z" stroke-linejoin="round"/>' },
-    'Ancient Coin': { color: 'var(--brass)', svg: '<circle cx="12" cy="12" r="9"/><path d="M9 12h6M12 8v8" stroke-linecap="round"/>' },
-  };
-  const DEFAULT_ICON = { color: 'var(--ash)', svg: '<rect x="4" y="8" width="16" height="12" rx="1"/><path d="M4 8l8-4 8 4" stroke-linejoin="round"/>' };
+  const FALLBACK_ICON = '/assets/items/_fallback/default-item.png';
 
-  function itemIconHtml(itemName){
-    const icon = ITEM_ICONS[itemName] || DEFAULT_ICON;
-    return `<div class="item-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="${icon.color}" stroke-width="1.5">${icon.svg}</svg></div>`;
+  function itemIconHtml(iconPath, itemName){
+    const src = iconPath || FALLBACK_ICON;
+    return `<div class="item-icon-wrap"><img src="${src}" alt="${itemName.replace(/"/g,'&quot;')}" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_ICON}';"></div>`;
   }
 
   function renderInventory(inventory){
@@ -313,7 +303,7 @@
       return `
         <div class="item-card">
           <div class="item-type ${inv.item.type}">${inv.item.type}</div>
-          ${itemIconHtml(inv.item.name)}
+          ${itemIconHtml(inv.item.icon, inv.item.name)}
           <div class="item-name">${inv.item.name}</div>
           <div class="item-desc">${inv.item.description}</div>
           <div class="item-footer">
@@ -341,7 +331,7 @@
       return `
         <div class="item-card">
           <div class="item-type ${item.type}">${item.type}</div>
-          ${itemIconHtml(item.name)}
+          ${itemIconHtml(item.icon, item.name)}
           <div class="item-name">${item.name}</div>
           <div class="item-desc">${item.description}</div>
           <div class="item-footer">

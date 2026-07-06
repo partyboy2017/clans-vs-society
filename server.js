@@ -1693,49 +1693,65 @@ const MONSTER_ZONES = [
   {
     id: 'woods',
     name: 'Cursed Woods',
+    tier: 'LOW',
     desc: 'A shadowed forest on the edge of the realm. Wolves and goblins prowl the treeline.',
     levelMin: 1,
     levelMax: 10,
     energyCost: 15,
     monsters: [
-      { name: 'Feral Wolf', hpBase: 35, atkBase: 5, defBase: 1 },
-      { name: 'Bog Goblin', hpBase: 45, atkBase: 6, defBase: 2 },
+      { name: 'Feral Wolf',    hpBase: 35, atkBase: 5, defBase: 1 },
+      { name: 'Bog Goblin',    hpBase: 45, atkBase: 6, defBase: 2 },
+      { name: 'Giant Rat Swarm', hpBase: 25, atkBase: 4, defBase: 0 },
+      { name: 'Bandit Scout',  hpBase: 50, atkBase: 7, defBase: 3 },
+      { name: 'Wild Boar',     hpBase: 40, atkBase: 6, defBase: 2 },
     ],
   },
   {
     id: 'marsh',
     name: 'Blighted Marsh',
+    tier: 'MEDIUM',
     desc: 'Sickly waters hide things that used to be human. The air itself feels hostile.',
     levelMin: 8,
     levelMax: 20,
     energyCost: 22,
     monsters: [
-      { name: 'Marsh Wretch', hpBase: 70, atkBase: 9, defBase: 4 },
-      { name: 'Bloated Leech', hpBase: 90, atkBase: 7, defBase: 6 },
+      { name: 'Marsh Wretch',   hpBase: 70,  atkBase: 9,  defBase: 4 },
+      { name: 'Bloated Leech',  hpBase: 90,  atkBase: 7,  defBase: 6 },
+      { name: 'Venomous Serpent', hpBase: 65, atkBase: 11, defBase: 3 },
+      { name: 'Swamp Troll',    hpBase: 110, atkBase: 10, defBase: 7 },
+      { name: 'Drowned Sailor', hpBase: 80,  atkBase: 9,  defBase: 5 },
     ],
   },
   {
     id: 'ruins',
     name: 'Frostpeak Ruins',
+    tier: 'HIGH',
     desc: 'The frozen remains of a fallen kingdom. Something still guards its halls.',
     levelMin: 18,
     levelMax: 35,
     energyCost: 30,
     monsters: [
-      { name: 'Frost Wraith', hpBase: 140, atkBase: 14, defBase: 8 },
-      { name: 'Ruin Golem', hpBase: 180, atkBase: 12, defBase: 12 },
+      { name: 'Frost Wraith',       hpBase: 140, atkBase: 14, defBase: 8 },
+      { name: 'Ruin Golem',         hpBase: 180, atkBase: 12, defBase: 12 },
+      { name: 'Ice Wyrm Whelp',     hpBase: 160, atkBase: 16, defBase: 9 },
+      { name: 'Cursed Knight',      hpBase: 170, atkBase: 15, defBase: 11 },
+      { name: 'Frostbound Revenant', hpBase: 150, atkBase: 17, defBase: 8 },
     ],
   },
   {
     id: 'rift',
     name: 'The Abyssal Rift',
+    tier: 'END GAME',
     desc: 'A tear in the world where nightmares crawl through. Only the strongest lords return.',
     levelMin: 30,
     levelMax: 50,
     energyCost: 40,
     monsters: [
-      { name: 'Rift Stalker', hpBase: 240, atkBase: 20, defBase: 14 },
-      { name: 'Voidbound Horror', hpBase: 300, atkBase: 18, defBase: 18 },
+      { name: 'Rift Stalker',      hpBase: 240, atkBase: 20, defBase: 14 },
+      { name: 'Voidbound Horror',  hpBase: 300, atkBase: 18, defBase: 18 },
+      { name: 'Chaos Hydra',       hpBase: 280, atkBase: 22, defBase: 16 },
+      { name: 'Ancient Lich',      hpBase: 260, atkBase: 24, defBase: 13 },
+      { name: 'Abyssal Devourer',  hpBase: 340, atkBase: 21, defBase: 20 },
     ],
   },
 ];
@@ -1758,7 +1774,7 @@ function scaleMonster(template, level) {
 app.get('/api/monsters/zones', (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   res.json({ zones: MONSTER_ZONES.map(z => ({
-    id: z.id, name: z.name, desc: z.desc,
+    id: z.id, name: z.name, tier: z.tier, desc: z.desc,
     levelMin: z.levelMin, levelMax: z.levelMax, energyCost: z.energyCost,
   })) });
 });

@@ -42,6 +42,11 @@
   .zone-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.3rem;transition:border-color 0.15s;}
   .zone-card:hover{border-color:var(--brass-dim);}
   .zone-levels{font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:0.16em;margin-bottom:0.5rem;color:var(--brass);}
+  .zone-tier{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:0.14em;padding:0.15rem 0.55rem;border:1px solid;margin-bottom:0.6rem;}
+  .zone-tier.low{color:var(--green-bright);border-color:var(--green-bright);}
+  .zone-tier.medium{color:var(--brass);border-color:var(--brass);}
+  .zone-tier.high{color:var(--rust-bright);border-color:var(--rust-bright);}
+  .zone-tier.end-game{color:#C77DFF;border-color:#C77DFF;}
   .zone-name{font-family:'Cinzel',serif;font-size:1.05rem;color:var(--parchment);margin-bottom:0.4rem;}
   .zone-desc{font-size:0.88rem;color:var(--ash);font-style:italic;margin-bottom:1rem;line-height:1.6;}
   .zone-rewards{display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;}
@@ -259,6 +264,7 @@
       const disabled = isRestricted || (myStats && myStats.energy < z.energyCost);
       return `
         <div class="zone-card">
+          <div class="zone-tier ${z.tier.toLowerCase().replace(' ','-')}">${z.tier}</div>
           <div class="zone-levels">LEVEL ${z.levelMin}–${z.levelMax}</div>
           <div class="zone-name">${z.name}</div>
           <div class="zone-desc">${z.desc}</div>

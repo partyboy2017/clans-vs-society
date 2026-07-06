@@ -53,6 +53,11 @@
 
   .empty-state{text-align:center;padding:2.5rem;color:var(--ash);font-style:italic;background:var(--bg-panel);border:1px solid var(--line);}
 
+  .equip-panel{background:var(--bg-panel);border:1px solid var(--line);padding:1.4rem;display:flex;justify-content:center;}
+  .equip-svg{width:100%;max-width:420px;height:auto;}
+  .slot-label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;fill:var(--ash);}
+  .slot-soon{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.06em;fill:var(--rust-bright);}
+
   .panel{background:var(--bg-panel);border:1px solid var(--line);padding:1.2rem 1.3rem;margin-top:1.4rem;}
   .panel-title{font-family:'Cinzel',serif;font-size:0.82rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--parchment);margin-bottom:1rem;padding-bottom:0.6rem;border-bottom:1px solid var(--line);}
   .log-list{display:flex;flex-direction:column;max-height:220px;overflow-y:auto;}
@@ -105,6 +110,100 @@
     <div class="tabs">
       <button class="tab active" id="tab-items" onclick="switchTab('items')">Your Items</button>
       <button class="tab" id="tab-store" onclick="switchTab('store')">General Store</button>
+      <button class="tab" id="tab-equipment" onclick="switchTab('equipment')">Equipment</button>
+    </div>
+
+    <div id="pane-equipment" style="display:none;">
+      <div class="equip-panel">
+        <svg viewBox="0 0 400 560" class="equip-svg">
+          <!-- Shadow silhouette -->
+          <g fill="#100E0B" fill-opacity="0.88" stroke="var(--brass-dim)" stroke-width="1" stroke-opacity="0.3">
+            <circle cx="200" cy="85" r="30"/>
+            <polygon points="150,120 250,120 235,270 165,270"/>
+            <polygon points="152,122 118,132 95,300 118,310 145,270"/>
+            <polygon points="248,122 282,132 305,300 282,310 255,270"/>
+            <polygon points="168,268 198,268 192,500 158,500"/>
+            <polygon points="232,268 202,268 208,500 242,500"/>
+            <ellipse cx="170" cy="500" rx="22" ry="8"/>
+            <ellipse cx="230" cy="500" rx="22" ry="8"/>
+          </g>
+
+          <!-- Connector lines for offset hand slots -->
+          <line x1="122" y1="240" x2="112" y2="290" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <line x1="278" y1="240" x2="288" y2="290" stroke="var(--line)" stroke-width="1.5" stroke-dasharray="3 3"/>
+
+          <!-- Helmet slot -->
+          <g>
+            <rect x="165" y="20" width="70" height="70" rx="4" fill="var(--bg-panel)" fill-opacity="0.92" stroke="var(--brass-dim)" stroke-width="1.4" stroke-dasharray="5 4"/>
+            <g transform="translate(179,34) scale(1.75)" fill="none" stroke="var(--ash)" stroke-width="1.5">
+              <path d="M4 13v-1a8 8 0 0 1 16 0v1" stroke-linecap="round"/>
+              <path d="M4 13h16v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>
+              <line x1="9" y1="14" x2="9" y2="17" stroke-linecap="round"/>
+              <line x1="15" y1="14" x2="15" y2="17" stroke-linecap="round"/>
+            </g>
+            <text x="200" y="104" text-anchor="middle" class="slot-label">Helmet</text>
+            <text x="228" y="30" text-anchor="middle" class="slot-soon">SOON</text>
+          </g>
+
+          <!-- Chest slot -->
+          <g>
+            <rect x="158" y="152" width="84" height="84" rx="4" fill="var(--bg-panel)" fill-opacity="0.92" stroke="var(--brass-dim)" stroke-width="1.4" stroke-dasharray="5 4"/>
+            <g transform="translate(174,168) scale(2.1)" fill="none" stroke="var(--ash)" stroke-width="1.4">
+              <path d="M12 3l6 3v5c0 5-2.7 8-6 10-3.3-2-6-5-6-10V6z" stroke-linejoin="round"/>
+            </g>
+            <text x="200" y="252" text-anchor="middle" class="slot-label">Chest</text>
+            <text x="230" y="162" text-anchor="middle" class="slot-soon">SOON</text>
+          </g>
+
+          <!-- Left Hand slot -->
+          <g>
+            <rect x="52" y="204" width="70" height="70" rx="4" fill="var(--bg-panel)" fill-opacity="0.92" stroke="var(--brass-dim)" stroke-width="1.4" stroke-dasharray="5 4"/>
+            <g transform="translate(66,218) scale(1.75)" fill="none" stroke="var(--ash)" stroke-width="1.5">
+              <line x1="12" y1="2" x2="12" y2="15" stroke-linecap="round"/>
+              <line x1="8" y1="6" x2="16" y2="6" stroke-linecap="round"/>
+              <line x1="9" y1="15" x2="15" y2="15" stroke-linecap="round"/>
+              <line x1="12" y1="15" x2="12" y2="20" stroke-linecap="round"/>
+            </g>
+            <text x="87" y="288" text-anchor="middle" class="slot-label">Left Hand</text>
+          </g>
+
+          <!-- Right Hand slot -->
+          <g>
+            <rect x="278" y="204" width="70" height="70" rx="4" fill="var(--bg-panel)" fill-opacity="0.92" stroke="var(--brass-dim)" stroke-width="1.4" stroke-dasharray="5 4"/>
+            <g transform="translate(292,218) scale(1.75)" fill="none" stroke="var(--ash)" stroke-width="1.5">
+              <line x1="12" y1="2" x2="12" y2="15" stroke-linecap="round"/>
+              <line x1="8" y1="6" x2="16" y2="6" stroke-linecap="round"/>
+              <line x1="9" y1="15" x2="15" y2="15" stroke-linecap="round"/>
+              <line x1="12" y1="15" x2="12" y2="20" stroke-linecap="round"/>
+            </g>
+            <text x="313" y="288" text-anchor="middle" class="slot-label">Right Hand</text>
+          </g>
+
+          <!-- Gloves slot -->
+          <g>
+            <rect x="163" y="294" width="70" height="70" rx="4" fill="var(--bg-panel)" fill-opacity="0.92" stroke="var(--brass-dim)" stroke-width="1.4" stroke-dasharray="5 4"/>
+            <g transform="translate(177,308) scale(1.75)" fill="none" stroke="var(--ash)" stroke-width="1.4">
+              <path d="M8 22v-9a2 2 0 0 1 4 0v2" stroke-linecap="round"/>
+              <path d="M12 14.5v-4a2 2 0 0 1 4 0v4" stroke-linecap="round"/>
+              <path d="M16 14v-2a2 2 0 0 1 4 0v5a4 4 0 0 1-4 4h-6a4 4 0 0 1-4-4v-3a2 2 0 0 1 4 0v1" stroke-linecap="round" stroke-linejoin="round"/>
+            </g>
+            <text x="198" y="378" text-anchor="middle" class="slot-label">Gloves</text>
+            <text x="226" y="304" text-anchor="middle" class="slot-soon">SOON</text>
+          </g>
+
+          <!-- Legs slot -->
+          <g>
+            <rect x="156" y="410" width="88" height="88" rx="4" fill="var(--bg-panel)" fill-opacity="0.92" stroke="var(--brass-dim)" stroke-width="1.4" stroke-dasharray="5 4"/>
+            <g transform="translate(173,426) scale(2.1)" fill="none" stroke="var(--ash)" stroke-width="1.3">
+              <path d="M9 2v10l-2 8a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2v-6" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M15 2v10l2 8a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-6" stroke-linecap="round" stroke-linejoin="round"/>
+            </g>
+            <text x="200" y="524" text-anchor="middle" class="slot-label">Legs</text>
+            <text x="228" y="420" text-anchor="middle" class="slot-soon">SOON</text>
+          </g>
+        </svg>
+      </div>
+      <div class="empty-state" style="margin-top:1rem;">Equipment slots are coming soon — gear you find or buy will be wearable here.</div>
     </div>
 
     <div id="pane-items">
@@ -154,8 +253,10 @@
   function switchTab(tab){
     document.getElementById('tab-items').classList.toggle('active', tab === 'items');
     document.getElementById('tab-store').classList.toggle('active', tab === 'store');
+    document.getElementById('tab-equipment').classList.toggle('active', tab === 'equipment');
     document.getElementById('pane-items').style.display = tab === 'items' ? 'block' : 'none';
     document.getElementById('pane-store').style.display = tab === 'store' ? 'block' : 'none';
+    document.getElementById('pane-equipment').style.display = tab === 'equipment' ? 'block' : 'none';
   }
 
   function renderInventory(inventory){

@@ -30,6 +30,16 @@
   .page-title{font-family:'Cinzel',serif;font-size:1.3rem;font-weight:600;letter-spacing:0.06em;color:var(--parchment);margin-bottom:0.3rem;}
   .page-sub{font-size:0.95rem;color:var(--ash);font-style:italic;margin-bottom:1.4rem;}
 
+  .resources{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.4rem;}
+  .resource-card{background:var(--bg-panel);border:1px solid var(--line);padding:1rem 1.1rem;}
+  .resource-label{font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--ash);margin-bottom:0.5rem;display:flex;justify-content:space-between;}
+  .resource-label span{color:var(--brass);}
+  .resource-bar-track{height:6px;background:rgba(255,255,255,0.07);overflow:hidden;margin-bottom:0.4rem;}
+  .resource-bar-fill{height:100%;transition:width 0.6s ease;}
+  .resource-bar-fill.health{background:var(--rust-bright);}
+  .resource-bar-fill.energy{background:var(--brass);}
+  .resource-value{font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--bone);}
+
   /* STATUS BANNERS */
   .status-banner{display:none;align-items:center;gap:1rem;padding:1rem 1.4rem;margin-bottom:1.4rem;border:1px solid;}
   .status-banner.show{display:flex;}
@@ -155,6 +165,19 @@
   <main class="main">
     <div class="page-title">Raids</div>
     <div class="page-sub">Strike at locations or challenge other lords. Victory brings spoils — defeat brings consequences.</div>
+
+    <div class="resources">
+      <div class="resource-card">
+        <div class="resource-label">Health <span id="hp-val">—</span></div>
+        <div class="resource-bar-track"><div class="resource-bar-fill health" id="hp-bar" style="width:0%"></div></div>
+        <div class="resource-value" id="hp-text">— / —</div>
+      </div>
+      <div class="resource-card">
+        <div class="resource-label">Energy <span id="en-val">—</span></div>
+        <div class="resource-bar-track"><div class="resource-bar-fill energy" id="en-bar" style="width:0%"></div></div>
+        <div class="resource-value" id="en-text">— / —</div>
+      </div>
+    </div>
 
     <!-- JAIL BANNER -->
     <div class="status-banner jail" id="jail-banner">
@@ -288,32 +311,32 @@
   }
 
   function renderLocations(locations){
-  const grid = document.getElementById('locations-grid');
-  grid.innerHTML = locations.map(loc => {
-    const disabled = isRestricted || (myStats && myStats.energy < loc.energyCost);
-    return `
-      <div class="location-card">
-        <div class="loc-risk ${loc.risk}">${loc.risk} RISK</div>
-        <div class="loc-name">${loc.name}</div>
-        <div class="loc-desc">${loc.desc}</div>
-        <div class="loc-rewards">
-          <span class="reward-pill gold">${loc.goldMin}–${loc.goldMax} GOLD</span>
-          <span class="reward-pill xp">+${loc.xpGain} XP</span>
-          <span class="reward-pill energy">${loc.energyCost} ENERGY</span>
-          <span class="reward-pill risk">${Math.round(loc.jailChance*100)}% JAIL CHANCE</span>
-        </div>
-        <button class="raid-btn" ${disabled?'disabled':''} data-location-id="${loc.id}" data-location-name="${loc.name.replace(/"/g,'&quot;')}">
-          ${isRestricted ? 'Unavailable' : disabled ? 'Not enough energy' : 'Raid This Location'}
-        </button>
-      </div>`;
-  }).join('');
+    const grid = document.getElementById('locations-grid');
+    grid.innerHTML = locations.map(loc => {
+      const disabled = isRestricted || (myStats && myStats.energy < loc.energyCost);
+      return `
+        <div class="location-card">
+          <div class="loc-risk ${loc.risk}">${loc.risk} RISK</div>
+          <div class="loc-name">${loc.name}</div>
+          <div class="loc-desc">${loc.desc}</div>
+          <div class="loc-rewards">
+            <span class="reward-pill gold">${loc.goldMin}–${loc.goldMax} GOLD</span>
+            <span class="reward-pill xp">+${loc.xpGain} XP</span>
+            <span class="reward-pill energy">${loc.energyCost} ENERGY</span>
+            <span class="reward-pill risk">${Math.round(loc.jailChance*100)}% JAIL CHANCE</span>
+          </div>
+          <button class="raid-btn" ${disabled?'disabled':''} data-location-id="${loc.id}" data-location-name="${loc.name.replace(/"/g,'&quot;')}">
+            ${isRestricted ? 'Unavailable' : disabled ? 'Not enough energy' : 'Raid This Location'}
+          </button>
+        </div>`;
+    }).join('');
 
-  grid.querySelectorAll('.raid-btn[data-location-id]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      raidNPC(btn.dataset.locationId, btn.dataset.locationName);
+    grid.querySelectorAll('.raid-btn[data-location-id]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        raidNPC(btn.dataset.locationId, btn.dataset.locationName);
+      });
     });
-  });
-}
+  }
 
   function filterPlayers(){
     const q = document.getElementById('search-players').value.toLowerCase();
@@ -434,11 +457,24 @@
     }, 1000);
   }
 
+  function updateResourceBars(stats){
+    const hpPct = Math.max(0, Math.min(100, Math.round((stats.health/stats.maxHealth)*100)));
+    document.getElementById('hp-val').textContent = hpPct + '%';
+    document.getElementById('hp-bar').style.width = hpPct + '%';
+    document.getElementById('hp-text').textContent = `${stats.health} / ${stats.maxHealth}`;
+
+    const enPct = Math.max(0, Math.min(100, Math.round((stats.energy/stats.maxEnergy)*100)));
+    document.getElementById('en-val').textContent = enPct + '%';
+    document.getElementById('en-bar').style.width = enPct + '%';
+    document.getElementById('en-text').textContent = `${stats.energy} / ${stats.maxEnergy}`;
+  }
+
   async function loadStatus(){
     const res = await fetch('/api/raid/status');
     if(!res.ok){ window.location.href='/'; return; }
     const data = await res.json();
     myStats = data.stats;
+    updateResourceBars(myStats);
 
     isRestricted = data.inJail || data.inHospital;
 

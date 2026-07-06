@@ -30,6 +30,17 @@
   .page-title{font-family:'Cinzel',serif;font-size:1.3rem;font-weight:600;letter-spacing:0.06em;color:var(--parchment);margin-bottom:0.3rem;}
   .page-sub{font-size:0.95rem;color:var(--ash);font-style:italic;margin-bottom:1.4rem;}
 
+  .resources{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.4rem;}
+  .resource-card{background:var(--bg-panel);border:1px solid var(--line);padding:1rem 1.1rem;}
+  .resource-label{font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--ash);margin-bottom:0.5rem;display:flex;justify-content:space-between;}
+  .resource-label span{color:var(--brass);}
+  .bar-track{height:6px;background:rgba(255,255,255,0.07);overflow:hidden;margin-bottom:0.4rem;}
+  .bar-fill{height:100%;transition:width 0.6s ease;}
+  .bar-health{background:var(--rust-bright);}
+  .bar-energy{background:var(--brass);}
+  .resource-value{font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--bone);}
+  @media(max-width:480px){.resources{grid-template-columns:1fr 1fr;}}
+
   .status-banner{display:none;align-items:center;gap:1rem;padding:1rem 1.4rem;margin-bottom:1.4rem;border:1px solid;}
   .status-banner.show{display:flex;}
   .status-banner.jail{background:rgba(139,58,42,0.15);border-color:var(--rust-bright);}
@@ -144,6 +155,19 @@
   <main class="main">
     <div class="page-title">Monsters</div>
     <div class="page-sub">Venture into the wilds and test your steel against the creatures that dwell there.</div>
+
+    <div class="resources">
+      <div class="resource-card">
+        <div class="resource-label">Health <span id="hp-val">—</span></div>
+        <div class="bar-track"><div class="bar-fill bar-health" id="hp-val-bar" style="width:0%"></div></div>
+        <div class="resource-value" id="hp-val-text">— / —</div>
+      </div>
+      <div class="resource-card">
+        <div class="resource-label">Energy <span id="en-val">—</span></div>
+        <div class="bar-track"><div class="bar-fill bar-energy" id="en-val-bar" style="width:0%"></div></div>
+        <div class="resource-value" id="en-val-text">— / —</div>
+      </div>
+    </div>
 
     <div class="status-banner jail" id="jail-banner">
       <div class="status-icon">⛓</div>
@@ -422,12 +446,25 @@
     }, 1000);
   }
 
+  function updateResourceBars(stats){
+    const hpPct = Math.max(0, Math.min(100, Math.round((stats.health/stats.maxHealth)*100)));
+    document.getElementById('hp-val').textContent = hpPct + '%';
+    document.getElementById('hp-val-bar').style.width = hpPct + '%';
+    document.getElementById('hp-val-text').textContent = `${stats.health} / ${stats.maxHealth}`;
+
+    const enPct = Math.max(0, Math.min(100, Math.round((stats.energy/stats.maxEnergy)*100)));
+    document.getElementById('en-val').textContent = enPct + '%';
+    document.getElementById('en-val-bar').style.width = enPct + '%';
+    document.getElementById('en-val-text').textContent = `${stats.energy} / ${stats.maxEnergy}`;
+  }
+
   async function loadPlayer(){
     const res = await fetch('/api/me');
     if(!res.ok){ window.location.href='/'; return; }
     const data = await res.json();
     myStats = data.stats;
     document.getElementById('player-name').textContent = data.username;
+    updateResourceBars(myStats);
 
     const now = Date.now();
     isRestricted = myStats.inJail || myStats.inHospital;

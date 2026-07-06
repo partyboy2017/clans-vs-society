@@ -289,7 +289,7 @@
 
   function itemIconHtml(iconPath, itemName){
     const src = iconPath || FALLBACK_ICON;
-    return `<div class="item-icon-wrap"><img src="${src}" alt="${itemName.replace(/"/g,'&quot;')}" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_ICON}';"></div>`;
+    return `<div class="item-icon-wrap"><img src="${src}" alt="" width="52" height="52" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_ICON}';"></div>`;
   }
 
   function renderInventory(inventory){

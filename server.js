@@ -750,8 +750,10 @@ app.post('/api/action/rest', async (req, res) => {
         gold:   { gte: goldCost },
       },
       data: {
-        gold:   { decrement: goldCost },
-        health: restoredHealth,
+        gold:         { decrement: goldCost },
+        health:       restoredHealth,
+        energy:       stats.maxEnergy,
+        lastEnergyAt: new Date(),
       },
     });
 

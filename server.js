@@ -1752,6 +1752,7 @@ const MONSTER_ZONES = [
       { name: 'Chaos Hydra',       hpBase: 280, atkBase: 22, defBase: 16 },
       { name: 'Ancient Lich',      hpBase: 260, atkBase: 24, defBase: 13 },
       { name: 'Abyssal Devourer',  hpBase: 340, atkBase: 21, defBase: 20 },
+      { name: 'Maliovre',          hpBase: 360, atkBase: 23, defBase: 19 },
     ],
   },
 ];

@@ -1789,6 +1789,52 @@ app.post('/api/raid/player', async (req, res) => {
 
 // ─── MONSTERS ─────────────────────────────────────────────────────────────────
 
+// Loot tables — currently only Low tier (Cursed Woods) drops materials.
+// Each entry: independent chance roll per item (a monster can drop 0, 1, or
+// multiple items on the same kill). Item names must match rows in the Item
+// table exactly (see prisma/seed-items.js).
+const LOOT_TABLES = {
+  'Feral Wolf': [
+    { itemName: 'Wolf Pelt',  chance: 0.40, qty: 1 },
+    { itemName: 'Wolf Fang',  chance: 0.25, qty: 1 },
+    { itemName: 'Wolf Claw',  chance: 0.15, qty: 1 },
+    { itemName: 'Minor Healing Potion', chance: 0.05, qty: 1 },
+    { itemName: 'Stick', chance: 0.30, qty: 1 },
+    { itemName: 'Rock',  chance: 0.30, qty: 1 },
+  ],
+  'Wild Boar': [
+    { itemName: 'Boar Hide', chance: 0.35, qty: 1 },
+    { itemName: 'Boar Tusk', chance: 0.20, qty: 1 },
+    { itemName: 'Minor Healing Potion', chance: 0.05, qty: 1 },
+    { itemName: 'Stick', chance: 0.30, qty: 1 },
+    { itemName: 'Rock',  chance: 0.30, qty: 1 },
+  ],
+  'Bog Goblin': [
+    { itemName: 'Goblin Tooth',       chance: 0.40, qty: 1 },
+    { itemName: 'Goblin Ear',         chance: 0.20, qty: 1 },
+    { itemName: 'Rusty Dagger',       chance: 0.12, qty: 1 },
+    { itemName: 'Tattered Coin Pouch', chance: 0.08, qty: 1 },
+    { itemName: 'Frying Pan', chance: 0.20, qty: 1 },
+    { itemName: 'Rock',       chance: 0.25, qty: 1 },
+  ],
+  'Giant Rat Swarm': [
+    { itemName: 'Rat Tail',     chance: 0.45, qty: 1 },
+    { itemName: 'Rat Fur',      chance: 0.25, qty: 1 },
+    { itemName: 'Moldy Cheese', chance: 0.15, qty: 1 },
+    { itemName: 'Stick', chance: 0.35, qty: 1 },
+    { itemName: 'Rock',  chance: 0.20, qty: 1 },
+  ],
+  'Bandit Scout': [
+    { itemName: 'Tattered Coin Pouch', chance: 0.25, qty: 1 },
+    { itemName: 'Worn Leather Strap',  chance: 0.20, qty: 1 },
+    { itemName: 'Bandit\'s Mask',      chance: 0.10, qty: 1 },
+    { itemName: 'Minor Healing Potion', chance: 0.15, qty: 1 },
+    { itemName: 'Ancient Coin',        chance: 0.03, qty: 1 },
+    { itemName: 'Frying Pan', chance: 0.25, qty: 1 },
+    { itemName: 'Stick',      chance: 0.20, qty: 1 },
+  ],
+};
+
 const MONSTER_ZONES = [
   {
     id: 'woods',
@@ -1991,9 +2037,29 @@ app.post('/api/monsters/turn', async (req, res) => {
           where: { userId: req.user.id },
           data: { gold: { increment: goldReward }, xp: { increment: xpReward } },
         });
+
+        // Roll loot drops, if this monster has a loot table.
+        const drops = [];
+        const table = LOOT_TABLES[session.monsterName];
+        if (table) {
+          for (const entry of table) {
+            if (Math.random() < entry.chance) {
+              const item = await tx.item.findFirst({ where: { name: entry.itemName } });
+              if (!item) continue; // item not seeded yet — skip rather than crash
+              const existing = await tx.inventory.findFirst({ where: { userId: req.user.id, itemId: item.id } });
+              if (existing) {
+                await tx.inventory.update({ where: { id: existing.id }, data: { quantity: { increment: entry.qty } } });
+              } else {
+                await tx.inventory.create({ data: { userId: req.user.id, itemId: item.id, quantity: entry.qty } });
+              }
+              drops.push({ name: item.name, qty: entry.qty });
+            }
+          }
+        }
+
         await tx.combatSession.delete({ where: { userId: req.user.id } });
 
-        return { won: true, log, goldReward, xpReward, monsterName: session.monsterName };
+        return { won: true, log, goldReward, xpReward, drops, monsterName: session.monsterName };
       }
 
       // Monster's turn

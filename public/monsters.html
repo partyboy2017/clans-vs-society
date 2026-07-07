@@ -397,10 +397,20 @@
 
       if(data.won){
         addLog(`<span class="win">You defeated the ${data.monsterName}!</span> <span class="gold-gain">+${data.goldReward} gold</span> <span class="win">+${data.xpReward} XP</span>`);
-        showModal('⚔', 'Victory!', `You have slain the ${data.monsterName}.`, [
+
+        const modalStats = [
           { label: 'GOLD GAINED', value: `+${data.goldReward} g`, cls: 'pos' },
           { label: 'XP GAINED',   value: `+${data.xpReward}`,    cls: 'pos' },
-        ]);
+        ];
+
+        if(data.drops && data.drops.length){
+          data.drops.forEach(d => {
+            addLog(`You found <span class="win">${d.qty}x ${d.name}</span>.`);
+            modalStats.push({ label: 'ITEM FOUND', value: `${d.qty}x ${d.name}`, cls: 'pos' });
+          });
+        }
+
+        showModal('⚔', 'Victory!', `You have slain the ${data.monsterName}.`, modalStats);
         if(data.leveledUp){
           addLog(`<span class="levelup">⚔ Level ${data.newLevel} achieved! 3 stat points awarded.</span>`);
         }

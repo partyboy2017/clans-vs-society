@@ -1900,6 +1900,65 @@ const LOOT_TABLES = {
     { itemName: 'Barnacle Cluster',       chance: 0.30, qty: 1 },
     { itemName: 'Ancient Coin',           chance: 0.05, qty: 1 },
   ],
+
+  // High tier — Frostpeak Ruins
+  'Frost Wraith': [
+    { itemName: 'Wraith Essence', chance: 0.35, qty: 1 },
+    { itemName: 'Frozen Tear',    chance: 0.20, qty: 1 },
+    { itemName: 'Elixir of Vigor', chance: 0.08, qty: 1 },
+  ],
+  'Ruin Golem': [
+    { itemName: 'Golem Core',    chance: 0.25, qty: 1 },
+    { itemName: 'Rubble Shard',  chance: 0.35, qty: 1 },
+    { itemName: 'Ancient Coin',  chance: 0.10, qty: 1 },
+  ],
+  'Ice Wyrm Whelp': [
+    { itemName: 'Wyrm Scale',     chance: 0.30, qty: 1 },
+    { itemName: 'Frost Fang',     chance: 0.25, qty: 1 },
+    { itemName: 'Healing Potion', chance: 0.08, qty: 1 },
+  ],
+  'Cursed Knight': [
+    { itemName: 'Cursed Rune',           chance: 0.25, qty: 1 },
+    { itemName: 'Tarnished Armor Plate', chance: 0.25, qty: 1 },
+    { itemName: 'Scroll of Wisdom',      chance: 0.08, qty: 1 },
+  ],
+  'Frostbound Revenant': [
+    { itemName: 'Revenant Chain',   chance: 0.25, qty: 1 },
+    { itemName: 'Frostbound Heart', chance: 0.20, qty: 1 },
+    { itemName: 'Elixir of Vigor',  chance: 0.10, qty: 1 },
+  ],
+
+  // End Game — The Abyssal Rift
+  'Rift Stalker': [
+    { itemName: 'Rift Shard',      chance: 0.30, qty: 1 },
+    { itemName: 'Stalker Claw',    chance: 0.25, qty: 1 },
+    { itemName: 'Elixir of Vigor', chance: 0.10, qty: 1 },
+  ],
+  'Voidbound Horror': [
+    { itemName: 'Void Essence', chance: 0.28, qty: 1 },
+    { itemName: 'Horror Eye',   chance: 0.20, qty: 1 },
+    { itemName: 'Ancient Coin', chance: 0.10, qty: 1 },
+  ],
+  'Chaos Hydra': [
+    { itemName: 'Hydra Scale',     chance: 0.30, qty: 1 },
+    { itemName: 'Chaos Fang',      chance: 0.25, qty: 2 },
+    { itemName: 'Healing Potion',  chance: 0.10, qty: 1 },
+  ],
+  'Ancient Lich': [
+    { itemName: 'Lich Dust',                chance: 0.28, qty: 1 },
+    { itemName: 'Cursed Phylactery Shard',  chance: 0.15, qty: 1 },
+    { itemName: 'Scroll of Wisdom',         chance: 0.10, qty: 1 },
+  ],
+  'Abyssal Devourer': [
+    { itemName: 'Abyssal Core',    chance: 0.25, qty: 1 },
+    { itemName: 'Devourer Tooth',  chance: 0.25, qty: 1 },
+    { itemName: 'Elixir of Vigor', chance: 0.10, qty: 1 },
+  ],
+  'Maliovre': [
+    { itemName: 'Rift Shard',        chance: 0.30, qty: 2 },
+    { itemName: 'Ancient Coin',      chance: 0.15, qty: 1 },
+    { itemName: 'Maliovre\'s Sigil', chance: 0.10, qty: 1 },
+  ],
 };
 
 const MONSTER_ZONES = [

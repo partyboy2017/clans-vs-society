@@ -829,6 +829,14 @@ app.post('/api/action/train', async (req, res) => {
   });
 
   const levelResult = await checkLevelUp(req.user.id);
+
+  const gainParts = [];
+  if (strGain) gainParts.push(`+${strGain} STR`);
+  if (defGain) gainParts.push(`+${defGain} DEF`);
+  if (intGain) gainParts.push(`+${intGain} INT`);
+  if (dexGain) gainParts.push(`+${dexGain} DEX`);
+  logActivity(req.user.id, 'training', `Trained: ${gainParts.join(', ')}, +${xpGain} XP.`);
+
   res.json({ strGain, defGain, intGain, dexGain, xpGain, ...levelResult });
 });
 
@@ -868,6 +876,7 @@ app.post('/api/action/rest', async (req, res) => {
       return res.status(400).json({ error: 'Not enough gold to rest' });
     }
 
+    logActivity(req.user.id, 'training', `Rested at the Inn for ${goldCost} gold. Health and energy fully restored.`);
     res.json({ ok: true, discounted: goldCost === 15, goldCost });
   } catch (e) {
     console.error('/api/action/rest error:', e);
@@ -951,6 +960,7 @@ app.post('/api/skills/unlock', async (req, res) => {
       return tx.stats.findUnique({ where: { userId: req.user.id } });
     });
 
+    logActivity(req.user.id, 'level', `Unlocked skill: ${skill.name} (-${skill.cost} stat points).`);
     res.json({ ok: true, skill: skill.name, statPointsRemaining: updatedStats.statPoints });
   } catch (e) {
     if (e.code === 'NOT_ENOUGH_POINTS') return res.status(400).json({ error: 'Not enough stat points' });
@@ -1046,6 +1056,13 @@ app.post('/api/action/skill', async (req, res) => {
 
 // ─── API: level-up helper ─────────────────────────────────────────────────────
 
+// Fire-and-forget activity log write. Never blocks or breaks gameplay if it
+// fails — logging is a nice-to-have, not a critical path.
+function logActivity(userId, category, message) {
+  prisma.activityLog.create({ data: { userId, category, message } })
+    .catch(err => console.error('logActivity error:', err));
+}
+
 async function checkLevelUp(userId) {
   const user  = await prisma.user.findUnique({ where: { id: userId } });
   const stats = await prisma.stats.findUnique({ where: { userId } });
@@ -1081,6 +1098,7 @@ async function checkLevelUp(userId) {
   });
 
   if (result.count === 0) return { leveledUp: false }; // another concurrent request won the race
+  logActivity(userId, 'level', `Reached Level ${newLevel}! +3 stat points awarded.`);
   return { leveledUp: true, newLevel, statPoints: stats.statPoints + 3 };
 }
 
@@ -1374,6 +1392,8 @@ app.post('/api/inventory/use', async (req, res) => {
     });
 
     const levelUp = await checkLevelUp(req.user.id);
+    const appliedText = result.applied.map(a => `+${a.amount} ${a.stat}`).join(', ');
+    logActivity(req.user.id, 'inventory', `Used ${result.itemName}. ${appliedText}`);
     res.json({ ...result, ...levelUp });
 
   } catch (e) {
@@ -1419,6 +1439,7 @@ app.post('/api/shop/buy', async (req, res) => {
       }
     });
 
+    logActivity(req.user.id, 'inventory', `Bought ${qty}x ${item.name} for ${cost} gold.`);
     res.json({ ok: true, itemName: item.name, quantity: qty, cost });
   } catch (e) {
     if (e && e.code === 'NO_GOLD') return res.status(400).json({ error: 'Not enough gold' });
@@ -1457,6 +1478,7 @@ app.post('/api/inventory/sell', async (req, res) => {
       return { itemName: inv.item.name, qty, totalValue };
     });
 
+    logActivity(req.user.id, 'inventory', `Sold ${result.qty}x ${result.itemName} for ${result.totalValue} gold.`);
     res.json({ ok: true, ...result });
   } catch (e) {
     if (e && e.code === 'NOT_FOUND')   return res.status(404).json({ error: 'Item not found in your inventory' });
@@ -1534,6 +1556,7 @@ app.post('/api/training/train', async (req, res) => {
   });
 
   const levelUp = await checkLevelUp(req.user.id);
+  logActivity(req.user.id, 'training', `Trained ${cfg.statField}: +${gain}, +${cfg.xpGain} XP.`);
   res.json({ gain, xpGain: cfg.xpGain, newValue: updated[cfg.statField], stat, ...levelUp });
 });
 
@@ -1725,6 +1748,17 @@ app.post('/api/raid/npc', async (req, res) => {
     });
 
     const levelUp = result.won ? await checkLevelUp(req.user.id) : { leveledUp: false };
+
+    if (result.won) {
+      logActivity(req.user.id, 'raid', `Raided ${location.name} — won ${result.goldGain} gold, +${result.xpGain} XP.`);
+    } else if (result.jailMins > 0) {
+      logActivity(req.user.id, 'raid', `Caught raiding ${location.name} — thrown in jail for ${result.jailMins}m.`);
+    } else if (result.hospitalMins > 0) {
+      logActivity(req.user.id, 'raid', `Lost the raid at ${location.name} — hospitalized for ${result.hospitalMins}m.`);
+    } else {
+      logActivity(req.user.id, 'raid', `Lost the raid at ${location.name}.`);
+    }
+
     res.json({ ...result, location: location.name, ...levelUp });
 
   } catch (e) {
@@ -1812,6 +1846,14 @@ app.post('/api/raid/player', async (req, res) => {
     });
 
     const levelUp = await checkLevelUp(req.user.id);
+
+    if (result.won) {
+      logActivity(req.user.id, 'raid', `Attacked ${target.characterName} and won — stole ${result.goldStolen} gold, +${result.xpGain} XP.`);
+      logActivity(targetId, 'raid', `Was attacked by ${req.user.characterName} and lost ${result.goldStolen} gold.${result.defenderHospitalized ? ' Hospitalized.' : ''}`);
+    } else {
+      logActivity(req.user.id, 'raid', `Attacked ${target.characterName} and lost, +${result.xpGain} XP.`);
+      logActivity(targetId, 'raid', `Successfully defended against an attack from ${req.user.characterName}.`);
+    }
 
     res.json({
       ...result,
@@ -2051,6 +2093,22 @@ function scaleMonster(template, level) {
   };
 }
 
+app.get('/api/activity', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 30));
+  try {
+    const entries = await prisma.activityLog.findMany({
+      where: { userId: req.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+    res.json({ entries });
+  } catch (e) {
+    console.error('/api/activity error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
 app.get('/api/wiki', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
 
@@ -2279,7 +2337,18 @@ app.post('/api/monsters/turn', async (req, res) => {
 
     if (result.won) {
       const levelUp = await checkLevelUp(req.user.id);
+      let msg = `Defeated ${result.monsterName} — ${result.goldReward} gold, +${result.xpReward} XP.`;
+      if (result.drops && result.drops.length) {
+        msg += ` Found: ${result.drops.map(d => `${d.qty}x ${d.name}`).join(', ')}.`;
+      }
+      logActivity(req.user.id, 'monster', msg);
       return res.json({ ...result, ...levelUp });
+    }
+    if (result.lost) {
+      logActivity(req.user.id, 'monster', `Defeated by ${result.monsterName} — hospitalized for ${result.hospitalMins}m.`);
+    }
+    if (result.fled) {
+      logActivity(req.user.id, 'monster', `Fled from a fight.`);
     }
     res.json(result);
 

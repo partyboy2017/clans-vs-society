@@ -29,6 +29,18 @@ model User {
   listings       Listing[]
   userSkills     UserSkill[]
   combatSession  CombatSession?
+  activityLogs   ActivityLog[]
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  category  String   // 'training' | 'raid' | 'monster' | 'inventory' | 'level' | 'status'
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model Stats {

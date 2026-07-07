@@ -384,6 +384,12 @@
   .log-text .gain{ color: var(--green-bright); }
   .log-text .loss{ color: var(--rust-bright); }
   .log-text .levelup{ color: var(--brass); font-family: 'Cinzel', serif; }
+  .log-category{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:0.08em;text-transform:uppercase;padding:0.1rem 0.4rem;border:1px solid var(--line);margin-right:0.5rem;color:var(--ash);vertical-align:1px;}
+  .log-category.training{color:var(--brass);border-color:var(--brass-dim);}
+  .log-category.raid{color:var(--rust-bright);border-color:var(--rust-bright);}
+  .log-category.monster{color:var(--green-bright);border-color:var(--green-bright);}
+  .log-category.inventory{color:var(--ash);border-color:var(--line);}
+  .log-category.level{color:var(--parchment);border-color:var(--brass);}
 
   .toast{
     position: fixed;
@@ -580,8 +586,8 @@
       <div class="panel-title">Activity Log</div>
       <div class="log-list" id="log-list">
         <div class="log-entry">
-          <span class="log-time">now</span>
-          <span class="log-text">You have entered the realm. The road ahead is long.</span>
+          <span class="log-time">—</span>
+          <span class="log-text" style="color:var(--ash);font-style:italic;">Loading activity...</span>
         </div>
       </div>
     </div>
@@ -780,7 +786,37 @@
     }
   }
 
+  function formatLogTime(iso){
+    const d = new Date(iso);
+    const now = new Date();
+    const sameDay = d.toDateString() === now.toDateString();
+    const hh = d.getHours().toString().padStart(2,'0');
+    const mm = d.getMinutes().toString().padStart(2,'0');
+    if (sameDay) return `${hh}:${mm}`;
+    return `${d.getMonth()+1}/${d.getDate()} ${hh}:${mm}`;
+  }
+
+  async function loadActivityLog(){
+    try {
+      const res = await fetch('/api/activity?limit=30');
+      const data = await res.json();
+      const list = document.getElementById('log-list');
+      if (!res.ok || !data.entries || data.entries.length === 0) {
+        list.innerHTML = `<div class="log-entry"><span class="log-time">—</span><span class="log-text" style="color:var(--ash);font-style:italic;">No activity yet. Go make some history.</span></div>`;
+        return;
+      }
+      list.innerHTML = data.entries.map(e => `
+        <div class="log-entry">
+          <span class="log-time">${formatLogTime(e.createdAt)}</span>
+          <span class="log-text"><span class="log-category ${e.category}">${e.category}</span>${e.message}</span>
+        </div>`).join('');
+    } catch (e) {
+      console.error('loadActivityLog error:', e);
+    }
+  }
+
   loadPlayer();
+  loadActivityLog();
 </script>
 
 <script src="/nav.js"></script>

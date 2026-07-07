@@ -63,6 +63,8 @@
   .item-btn:disabled{background:var(--bg-panel-2);color:var(--ash);border:1px solid var(--line);cursor:not-allowed;}
   .item-btn.buy{background:var(--brass-dim);}
   .item-btn.buy:hover:not(:disabled){background:var(--brass);}
+  .item-btn.sell{background:var(--bg-panel-2);border:1px solid var(--brass-dim);color:var(--brass);}
+  .item-btn.sell:hover:not(:disabled){background:var(--brass-dim);color:var(--bone);}
 
   .empty-state{text-align:center;padding:2.5rem;color:var(--ash);font-style:italic;background:var(--bg-panel);border:1px solid var(--line);}
 
@@ -300,6 +302,7 @@
     }
     grid.innerHTML = inventory.map(inv => {
       const usable = inv.item.type === 'consumable';
+      const sellValue = Math.max(1, Math.floor(inv.item.basePrice * 0.5));
       return `
         <div class="item-card">
           <div class="item-type ${inv.item.type}">${inv.item.type}</div>
@@ -308,15 +311,19 @@
           <div class="item-desc">${inv.item.description}</div>
           <div class="item-footer">
             <span class="item-qty">Qty: ${inv.quantity}</span>
-            <button class="item-btn" ${usable?'':'disabled'} data-inv-id="${inv.id}" data-item-name="${inv.item.name.replace(/"/g,'&quot;')}">
-              ${usable ? 'Use' : 'Not usable'}
-            </button>
+            <div style="display:flex;gap:0.4rem;">
+              ${usable ? `<button class="item-btn" data-action="use" data-inv-id="${inv.id}" data-item-name="${inv.item.name.replace(/"/g,'&quot;')}">Use</button>` : ''}
+              <button class="item-btn sell" data-action="sell" data-inv-id="${inv.id}" data-item-name="${inv.item.name.replace(/"/g,'&quot;')}">Sell ${sellValue}g</button>
+            </div>
           </div>
         </div>`;
     }).join('');
 
-    grid.querySelectorAll('.item-btn[data-inv-id]:not(:disabled)').forEach(btn => {
+    grid.querySelectorAll('.item-btn[data-action="use"]').forEach(btn => {
       btn.addEventListener('click', () => useItem(btn.dataset.invId, btn.dataset.itemName));
+    });
+    grid.querySelectorAll('.item-btn[data-action="sell"]').forEach(btn => {
+      btn.addEventListener('click', () => sellItem(btn.dataset.invId, btn.dataset.itemName));
     });
   }
 
@@ -378,6 +385,22 @@
     }
 
     await Promise.all([loadInventory(), loadPlayer()]);
+  }
+
+  async function sellItem(inventoryId, itemName){
+    const res = await fetch('/api/inventory/sell', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ inventoryId: parseInt(inventoryId, 10), quantity: 1 })
+    });
+    const data = await res.json();
+    if(!res.ok){ showToast(data.error); return; }
+
+    addLog(`You sold <span class="spend">${itemName}</span> for <span class="gain">+${data.totalValue} gold</span>.`);
+    showToast(`Sold ${itemName} for ${data.totalValue}g`);
+
+    await loadPlayer();
+    await Promise.all([loadInventory(), loadStore()]);
   }
 
   async function buyItem(itemId, itemName){

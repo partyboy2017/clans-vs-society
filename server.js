@@ -1420,6 +1420,45 @@ app.post('/api/shop/buy', async (req, res) => {
   }
 });
 
+app.post('/api/inventory/sell', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const { inventoryId, quantity } = req.body;
+  const qty = Math.max(1, parseInt(quantity, 10) || 1);
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const inv = await tx.inventory.findFirst({
+        where: { id: inventoryId, userId: req.user.id },
+        include: { item: true },
+      });
+      if (!inv) throw { code: 'NOT_FOUND' };
+      if (inv.quantity < qty) throw { code: 'NOT_ENOUGH' };
+
+      // Vendors pay half base price — keeps buying then reselling a
+      // consumable from a net gain, and gives junk drops real value.
+      const unitValue = Math.max(1, Math.floor(inv.item.basePrice * 0.5));
+      const totalValue = unitValue * qty;
+
+      if (inv.quantity - qty <= 0) {
+        await tx.inventory.delete({ where: { id: inv.id } });
+      } else {
+        await tx.inventory.update({ where: { id: inv.id }, data: { quantity: { decrement: qty } } });
+      }
+
+      await tx.stats.update({ where: { userId: req.user.id }, data: { gold: { increment: totalValue } } });
+
+      return { itemName: inv.item.name, qty, totalValue };
+    });
+
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    if (e && e.code === 'NOT_FOUND')   return res.status(404).json({ error: 'Item not found in your inventory' });
+    if (e && e.code === 'NOT_ENOUGH')  return res.status(400).json({ error: 'Not enough of that item' });
+    console.error('/api/inventory/sell error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
 const TRAINING_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 
 const TRAINING_CONFIG = {

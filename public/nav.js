@@ -11,6 +11,7 @@
         { href: '/raids',     label: 'Raids',     icon: '<path d="M4 12c2-5 6-8 8-8s6 3 8 8c-2 5-6 8-8 8s-6-3-8-8z" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.4"/>' },
         { href: '/monsters',  label: 'Monsters',  icon: '<path d="M12 2c-4 0-7 3-7 7v6a3 3 0 0 0 3 3h8a3 3 0 0 0 3-3V9c0-4-3-7-7-7z" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 10v2M15 10v2M9 18l1 2M15 18l-1 2" stroke-linecap="round"/>' },
         { href: '/inventory', label: 'Inventory', icon: '<path d="M3 7l2-4h14l2 4M3 7v12a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V7M3 7h18" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 11a3 3 0 0 0 6 0" stroke-linecap="round"/>' },
+        { href: '/wiki', label: 'Wiki', icon: '<path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v17H6.5A2.5 2.5 0 0 0 4 21.5v-17z" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 7h8M8 11h8" stroke-linecap="round"/>' },
       ]
     },
     {

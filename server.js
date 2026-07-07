@@ -527,6 +527,13 @@ app.get('/inventory', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'inventory.html'));
 });
 
+app.get('/wiki', (req, res) => {
+  if (!req.isAuthenticated())   return res.redirect('/');
+  if (!req.user.characterName)  return res.redirect('/choose-name');
+  if (!req.user.characterClass) return res.redirect('/choose-class');
+  res.sendFile(path.join(__dirname, 'public', 'wiki.html'));
+});
+
 app.get('/house', (req, res) => {
   if (!req.isAuthenticated())   return res.redirect('/');
   if (!req.user.characterName)  return res.redirect('/choose-name');
@@ -2043,6 +2050,56 @@ function scaleMonster(template, level) {
     xpReward:   8 + level * 3,
   };
 }
+
+app.get('/api/wiki', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+
+  try {
+    const classes = Object.entries(CLASSES).map(([key, c]) => ({
+      key, label: c.label, desc: c.desc,
+      baseStats: c.baseStats, perLevel: c.perLevel,
+    }));
+
+    const skills = Object.entries(SKILL_TREES).map(([classKey, tree]) => ({
+      classKey,
+      classLabel: CLASSES[classKey]?.label || classKey,
+      skills: tree.map(s => ({
+        key: s.key, name: s.name, cost: s.cost, requires: s.requires,
+        type: s.type, desc: s.desc,
+      })),
+    }));
+
+    const zones = MONSTER_ZONES.map(z => ({
+      id: z.id, name: z.name, tier: z.tier, desc: z.desc,
+      levelMin: z.levelMin, levelMax: z.levelMax, energyCost: z.energyCost,
+      monsters: z.monsters.map(m => ({
+        name: m.name, hpBase: m.hpBase, atkBase: m.atkBase, defBase: m.defBase,
+        loot: (LOOT_TABLES[m.name] || []).map(l => ({
+          itemName: l.itemName, chance: l.chance, qty: l.qty,
+        })),
+      })),
+    }));
+
+    const raidLocations = NPC_LOCATIONS.map(l => ({
+      id: l.id, name: l.name, risk: l.risk, desc: l.desc,
+      energyCost: l.energyCost, goldMin: l.goldMin, goldMax: l.goldMax,
+      xpGain: l.xpGain, jailChance: l.jailChance, jailMins: l.jailMins,
+    }));
+
+    const items = await prisma.item.findMany({ orderBy: [{ type: 'asc' }, { basePrice: 'asc' }] });
+
+    const mechanics = {
+      energyRegen:  { amount: ENERGY_REGEN_AMOUNT, intervalMinutes: ENERGY_REGEN_INTERVAL_MS / 60000 },
+      trainingCooldownMinutes: TRAINING_COOLDOWN_MS / 60000,
+      restCooldownMinutes: REST_COOLDOWN_MS / 60000,
+    };
+
+    res.json({ classes, skills, zones, raidLocations, items, mechanics });
+  } catch (e) {
+    console.error('/api/wiki error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
 
 app.get('/api/monsters/zones', (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });

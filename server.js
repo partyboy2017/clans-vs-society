@@ -1872,6 +1872,34 @@ const LOOT_TABLES = {
     { itemName: 'Frying Pan', chance: 0.25, qty: 1 },
     { itemName: 'Stick',      chance: 0.20, qty: 1 },
   ],
+
+  // Medium tier — Blighted Marsh
+  'Marsh Wretch': [
+    { itemName: 'Rotten Cloth',    chance: 0.40, qty: 1 },
+    { itemName: 'Wretch Claw',     chance: 0.20, qty: 1 },
+    { itemName: 'Healing Potion',  chance: 0.08, qty: 1 },
+  ],
+  'Bloated Leech': [
+    { itemName: 'Leech Sac',      chance: 0.35, qty: 1 },
+    { itemName: 'Slimy Residue',  chance: 0.30, qty: 1 },
+    { itemName: 'Energy Draught', chance: 0.08, qty: 1 },
+  ],
+  'Venomous Serpent': [
+    { itemName: 'Serpent Fang',   chance: 0.35, qty: 1 },
+    { itemName: 'Snake Skin',     chance: 0.25, qty: 1 },
+    { itemName: 'Healing Potion', chance: 0.06, qty: 1 },
+  ],
+  'Swamp Troll': [
+    { itemName: 'Troll Hide',        chance: 0.30, qty: 1 },
+    { itemName: 'Troll Tooth',       chance: 0.20, qty: 1 },
+    { itemName: 'Elixir of Vigor',   chance: 0.10, qty: 1 },
+  ],
+  'Drowned Sailor': [
+    { itemName: 'Waterlogged Coin Pouch', chance: 0.25, qty: 1 },
+    { itemName: 'Rusted Cutlass',         chance: 0.20, qty: 1 },
+    { itemName: 'Barnacle Cluster',       chance: 0.30, qty: 1 },
+    { itemName: 'Ancient Coin',           chance: 0.05, qty: 1 },
+  ],
 };
 
 const MONSTER_ZONES = [

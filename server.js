@@ -346,6 +346,51 @@ async function sendWelcomeEmail(toEmail, username) {
   }
 }
 
+async function sendFeedbackEmail({ category, message, username, email }) {
+  const dest = process.env.FEEDBACK_EMAIL || 'clansvssociety@gmail.com';
+  if (!process.env.RESEND_API_KEY) return { ok: false, error: 'Email is not configured' };
+
+  const html = `
+    <div style="background:#1C1A17;padding:24px;font-family:Georgia,serif;">
+      <table role="presentation" width="100%" style="max-width:520px;margin:0 auto;background:#25211C;border:1px solid rgba(176,141,69,0.3);">
+        <tr><td style="padding:28px 30px;">
+          <div style="font-family:Georgia,serif;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#B08D45;margin-bottom:6px;">Clans vs Society — ${category}</div>
+          <h2 style="color:#DCCEA6;font-size:18px;margin:0 0 16px;">New ${category} submitted</h2>
+          <table role="presentation" width="100%" style="border-collapse:collapse;margin-bottom:16px;">
+            <tr><td style="color:#93897A;font-size:13px;padding:4px 0;">From:</td><td style="color:#ECE4D2;font-size:13px;padding:4px 0;">${username} (${email || 'no email on file'})</td></tr>
+          </table>
+          <div style="background:#2C2620;border:1px solid rgba(176,141,69,0.2);padding:16px;color:#ECE4D2;font-size:14px;line-height:1.6;white-space:pre-wrap;">${message}</div>
+        </td></tr>
+      </table>
+    </div>`;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify({
+        from:    process.env.FROM_EMAIL || 'Clans vs Society <onboarding@resend.dev>',
+        to:      dest,
+        reply_to: email || undefined,
+        subject: `[${category}] from ${username}`,
+        html,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      console.error('Resend API error (feedback):', res.status, body);
+      return { ok: false, error: 'Failed to send' };
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error('Failed to send feedback email:', err);
+    return { ok: false, error: 'Failed to send' };
+  }
+}
+
 function welcomeEmailHtml(username) {
   return `
   <div style="background:#1C1A17;padding:32px 16px;font-family:Georgia,'Times New Roman',serif;">
@@ -534,6 +579,13 @@ app.get('/wiki', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'wiki.html'));
 });
 
+app.get('/realm-map', (req, res) => {
+  if (!req.isAuthenticated())   return res.redirect('/');
+  if (!req.user.characterName)  return res.redirect('/choose-name');
+  if (!req.user.characterClass) return res.redirect('/choose-class');
+  res.sendFile(path.join(__dirname, 'public', 'realm-map.html'));
+});
+
 app.get('/house', (req, res) => {
   if (!req.isAuthenticated())   return res.redirect('/');
   if (!req.user.characterName)  return res.redirect('/choose-name');
@@ -541,11 +593,11 @@ app.get('/house', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'house.html'));
 });
 
-app.get('/realm-map', (req, res) => {
+app.get('/feedback', (req, res) => {
   if (!req.isAuthenticated())   return res.redirect('/');
   if (!req.user.characterName)  return res.redirect('/choose-name');
   if (!req.user.characterClass) return res.redirect('/choose-class');
-  res.sendFile(path.join(__dirname, 'public', 'realm-map.html'));
+  res.sendFile(path.join(__dirname, 'public', 'feedback.html'));
 });
 
 app.get('/market', (req, res) => {
@@ -2092,6 +2144,46 @@ function scaleMonster(template, level) {
     xpReward:   8 + level * 3,
   };
 }
+
+const feedbackCooldowns = new Map(); // userId -> last submission timestamp
+const FEEDBACK_COOLDOWN_MS = 60 * 1000; // 1 submission per minute per user
+
+app.post('/api/feedback', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+
+  const { category, message } = req.body;
+  const allowedCategories = ['Bug Report', 'Feedback', 'Other'];
+  if (!allowedCategories.includes(category)) {
+    return res.status(400).json({ error: 'Invalid category' });
+  }
+  const trimmed = (message || '').trim();
+  if (trimmed.length < 5) {
+    return res.status(400).json({ error: 'Please write a bit more detail (at least 5 characters).' });
+  }
+  if (trimmed.length > 3000) {
+    return res.status(400).json({ error: 'Message is too long (max 3000 characters).' });
+  }
+
+  const lastSent = feedbackCooldowns.get(req.user.id);
+  if (lastSent && Date.now() - lastSent < FEEDBACK_COOLDOWN_MS) {
+    return res.status(429).json({ error: 'Please wait a moment before sending more feedback.' });
+  }
+
+  const result = await sendFeedbackEmail({
+    category,
+    message: trimmed,
+    username: req.user.characterName || req.user.username,
+    email: req.user.email,
+  });
+
+  if (!result.ok) {
+    return res.status(500).json({ error: 'Could not send your feedback right now. Please try again later.' });
+  }
+
+  feedbackCooldowns.set(req.user.id, Date.now());
+  logActivity(req.user.id, 'feedback', `Submitted ${category.toLowerCase()}.`);
+  res.json({ ok: true });
+});
 
 app.get('/api/activity', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });

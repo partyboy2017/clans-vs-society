@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#1C1A17;--bg-panel:#25211C;--bg-panel-2:#2C2620;--parchment:#DCCEA6;--rust:#8B3A2A;--rust-bright:#B0492F;--brass:#B08D45;--brass-dim:#8A6F3A;--bone:#ECE4D2;--ash:#93897A;--green:#4A7C59;--green-bright:#5C9E70;--purple:#C77DFF;--line:rgba(176,141,69,0.22);}
+  :root{--bg:#1C1A17;--bg-panel:#25211C;--bg-panel-2:#2C2620;--parchment:#DCCEA6;--rust:#8B3A2A;--rust-bright:#B0492F;--brass:#B08D45;--brass-dim:#8A6F3A;--bone:#ECE4D2;--ash:#93897A;--green-bright:#5C9E70;--line:rgba(176,141,69,0.22);}
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg);color:var(--bone);font-family:'EB Garamond',serif;font-size:17px;line-height:1.5;min-height:100vh;}
   .shell{display:grid;grid-template-columns:220px 1fr;grid-template-rows:54px 1fr;min-height:100vh;}
@@ -30,28 +30,42 @@
   .page-title{font-family:'Cinzel',serif;font-size:1.3rem;font-weight:600;letter-spacing:0.06em;color:var(--parchment);margin-bottom:0.3rem;}
   .page-sub{font-size:0.95rem;color:var(--ash);font-style:italic;margin-bottom:1.4rem;}
 
-  .map-panel{background:var(--bg-panel);border:1px solid var(--line);padding:1.2rem;margin-bottom:1.2rem;}
-  .map-svg{width:100%;height:auto;display:block;}
+  .map-panel{background:var(--bg-panel);border:1px solid var(--line);padding:0.8rem;margin-bottom:1.2rem;}
+  .map-image-wrap{position:relative;width:100%;line-height:0;}
+  .map-image{width:100%;height:auto;display:block;}
 
-  .region-group{cursor:pointer;}
-  .region-group:hover .region-blob{filter:brightness(1.25);}
-  .region-group:hover .region-label{fill:var(--bone);}
+  .poi{position:absolute;transform:translate(-50%,-100%);cursor:pointer;}
+  .poi-pin{width:22px;height:22px;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.7));transition:transform 0.15s;}
+  .poi:hover .poi-pin{transform:scale(1.25);}
+  .poi-pulse{animation:poiPulse 2.2s ease-in-out infinite;}
+  @keyframes poiPulse{
+    0%,100%{opacity:0.55;}
+    50%{opacity:1;}
+  }
+  .poi-tooltip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--bg-panel-2);border:1px solid var(--brass-dim);padding:0.4rem 0.7rem;white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:0.68rem;color:var(--parchment);opacity:0;pointer-events:none;transition:opacity 0.15s;z-index:5;}
+  .poi:hover .poi-tooltip{opacity:1;}
 
-  .marker-group{cursor:pointer;}
-  .marker-group:hover .marker-pin{filter:brightness(1.4);}
-  .marker-group:hover .marker-label{fill:var(--bone);}
-  .marker-group:hover .marker-tag{opacity:1;}
-  .marker-tag{opacity:0.85;transition:opacity 0.15s;}
-
-  .legend{display:flex;gap:1.4rem;flex-wrap:wrap;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--line);}
+  .legend{display:flex;gap:1.4rem;flex-wrap:wrap;margin-top:0.9rem;padding:0.9rem 0.4rem 0.2rem;border-top:1px solid var(--line);}
   .legend-item{display:flex;align-items:center;gap:0.5rem;font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:0.08em;color:var(--ash);text-transform:uppercase;}
-  .legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
 
   .info-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.3rem 1.4rem;margin-bottom:1rem;}
   .info-title{font-family:'Cinzel',serif;font-size:1rem;color:var(--parchment);margin-bottom:0.4rem;}
   .info-desc{font-size:0.9rem;color:var(--ash);font-style:italic;line-height:1.6;}
 
-  @media(max-width:800px){.shell{grid-template-columns:1fr;}.sidebar{display:none;}}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:200;padding:1.5rem;}
+  .modal-overlay.show{display:flex;}
+  .modal{background:var(--bg-panel);border:1px solid var(--line);padding:1.8rem 2rem;max-width:420px;width:100%;position:relative;}
+  .modal::before,.modal::after{content:"";position:absolute;left:0;right:0;height:4px;background:linear-gradient(90deg,transparent,var(--brass-dim),transparent);opacity:0.5;}
+  .modal::before{top:0;} .modal::after{bottom:0;}
+  .modal-region{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--brass);margin-bottom:0.5rem;}
+  .modal-title{font-family:'Cinzel',serif;font-size:1.3rem;color:var(--parchment);margin-bottom:0.6rem;}
+  .modal-desc{font-size:0.95rem;color:var(--bone);line-height:1.65;margin-bottom:1rem;}
+  .modal-status{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.25rem 0.6rem;border:1px solid var(--brass-dim);color:var(--brass);margin-bottom:1.2rem;}
+  .modal-status.live{color:var(--green-bright);border-color:var(--green-bright);}
+  .modal-close{width:100%;font-family:'JetBrains Mono',monospace;font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.8rem;border:none;cursor:pointer;background:var(--rust);color:var(--bone);transition:background 0.15s;}
+  .modal-close:hover{background:var(--rust-bright);}
+
+  @media(max-width:800px){.shell{grid-template-columns:1fr;}.sidebar{display:none;}.poi-pin{width:16px;height:16px;} .poi-tooltip{display:none;}}
   .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(28,26,23,0.97);border-top:1px solid var(--line);z-index:20;padding-bottom:env(safe-area-inset-bottom);}
   .mobile-nav-inner{display:flex;justify-content:space-around;align-items:stretch;}
   .mn-item{display:flex;flex-direction:column;align-items:center;gap:0.25rem;padding:0.6rem 0.3rem;color:var(--ash);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;flex:1;transition:color 0.15s;-webkit-tap-highlight-color:transparent;}
@@ -81,134 +95,96 @@
 
   <main class="main">
     <div class="page-title">Map of Karthûl</div>
-    <div class="page-sub">A fallen kingdom, carved into contested ground. Click a region to travel there.</div>
+    <div class="page-sub">A fallen kingdom's known lands. Click a point of interest to learn more.</div>
 
     <div class="map-panel">
-      <svg class="map-svg" viewBox="0 0 900 620" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <radialGradient id="bgGlow" cx="50%" cy="45%" r="65%">
-            <stop offset="0%" stop-color="#2C2620"/>
-            <stop offset="100%" stop-color="#1C1A17"/>
-          </radialGradient>
-        </defs>
-
-        <rect x="0" y="0" width="900" height="620" fill="url(#bgGlow)"/>
-
-        <!-- Decorative border -->
-        <rect x="8" y="8" width="884" height="604" fill="none" stroke="var(--line)" stroke-width="1.5"/>
-
-        <!-- Compass rose -->
-        <g transform="translate(830,60)" opacity="0.5">
-          <circle r="26" fill="none" stroke="var(--brass-dim)" stroke-width="1"/>
-          <line x1="0" y1="-22" x2="0" y2="22" stroke="var(--brass-dim)" stroke-width="1"/>
-          <line x1="-22" y1="0" x2="22" y2="0" stroke="var(--brass-dim)" stroke-width="1"/>
-          <text x="0" y="-30" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--brass)">N</text>
-        </g>
-
-        <!-- Roads connecting capital to each region -->
-        <g stroke="var(--brass-dim)" stroke-width="1.5" stroke-dasharray="4 5" opacity="0.5" fill="none">
-          <path d="M450,310 Q330,240 210,175"/>
-          <path d="M450,310 Q330,380 210,445"/>
-          <path d="M450,310 Q590,240 690,175"/>
-          <path d="M450,310 Q590,380 690,445"/>
-        </g>
-
-        <!-- Capital / spawn hub — travel point back to Overview -->
-        <g class="marker-group" data-href="/dashboard" transform="translate(450,310)">
-          <circle class="marker-pin" r="34" fill="#2C2620" stroke="var(--brass)" stroke-width="2"/>
-          <path d="M-14,6 L-14,-4 L-7,-10 L0,-4 L0,-10 L7,-4 L7,6 Z" fill="none" stroke="var(--parchment)" stroke-width="1.4" stroke-linejoin="round"/>
-          <text class="marker-label" x="0" y="52" text-anchor="middle" font-family="Cinzel, serif" font-size="15" fill="var(--parchment)" font-weight="700">KARTHÛL</text>
-          <text class="marker-tag" x="0" y="70" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="8" fill="var(--brass)" letter-spacing="1.5">⚑ TRAVEL POINT</text>
-        </g>
-
-        <!-- ── Cursed Woods (LOW) — upper left ── -->
-        <g class="region-group" data-href="/monsters" transform="translate(190,155)">
-          <path class="region-blob" d="M-95,-55 C-60,-85 20,-80 65,-45 C95,-15 85,40 45,65 C0,90 -70,75 -95,30 C-115,-5 -120,-30 -95,-55 Z"
-                fill="rgba(92,158,112,0.12)" stroke="var(--green-bright)" stroke-width="1.6"/>
-          <path transform="translate(-14,-16) scale(1.3)" d="M0,10 L6,-4 L12,10 M-8,14 L0,-8 L8,14 M-16,18 L-6,-2 L4,18" fill="none" stroke="var(--green-bright)" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/>
-          <text class="region-label" x="0" y="30" text-anchor="middle" font-family="Cinzel, serif" font-size="15" fill="var(--parchment)">Cursed Woods</text>
-          <text x="0" y="47" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--green-bright)" letter-spacing="1.5">LOW TIER</text>
-        </g>
-
-        <!-- ── Blighted Marsh (MEDIUM) — lower left ── -->
-        <g class="region-group" data-href="/monsters" transform="translate(190,470)">
-          <path class="region-blob" d="M-90,-50 C-50,-80 30,-75 70,-40 C100,-10 90,45 50,70 C5,95 -65,80 -92,35 C-112,0 -115,-25 -90,-50 Z"
-                fill="rgba(176,141,69,0.12)" stroke="var(--brass)" stroke-width="1.6"/>
-          <path transform="translate(-16,-14) scale(1.2)" d="M-10,16 Q-6,4 -10,-6 M0,18 Q4,4 0,-10 M10,16 Q14,4 10,-6" fill="none" stroke="var(--brass)" stroke-width="1.4" stroke-linecap="round"/>
-          <text class="region-label" x="0" y="32" text-anchor="middle" font-family="Cinzel, serif" font-size="15" fill="var(--parchment)">Blighted Marsh</text>
-          <text x="0" y="49" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--brass)" letter-spacing="1.5">MEDIUM TIER</text>
-        </g>
-
-        <!-- ── Frostpeak Ruins (HIGH) — upper right ── -->
-        <g class="region-group" data-href="/monsters" transform="translate(710,155)">
-          <path class="region-blob" d="M-70,55 C-100,20 -90,-35 -50,-65 C-10,-92 55,-88 85,-55 C110,-25 100,30 60,60 C20,88 -35,90 -70,55 Z"
-                fill="rgba(176,73,47,0.12)" stroke="var(--rust-bright)" stroke-width="1.6"/>
-          <path transform="translate(-18,-10) scale(1.15)" d="M-14,18 L-4,-10 L4,4 L10,-16 L20,18 Z" fill="none" stroke="var(--rust-bright)" stroke-width="1.4" stroke-linejoin="round"/>
-          <text class="region-label" x="0" y="32" text-anchor="middle" font-family="Cinzel, serif" font-size="15" fill="var(--parchment)">Frostpeak Ruins</text>
-          <text x="0" y="49" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--rust-bright)" letter-spacing="1.5">HIGH TIER</text>
-        </g>
-
-        <!-- ── The Abyssal Rift (END GAME) — lower right ── -->
-        <g class="region-group" data-href="/monsters" transform="translate(710,470)">
-          <path class="region-blob" d="M-85,-45 C-45,-80 30,-78 70,-45 C105,-15 100,40 60,68 C15,95 -60,85 -90,40 C-108,10 -112,-18 -85,-45 Z"
-                fill="rgba(199,125,255,0.12)" stroke="var(--purple)" stroke-width="1.6"/>
-          <circle cx="0" cy="0" r="16" fill="none" stroke="var(--purple)" stroke-width="1.4"/>
-          <circle cx="0" cy="0" r="8" fill="var(--purple)" opacity="0.35"/>
-          <text class="region-label" x="0" y="38" text-anchor="middle" font-family="Cinzel, serif" font-size="15" fill="var(--parchment)">The Abyssal Rift</text>
-          <text x="0" y="55" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--purple)" letter-spacing="1.5">END GAME</text>
-        </g>
-
-        <!-- Raid location travel points -->
-        <g class="marker-group" data-href="/raids" transform="translate(350,300)">
-          <path class="marker-pin" d="M0,-15 C6,-15 11,-10 11,-4 C11,4 0,15 0,15 C0,15 -11,4 -11,-4 C-11,-10 -6,-15 0,-15 Z" fill="var(--rust)" stroke="var(--bone)" stroke-width="1"/>
-          <circle cx="0" cy="-4" r="3.2" fill="var(--bone)"/>
-          <text class="marker-label" x="0" y="-22" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--ash)">Village Market</text>
-          <text class="marker-tag" x="0" y="27" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="7" fill="var(--brass)" letter-spacing="1">⚑ TRAVEL POINT</text>
-        </g>
-        <g class="marker-group" data-href="/raids" transform="translate(560,255)">
-          <path class="marker-pin" d="M0,-15 C6,-15 11,-10 11,-4 C11,4 0,15 0,15 C0,15 -11,4 -11,-4 C-11,-10 -6,-15 0,-15 Z" fill="var(--rust)" stroke="var(--bone)" stroke-width="1"/>
-          <circle cx="0" cy="-4" r="3.2" fill="var(--bone)"/>
-          <text class="marker-label" x="0" y="-22" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--ash)">Merchant Caravan</text>
-          <text class="marker-tag" x="0" y="27" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="7" fill="var(--brass)" letter-spacing="1">⚑ TRAVEL POINT</text>
-        </g>
-        <g class="marker-group" data-href="/raids" transform="translate(590,375)">
-          <path class="marker-pin" d="M0,-15 C6,-15 11,-10 11,-4 C11,4 0,15 0,15 C0,15 -11,4 -11,-4 C-11,-10 -6,-15 0,-15 Z" fill="var(--rust)" stroke="var(--bone)" stroke-width="1"/>
-          <circle cx="0" cy="-4" r="3.2" fill="var(--bone)"/>
-          <text class="marker-label" x="0" y="27" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--ash)">Noble's Manor</text>
-          <text class="marker-tag" x="0" y="40" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="7" fill="var(--brass)" letter-spacing="1">⚑ TRAVEL POINT</text>
-        </g>
-        <g class="marker-group" data-href="/raids" transform="translate(450,400)">
-          <path class="marker-pin" d="M0,-15 C6,-15 11,-10 11,-4 C11,4 0,15 0,15 C0,15 -11,4 -11,-4 C-11,-10 -6,-15 0,-15 Z" fill="var(--rust)" stroke="var(--bone)" stroke-width="1"/>
-          <circle cx="0" cy="-4" r="3.2" fill="var(--bone)"/>
-          <text class="marker-label" x="0" y="27" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="9" fill="var(--ash)">Royal Treasury</text>
-          <text class="marker-tag" x="0" y="40" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="7" fill="var(--brass)" letter-spacing="1">⚑ TRAVEL POINT</text>
-        </g>
-      </svg>
+      <div class="map-image-wrap" id="map-wrap">
+        <img class="map-image" src="/assets/map/karthul-map.png" alt="Map of the Realm of Karthûl">
+        <!-- POI markers injected by JS, positioned as % of image so they stay aligned at any size -->
+      </div>
 
       <div class="legend">
-        <div class="legend-item"><span class="legend-dot" style="background:var(--green-bright);"></span>Low Tier</div>
-        <div class="legend-item"><span class="legend-dot" style="background:var(--brass);"></span>Medium Tier</div>
-        <div class="legend-item"><span class="legend-dot" style="background:var(--rust-bright);"></span>High Tier</div>
-        <div class="legend-item"><span class="legend-dot" style="background:var(--purple);"></span>End Game</div>
-        <div class="legend-item"><span class="legend-dot" style="background:var(--rust);"></span>⚑ Travel Point</div>
+        <div class="legend-item">★ Capital City</div>
+        <div class="legend-item">⚑ Point of Interest</div>
+        <div class="legend-item">Click any marker for details</div>
       </div>
     </div>
 
     <div class="info-card">
       <div class="info-title">The Realm of Karthûl</div>
-      <div class="info-desc">Once a unified kingdom, Karthûl fractured long ago — its crown lost, its treasury scattered, its people divided into warring clans. What remains is a land of ruin and opportunity: forests thick with bandits, marshes that hide older things, mountain ruins that guard forgotten wealth, and a Rift at the world's edge that should never have opened. Every lord who rises here does so on the bones of what came before.</div>
+      <div class="info-desc">Once a unified kingdom, Karthûl fractured long ago into a scattering of distant lands — each shaped by its own fortune and ruin. The Eldric Kingdoms remain the beating heart of what civilization still stands, while frozen wastes, sunken swamps, burning peaks, and drifting isles mark the realm's far edges. Every lord who rises here does so on the bones of what came before. Most of these lands are still being charted — more will open to travel as the realm grows.</div>
     </div>
   </main>
 </div>
 
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-region" id="modal-region"></div>
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-status" id="modal-status"></div>
+    <div class="modal-desc" id="modal-desc"></div>
+    <button class="modal-close" onclick="closeModal()">Close</button>
+  </div>
+</div>
+
 <script src="/nav.js"></script>
 <script>
-  document.querySelectorAll('.region-group, .marker-group').forEach(el => {
-    el.addEventListener('click', () => {
-      const href = el.dataset.href;
-      if (href) window.location.href = href;
+  // Coordinates are percentages of the image's width/height, so markers stay
+  // pinned to the artwork regardless of how large the image renders.
+  const POINTS_OF_INTEREST = [
+    { name: 'Aurelia', region: 'Eldric Kingdoms — Heart of Civilization', x: 45.2, y: 53.8, capital: true,
+      href: '/dashboard', desc: 'The last great capital of Karthûl, and the seat from which every lord begins their rise. Home is always one road away.' },
+    { name: 'Icewind Citadel', region: 'Frostreach — The Shivering North', x: 50.1, y: 17.4,
+      desc: 'A fortress carved into the northern ice, said to guard secrets older than the kingdom itself.' },
+    { name: 'Stonehall', region: 'Silverpeaks — Dwarven Hold', x: 43.0, y: 30.1,
+      desc: 'A mountain stronghold of the dwarven clans, rich in ore and older grudges.' },
+    { name: 'Greenwatch', region: 'Verdant Wilds — The Emerald Expanse', x: 18.4, y: 42.6,
+      desc: 'A watchpost on the edge of an endless forest, where rangers keep count of what moves among the trees.' },
+    { name: 'Tempest Haven', region: 'Stormcoast — Lands of Tempest', x: 67.1, y: 40.3,
+      desc: 'A harbor town that has weathered a thousand storms, and sailors who claim to have weathered worse.' },
+    { name: 'Drakenholm', region: 'Isle of Legends', x: 82.4, y: 27.0,
+      desc: 'A floating isle wreathed in storm clouds, spoken of more in legend than in any confirmed sighting.' },
+    { name: 'Sunspear Oasis', region: 'Sandscarre — The Endless Dunes', x: 22.1, y: 74.7,
+      desc: 'The only reliable water for a hundred miles in any direction — and fiercely contested for it.' },
+    { name: 'Bogtimber', region: 'Mireveil — The Sunken Wilds', x: 39.9, y: 77.3,
+      desc: 'A settlement built on stilts above the marsh, where the locals trust the swamp more than strangers.' },
+    { name: 'Blackgate', region: 'Ashenreach — Land of Fire and Fury', x: 61.2, y: 78.0,
+      desc: 'A town living in the shadow of an active volcano, out of necessity rather than choice.' },
+    { name: 'Luminara', region: 'Celestial Isles — Pearls of the South', x: 85.0, y: 69.0,
+      desc: 'A glittering archipelago city, as beautiful as it is difficult to reach.' },
+  ];
+
+  function buildMarkers(){
+    const wrap = document.getElementById('map-wrap');
+    POINTS_OF_INTEREST.forEach(poi => {
+      const el = document.createElement('div');
+      el.className = 'poi';
+      el.style.left = poi.x + '%';
+      el.style.top = poi.y + '%';
+      el.innerHTML = poi.capital
+        ? `<svg class="poi-pin" viewBox="0 0 24 24" fill="var(--brass)" stroke="var(--parchment)" stroke-width="1"><path d="M12 2l2.9 6.3L22 9.3l-5 4.9 1.2 7.1L12 17.9l-6.2 3.4L7 14.2 2 9.3l7.1-1z"/></svg>
+           <div class="poi-tooltip">★ ${poi.name}</div>`
+        : `<svg class="poi-pin poi-pulse" viewBox="0 0 24 24" fill="var(--rust-bright)" stroke="var(--bone)" stroke-width="1"><path d="M12 2C7.5 2 4 5.6 4 10c0 6 8 12 8 12s8-6 8-12c0-4.4-3.5-8-8-8z"/><circle cx="12" cy="10" r="2.6" fill="var(--bone)"/></svg>
+           <div class="poi-tooltip">${poi.name}</div>`;
+      el.addEventListener('click', () => openPoi(poi));
+      wrap.appendChild(el);
     });
-  });
+  }
+
+  function openPoi(poi){
+    if (poi.href) { window.location.href = poi.href; return; }
+    document.getElementById('modal-region').textContent = poi.region;
+    document.getElementById('modal-title').textContent = poi.name;
+    document.getElementById('modal-desc').textContent = poi.desc;
+    const statusEl = document.getElementById('modal-status');
+    statusEl.textContent = 'Uncharted — coming soon';
+    statusEl.className = 'modal-status';
+    document.getElementById('modal-overlay').classList.add('show');
+  }
+
+  function closeModal(){
+    document.getElementById('modal-overlay').classList.remove('show');
+  }
 
   async function loadPlayer(){
     const res = await fetch('/api/me');
@@ -217,6 +193,7 @@
     document.getElementById('player-name').textContent = data.username;
   }
 
+  buildMarkers();
   loadPlayer();
 </script>
 <nav class="mobile-nav" id="mobile-nav"></nav>

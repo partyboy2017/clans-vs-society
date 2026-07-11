@@ -1,9 +1,9 @@
 // Sentry must be initialized before any other module is required — see
 // instrument.js for why. This also handles loading .env, so we don't need
 // a separate require('dotenv').config() call here.
-const Sentry = require('./instrument');
+//const Sentry = require('./instrument');
 
-const express = require('express');
+//const express = require('express');
 const path = require('path');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
@@ -11,7 +11,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { PrismaClient } = require('@prisma/client');
 
-const app = express();
+//const app = express();
 const prisma = new PrismaClient();
 
 // Wraps console.error so every existing error-logging call site also

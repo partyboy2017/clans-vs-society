@@ -1,8 +1,4 @@
-// Sentry must be initialized before any other module is required — see
-// instrument.js for why. This also handles loading .env, so we don't need
-// a separate require('dotenv').config() call here.
-//const Sentry = require('./instrument');
-
+require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
@@ -14,16 +10,10 @@ const { PrismaClient } = require('@prisma/client');
 const app = express();
 const prisma = new PrismaClient();
 
-// Wraps console.error so every existing error-logging call site also
-// reports to Sentry, without needing to touch each one individually.
-// Safe to call with non-Error trailing arguments (e.g. a string) — it just
-// won't forward those to Sentry, since there's nothing useful to capture.
+// Thin wrapper kept around console.error so error-logging call sites don't
+// need to change again once Sentry (or similar) gets added back later.
 function logError(...args) {
   console.error(...args);
-  const last = args[args.length - 1];
-  if (last instanceof Error && process.env.SENTRY_DSN) {
-    Sentry.captureException(last);
-  }
 }
 
 // ─── Class definitions ────────────────────────────────────────────────────────
@@ -2628,11 +2618,6 @@ app.post('/api/monsters/turn', validate(schemas.monstersTurn), async (req, res) 
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
-
-// Safety net for any error that isn't already caught by a route's own
-// try/catch (e.g. a thrown error in middleware, or a bug in code we haven't
-// wrapped yet). Must be registered after all routes, before app.listen().
-//Sentry.setupExpressErrorHandler(app);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {

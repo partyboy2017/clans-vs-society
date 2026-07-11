@@ -450,6 +450,30 @@ const STARTER_ITEMS = [
     basePrice: 150,
     icon: '/assets/items/materials/sigil-maliovre.png',
   },
+  {
+    name: 'Logs',
+    description: 'Sturdy timber, freshly cut and seasoned. The backbone of any wagon frame.',
+    type: 'crafting',
+    effect: '',
+    basePrice: 6,
+    icon: '/assets/items/crafting/logs.png',
+  },
+  {
+    name: 'Nails',
+    description: 'A fistful of iron nails, hammered true. Every good build needs plenty.',
+    type: 'crafting',
+    effect: '',
+    basePrice: 3,
+    icon: '/assets/items/crafting/nails.png',
+  },
+  {
+    name: 'Iron Bar',
+    description: 'A bar of refined iron, ready for the forge. Used to reinforce a wagon\'s axles and fittings.',
+    type: 'crafting',
+    effect: '',
+    basePrice: 14,
+    icon: '/assets/items/crafting/iron-bar.png',
+  },
 ];
 
 async function main() {

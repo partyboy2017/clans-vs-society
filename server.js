@@ -1459,8 +1459,8 @@ app.post('/api/inventory/use', async (req, res) => {
 app.get('/api/shop/items', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const items = await prisma.item.findMany({
-    where: { type: 'consumable' },
-    orderBy: { basePrice: 'asc' },
+    where: { type: { in: ['consumable', 'crafting'] } },
+    orderBy: [{ type: 'asc' }, { basePrice: 'asc' }],
   });
   res.json({ items });
 });
@@ -1933,6 +1933,16 @@ app.post('/api/raid/player', async (req, res) => {
 // Each entry: independent chance roll per item (a monster can drop 0, 1, or
 // multiple items on the same kill). Item names must match rows in the Item
 // table exactly (see prisma/seed-items.js).
+// The Basic Wagon is the first unlock toward inter-city travel. Requires
+// Level 10 and enough crafting materials, purchasable from the General
+// Store or found in the wild later.
+const WAGON_MIN_LEVEL = 10;
+const WAGON_RECIPE = [
+  { itemName: 'Logs',     qty: 10 },
+  { itemName: 'Nails',    qty: 15 },
+  { itemName: 'Iron Bar', qty: 5 },
+];
+
 const LOOT_TABLES = {
   'Feral Wolf': [
     { itemName: 'Wolf Pelt',  chance: 0.40, qty: 1 },
@@ -2183,6 +2193,83 @@ app.post('/api/feedback', async (req, res) => {
   feedbackCooldowns.set(req.user.id, Date.now());
   logActivity(req.user.id, 'feedback', `Submitted ${category.toLowerCase()}.`);
   res.json({ ok: true });
+});
+
+app.get('/api/wagon/status', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  try {
+    const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    if (!stats) return res.status(404).json({ error: 'No stats found' });
+
+    const inventory = await prisma.inventory.findMany({
+      where: { userId: req.user.id },
+      include: { item: true },
+    });
+
+    const progress = WAGON_RECIPE.map(req_ => {
+      const owned = inventory.find(inv => inv.item.name === req_.itemName)?.quantity || 0;
+      return { itemName: req_.itemName, need: req_.qty, have: Math.min(owned, req_.qty) };
+    });
+
+    res.json({
+      hasWagon: stats.hasWagon,
+      level: stats.level,
+      minLevel: WAGON_MIN_LEVEL,
+      meetsLevel: stats.level >= WAGON_MIN_LEVEL,
+      progress,
+      canBuild: stats.level >= WAGON_MIN_LEVEL && progress.every(p => p.have >= p.need),
+    });
+  } catch (e) {
+    console.error('/api/wagon/status error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+app.post('/api/wagon/build', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const statsRows = await tx.$queryRaw`
+        SELECT * FROM "Stats" WHERE "userId" = ${req.user.id} FOR UPDATE
+      `;
+      const stats = statsRows[0];
+      if (!stats) throw { code: 'NO_STATS' };
+      if (stats.hasWagon) throw { code: 'ALREADY_HAVE' };
+      if (stats.level < WAGON_MIN_LEVEL) throw { code: 'LEVEL_TOO_LOW' };
+
+      // Verify and consume each required material.
+      for (const req_ of WAGON_RECIPE) {
+        const item = await tx.item.findFirst({ where: { name: req_.itemName } });
+        if (!item) throw { code: 'MISSING_ITEM', itemName: req_.itemName };
+
+        const inv = await tx.inventory.findFirst({ where: { userId: req.user.id, itemId: item.id } });
+        if (!inv || inv.quantity < req_.qty) throw { code: 'NOT_ENOUGH', itemName: req_.itemName };
+      }
+      for (const req_ of WAGON_RECIPE) {
+        const item = await tx.item.findFirst({ where: { name: req_.itemName } });
+        const inv = await tx.inventory.findFirst({ where: { userId: req.user.id, itemId: item.id } });
+        if (inv.quantity - req_.qty <= 0) {
+          await tx.inventory.delete({ where: { id: inv.id } });
+        } else {
+          await tx.inventory.update({ where: { id: inv.id }, data: { quantity: { decrement: req_.qty } } });
+        }
+      }
+
+      await tx.stats.update({ where: { userId: req.user.id }, data: { hasWagon: true } });
+    });
+
+    logActivity(req.user.id, 'level', 'Built a Basic Wagon! Travel across Karthûl is now possible.');
+    res.json({ ok: true });
+
+  } catch (e) {
+    if (e && e.code === 'ALREADY_HAVE')   return res.status(400).json({ error: 'You already own a wagon' });
+    if (e && e.code === 'LEVEL_TOO_LOW')  return res.status(400).json({ error: `You must be at least Level ${WAGON_MIN_LEVEL} to build a wagon` });
+    if (e && e.code === 'NOT_ENOUGH')     return res.status(400).json({ error: `Not enough ${e.itemName}` });
+    if (e && e.code === 'MISSING_ITEM')   return res.status(500).json({ error: `${e.itemName} is not yet available — ask the developer to seed it` });
+    console.error('/api/wagon/build error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
 });
 
 app.get('/api/activity', async (req, res) => {

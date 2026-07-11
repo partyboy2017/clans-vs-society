@@ -66,6 +66,8 @@ model Stats {
 
   gold Int @default(0)
 
+  hasWagon Boolean @default(false)
+
   lastStrengthTrain DateTime?
   lastDefenseTrain  DateTime?
   lastSpeedTrain    DateTime?

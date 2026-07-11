@@ -134,6 +134,20 @@
     letter-spacing: 0.06em;
     color: var(--parchment);
     margin-bottom: 0.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+  }
+  .class-badge{
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.65rem;
+    border: 1px solid var(--brass);
+    color: var(--brass);
+    vertical-align: middle;
   }
   .page-sub{
     font-size: 0.95rem;
@@ -459,7 +473,7 @@
   <nav class="sidebar" id="sidebar"></nav>
 
   <main class="main">
-    <div class="page-title" id="greeting">Welcome back</div>
+    <div class="page-title"><span id="greeting">Welcome back</span><span class="class-badge" id="class-badge" style="display:none;"></span></div>
     <div class="page-sub" id="level-line">Loading your character...</div>
 
     <!-- JAIL BANNER -->
@@ -656,6 +670,11 @@
 
       document.getElementById('player-name').textContent = data.username;
       document.getElementById('greeting').textContent = `Welcome back, ${data.username}`;
+      const classBadge = document.getElementById('class-badge');
+      if (data.classLabel) {
+        classBadge.textContent = data.classLabel;
+        classBadge.style.display = 'inline-block';
+      }
       document.getElementById('level-line').textContent = `Level ${data.stats.level} — ${data.stats.xp} XP earned`;
 
       updateStatusBanners(data.stats);

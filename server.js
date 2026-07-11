@@ -3,7 +3,7 @@
 // a separate require('dotenv').config() call here.
 //const Sentry = require('./instrument');
 
-//const express = require('express');
+const express = require('express');
 const path = require('path');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);

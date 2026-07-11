@@ -1,4 +1,8 @@
-require('dotenv').config();
+// Sentry must be initialized before any other module is required — see
+// instrument.js for why. This also handles loading .env, so we don't need
+// a separate require('dotenv').config() call here.
+const Sentry = require('./instrument');
+
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
@@ -9,6 +13,18 @@ const { PrismaClient } = require('@prisma/client');
 
 const app = express();
 const prisma = new PrismaClient();
+
+// Wraps console.error so every existing error-logging call site also
+// reports to Sentry, without needing to touch each one individually.
+// Safe to call with non-Error trailing arguments (e.g. a string) — it just
+// won't forward those to Sentry, since there's nothing useful to capture.
+function logError(...args) {
+  console.error(...args);
+  const last = args[args.length - 1];
+  if (last instanceof Error && process.env.SENTRY_DSN) {
+    Sentry.captureException(last);
+  }
+}
 
 // ─── Class definitions ────────────────────────────────────────────────────────
 // Each class has:
@@ -62,6 +78,94 @@ const CLASSES = {
 };
 
 const VALID_CLASSES = Object.keys(CLASSES);
+
+// ─── Input validation ──────────────────────────────────────────────────────────
+// Zod schemas guard the *shape* of request bodies (correct types, required
+// fields, sane bounds) before a request ever reaches game logic. This turns
+// malformed input (missing fields, wrong types, huge strings) into a clean
+// 400 with a clear message, instead of a raw Prisma error or a 500. Business
+// rules that need a database lookup (e.g. "does this location actually
+// exist?") stay in the route handler — that's not something a shape
+// validator can check on its own.
+
+const { z } = require('zod');
+
+function validate(schema) {
+  return (req, res, next) => {
+    const result = schema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error.issues[0]?.message || 'Invalid request' });
+    }
+    req.body = result.data;
+    next();
+  };
+}
+
+const id = () => z.coerce.number().int().positive('Must be a positive number');
+
+const schemas = {
+  chooseName: z.object({
+    characterName: z.string().trim()
+      .min(2, 'Name must be at least 2 characters')
+      .max(24, 'Name must be 24 characters or fewer'),
+  }),
+  chooseClass: z.object({
+    characterClass: z.enum(VALID_CLASSES, { message: 'Invalid class' }),
+  }),
+  skillKey: z.object({
+    skillKey: z.string().min(1, 'skillKey is required'),
+  }),
+  spendStat: z.object({
+    stat: z.enum(['strength', 'defense', 'speed', 'dexterity', 'intelligence'], { message: 'Invalid stat' }),
+  }),
+  houseCreate: z.object({
+    name:  z.string().trim().min(2, 'House name must be at least 2 characters').max(30, 'House name must be 30 characters or fewer'),
+    motto: z.string().trim().max(100, 'Motto must be 100 characters or fewer').optional(),
+  }),
+  houseJoin: z.object({
+    houseId: id(),
+  }),
+  marketBuy: z.object({
+    listingId: id(),
+  }),
+  marketList: z.object({
+    inventoryId: id(),
+    price:       z.coerce.number().int().min(1, 'Price must be at least 1 gold'),
+    quantity:    z.coerce.number().int().min(1, 'Quantity must be at least 1'),
+  }),
+  inventoryId: z.object({
+    inventoryId: id(),
+  }),
+  shopBuy: z.object({
+    itemId:   id(),
+    quantity: z.coerce.number().int().min(1).max(99).optional().default(1),
+  }),
+  inventorySell: z.object({
+    inventoryId: id(),
+    quantity:    z.coerce.number().int().min(1).optional().default(1),
+  }),
+  trainingTrain: z.object({
+    stat: z.string().min(1, 'stat is required'),
+  }),
+  raidNpc: z.object({
+    locationId: z.string().min(1, 'locationId is required'),
+  }),
+  raidPlayer: z.object({
+    targetId: id(),
+  }),
+  feedback: z.object({
+    category: z.enum(['Bug Report', 'Feedback', 'Other'], { message: 'Invalid category' }),
+    message:  z.string().trim()
+      .min(5, 'Please write a bit more detail (at least 5 characters).')
+      .max(3000, 'Message is too long (max 3000 characters).'),
+  }),
+  monstersStart: z.object({
+    zoneId: z.string().min(1, 'zoneId is required'),
+  }),
+  monstersTurn: z.object({
+    action: z.enum(['attack', 'defend', 'flee'], { message: 'Invalid action' }),
+  }),
+};
 
 // ─── Skill trees ──────────────────────────────────────────────────────────────
 // Each skill has:
@@ -346,12 +450,12 @@ async function sendWelcomeEmail(toEmail, username) {
     });
     if (!res.ok) {
       const body = await res.text();
-      console.error('Resend API error:', res.status, body);
+      logError('Resend API error:', res.status, body);
       return;
     }
     console.log(`Welcome email sent to ${toEmail}`);
   } catch (err) {
-    console.error('Failed to send welcome email:', err);
+    logError('Failed to send welcome email:', err);
   }
 }
 
@@ -390,12 +494,12 @@ async function sendFeedbackEmail({ category, message, username, email }) {
     });
     if (!res.ok) {
       const body = await res.text();
-      console.error('Resend API error (feedback):', res.status, body);
+      logError('Resend API error (feedback):', res.status, body);
       return { ok: false, error: 'Failed to send' };
     }
     return { ok: true };
   } catch (err) {
-    console.error('Failed to send feedback email:', err);
+    logError('Failed to send feedback email:', err);
     return { ok: false, error: 'Failed to send' };
   }
 }
@@ -485,7 +589,7 @@ passport.use(new GoogleStrategy({
     if (isNewUser && user.email) {
       // Fire-and-forget — a slow or failing mail provider should never block login.
       sendWelcomeEmail(user.email, user.username).catch(err =>
-        console.error('Welcome email error:', err)
+        logError('Welcome email error:', err)
       );
     }
 
@@ -505,7 +609,7 @@ passport.deserializeUser(async (id, done) => {
     });
     done(null, user);
   } catch (err) {
-    console.error('[deserializeUser] error for id', id, err);
+    logError('[deserializeUser] error for id', id, err);
     done(err, null);
   }
 });
@@ -677,12 +781,10 @@ app.get('/api/classes', (req, res) => {
 
 // ─── API: choose name ─────────────────────────────────────────────────────────
 
-app.post('/api/choose-name', async (req, res) => {
+app.post('/api/choose-name', validate(schemas.chooseName), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { characterName } = req.body;
-  if (!characterName || characterName.trim().length < 2)
-    return res.status(400).json({ error: 'Name must be at least 2 characters' });
-  const clean = characterName.trim().slice(0, 24);
+  const clean = characterName;
   try {
     const exists = await prisma.user.findFirst({ where: { characterName: clean } });
     if (exists) return res.status(409).json({ error: 'That name is already taken' });
@@ -704,13 +806,11 @@ app.post('/api/choose-name', async (req, res) => {
 
 // ─── API: choose class ────────────────────────────────────────────────────────
 
-app.post('/api/choose-class', async (req, res) => {
+app.post('/api/choose-class', validate(schemas.chooseClass), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   if (req.user.characterClass)  return res.status(409).json({ error: 'Class already chosen' });
 
   const { characterClass } = req.body;
-  if (!VALID_CLASSES.includes(characterClass))
-    return res.status(400).json({ error: 'Invalid class' });
 
   const cls = CLASSES[characterClass];
 
@@ -752,7 +852,7 @@ app.post('/api/choose-class', async (req, res) => {
       res.json({ ok: true });
     });
   } catch (e) {
-    console.error(e);
+    logError(e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
@@ -940,7 +1040,7 @@ app.post('/api/action/rest', async (req, res) => {
     logActivity(req.user.id, 'training', `Rested at the Inn for ${goldCost} gold. Health and energy fully restored.`);
     res.json({ ok: true, discounted: goldCost === 15, goldCost });
   } catch (e) {
-    console.error('/api/action/rest error:', e);
+    logError('/api/action/rest error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
@@ -964,7 +1064,7 @@ app.get('/api/skills', async (req, res) => {
 });
 
 // POST /api/skills/unlock — spend stat points to unlock a skill
-app.post('/api/skills/unlock', async (req, res) => {
+app.post('/api/skills/unlock', validate(schemas.skillKey), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
 
   const { skillKey } = req.body;
@@ -1026,13 +1126,13 @@ app.post('/api/skills/unlock', async (req, res) => {
   } catch (e) {
     if (e.code === 'NOT_ENOUGH_POINTS') return res.status(400).json({ error: 'Not enough stat points' });
     if (e.code === 'P2002')             return res.status(409).json({ error: 'Skill already unlocked' });
-    console.error(e);
+    logError(e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
 
 // POST /api/action/skill — fire an active skill
-app.post('/api/action/skill', async (req, res) => {
+app.post('/api/action/skill', validate(schemas.skillKey), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
 
   const { skillKey } = req.body;
@@ -1121,7 +1221,7 @@ app.post('/api/action/skill', async (req, res) => {
 // fails — logging is a nice-to-have, not a critical path.
 function logActivity(userId, category, message) {
   prisma.activityLog.create({ data: { userId, category, message } })
-    .catch(err => console.error('logActivity error:', err));
+    .catch(err => logError('logActivity error:', err));
 }
 
 async function checkLevelUp(userId) {
@@ -1165,11 +1265,9 @@ async function checkLevelUp(userId) {
 
 // ─── API: spend stat points ───────────────────────────────────────────────────
 
-app.post('/api/spend-stat', async (req, res) => {
+app.post('/api/spend-stat', validate(schemas.spendStat), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { stat } = req.body;
-  const allowed = ['strength', 'defense', 'speed', 'dexterity', 'intelligence'];
-  if (!allowed.includes(stat)) return res.status(400).json({ error: 'Invalid stat' });
 
   // Atomic: deduct a stat point and increment the chosen stat in one shot.
   // The WHERE guard (statPoints >= 1) means count === 0 → genuinely out of points.
@@ -1228,10 +1326,9 @@ app.get('/api/houses', async (req, res) => {
   res.json(houses);
 });
 
-app.post('/api/house/create', async (req, res) => {
+app.post('/api/house/create', validate(schemas.houseCreate), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { name, motto } = req.body;
-  if (!name || name.trim().length < 2) return res.status(400).json({ error: 'House name must be at least 2 characters' });
   const existing = await prisma.houseMember.findUnique({ where: { userId: req.user.id } });
   if (existing) return res.status(400).json({ error: 'You already belong to a house' });
   try {
@@ -1256,12 +1353,12 @@ app.post('/api/house/create', async (req, res) => {
   } catch (e) {
     if (e.code === 'NO_GOLD') return res.status(400).json({ error: 'Founding a house costs 500 gold' });
     if (e.code === 'P2002')   return res.status(409).json({ error: 'That house name is already taken' });
-    console.error(e);
+    logError(e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
 
-app.post('/api/house/join', async (req, res) => {
+app.post('/api/house/join', validate(schemas.houseJoin), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { houseId } = req.body;
   const existing = await prisma.houseMember.findUnique({ where: { userId: req.user.id } });
@@ -1304,7 +1401,7 @@ app.get('/api/market/inventory', async (req, res) => {
   res.json(inventory);
 });
 
-app.post('/api/market/buy', async (req, res) => {
+app.post('/api/market/buy', validate(schemas.marketBuy), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { listingId } = req.body;
 
@@ -1350,15 +1447,14 @@ app.post('/api/market/buy', async (req, res) => {
     if (e.code === 'OWN_LISTING') return res.status(400).json({ error: 'You cannot buy your own listing' });
     if (e.code === 'NO_GOLD')     return res.status(400).json({ error: 'Not enough gold' });
     if (e.code === 'P2025')       return res.status(404).json({ error: 'Listing no longer available' });
-    console.error(e);
+    logError(e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
 
-app.post('/api/market/list', async (req, res) => {
+app.post('/api/market/list', validate(schemas.marketList), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { inventoryId, price, quantity } = req.body;
-  if (!price || price < 1) return res.status(400).json({ error: 'Price must be at least 1 gold' });
   const inv = await prisma.inventory.findFirst({ where: { id: inventoryId, userId: req.user.id } });
   if (!inv) return res.status(404).json({ error: 'Item not found in your inventory' });
   if (inv.quantity < quantity) return res.status(400).json({ error: 'Not enough of that item' });
@@ -1395,7 +1491,7 @@ app.get('/api/inventory', async (req, res) => {
   res.json({ inventory });
 });
 
-app.post('/api/inventory/use', async (req, res) => {
+app.post('/api/inventory/use', validate(schemas.inventoryId), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { inventoryId } = req.body;
 
@@ -1460,7 +1556,7 @@ app.post('/api/inventory/use', async (req, res) => {
   } catch (e) {
     if (e && e.code === 'NOT_FOUND')  return res.status(404).json({ error: 'Item not found in your inventory' });
     if (e && e.code === 'NOT_USABLE') return res.status(400).json({ error: 'That item cannot be used' });
-    console.error('/api/inventory/use error:', e);
+    logError('/api/inventory/use error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
@@ -1474,10 +1570,10 @@ app.get('/api/shop/items', async (req, res) => {
   res.json({ items });
 });
 
-app.post('/api/shop/buy', async (req, res) => {
+app.post('/api/shop/buy', validate(schemas.shopBuy), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { itemId, quantity } = req.body;
-  const qty = Math.max(1, Math.min(99, parseInt(quantity, 10) || 1));
+  const qty = quantity;
 
   const item = await prisma.item.findUnique({ where: { id: itemId } });
   if (!item) return res.status(404).json({ error: 'Item not found' });
@@ -1504,15 +1600,15 @@ app.post('/api/shop/buy', async (req, res) => {
     res.json({ ok: true, itemName: item.name, quantity: qty, cost });
   } catch (e) {
     if (e && e.code === 'NO_GOLD') return res.status(400).json({ error: 'Not enough gold' });
-    console.error('/api/shop/buy error:', e);
+    logError('/api/shop/buy error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
 
-app.post('/api/inventory/sell', async (req, res) => {
+app.post('/api/inventory/sell', validate(schemas.inventorySell), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { inventoryId, quantity } = req.body;
-  const qty = Math.max(1, parseInt(quantity, 10) || 1);
+  const qty = quantity;
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -1544,7 +1640,7 @@ app.post('/api/inventory/sell', async (req, res) => {
   } catch (e) {
     if (e && e.code === 'NOT_FOUND')   return res.status(404).json({ error: 'Item not found in your inventory' });
     if (e && e.code === 'NOT_ENOUGH')  return res.status(400).json({ error: 'Not enough of that item' });
-    console.error('/api/inventory/sell error:', e);
+    logError('/api/inventory/sell error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
@@ -1572,7 +1668,7 @@ app.get('/api/training/status', async (req, res) => {
   res.json({ stats, cooldowns });
 });
 
-app.post('/api/training/train', async (req, res) => {
+app.post('/api/training/train', validate(schemas.trainingTrain), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { stat } = req.body;
   const cfg = TRAINING_CONFIG[stat];
@@ -1741,12 +1837,12 @@ app.get('/api/raid/status', async (req, res) => {
       hospitalRemainingMs: stats.inHospital && stats.hospitalUntil ? Math.max(0, stats.hospitalUntil - now) : 0,
     });
   } catch (e) {
-    console.error('/api/raid/status error:', e);
+    logError('/api/raid/status error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
 
-app.post('/api/raid/npc', async (req, res) => {
+app.post('/api/raid/npc', validate(schemas.raidNpc), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { locationId } = req.body;
   const location = NPC_LOCATIONS.find(l => l.id === locationId);
@@ -1826,12 +1922,12 @@ app.post('/api/raid/npc', async (req, res) => {
     if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
     if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
     if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy' });
-    console.error('/api/raid/npc error:', e);
+    logError('/api/raid/npc error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
 
-app.post('/api/raid/player', async (req, res) => {
+app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { targetId } = req.body;
   if (targetId === req.user.id) return res.status(400).json({ error: 'You cannot attack yourself' });
@@ -1926,7 +2022,7 @@ app.post('/api/raid/player', async (req, res) => {
     if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
     if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
     if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy — attacks cost 20 energy' });
-    console.error('/api/raid/player error:', e);
+    logError('/api/raid/player error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
@@ -2167,21 +2263,10 @@ function scaleMonster(template, level) {
 const feedbackCooldowns = new Map(); // userId -> last submission timestamp
 const FEEDBACK_COOLDOWN_MS = 60 * 1000; // 1 submission per minute per user
 
-app.post('/api/feedback', async (req, res) => {
+app.post('/api/feedback', validate(schemas.feedback), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
 
   const { category, message } = req.body;
-  const allowedCategories = ['Bug Report', 'Feedback', 'Other'];
-  if (!allowedCategories.includes(category)) {
-    return res.status(400).json({ error: 'Invalid category' });
-  }
-  const trimmed = (message || '').trim();
-  if (trimmed.length < 5) {
-    return res.status(400).json({ error: 'Please write a bit more detail (at least 5 characters).' });
-  }
-  if (trimmed.length > 3000) {
-    return res.status(400).json({ error: 'Message is too long (max 3000 characters).' });
-  }
 
   const lastSent = feedbackCooldowns.get(req.user.id);
   if (lastSent && Date.now() - lastSent < FEEDBACK_COOLDOWN_MS) {
@@ -2190,7 +2275,7 @@ app.post('/api/feedback', async (req, res) => {
 
   const result = await sendFeedbackEmail({
     category,
-    message: trimmed,
+    message,
     username: req.user.characterName || req.user.username,
     email: req.user.email,
   });
@@ -2229,7 +2314,7 @@ app.get('/api/wagon/status', async (req, res) => {
       canBuild: stats.level >= WAGON_MIN_LEVEL && progress.every(p => p.have >= p.need),
     });
   } catch (e) {
-    console.error('/api/wagon/status error:', e);
+    logError('/api/wagon/status error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
@@ -2276,7 +2361,7 @@ app.post('/api/wagon/build', async (req, res) => {
     if (e && e.code === 'LEVEL_TOO_LOW')  return res.status(400).json({ error: `You must be at least Level ${WAGON_MIN_LEVEL} to build a wagon` });
     if (e && e.code === 'NOT_ENOUGH')     return res.status(400).json({ error: `Not enough ${e.itemName}` });
     if (e && e.code === 'MISSING_ITEM')   return res.status(500).json({ error: `${e.itemName} is not yet available — ask the developer to seed it` });
-    console.error('/api/wagon/build error:', e);
+    logError('/api/wagon/build error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
@@ -2292,7 +2377,7 @@ app.get('/api/activity', async (req, res) => {
     });
     res.json({ entries });
   } catch (e) {
-    console.error('/api/activity error:', e);
+    logError('/api/activity error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
@@ -2342,7 +2427,7 @@ app.get('/api/wiki', async (req, res) => {
 
     res.json({ classes, skills, zones, raidLocations, items, mechanics });
   } catch (e) {
-    console.error('/api/wiki error:', e);
+    logError('/api/wiki error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
@@ -2361,7 +2446,7 @@ app.get('/api/monsters/session', async (req, res) => {
   res.json({ session });
 });
 
-app.post('/api/monsters/start', async (req, res) => {
+app.post('/api/monsters/start', validate(schemas.monstersStart), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { zoneId } = req.body;
   const zone = MONSTER_ZONES.find(z => z.id === zoneId);
@@ -2411,17 +2496,14 @@ app.post('/api/monsters/start', async (req, res) => {
     if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
     if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
     if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy' });
-    console.error('/api/monsters/start error:', e);
+    logError('/api/monsters/start error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
 
-app.post('/api/monsters/turn', async (req, res) => {
+app.post('/api/monsters/turn', validate(schemas.monstersTurn), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { action } = req.body;
-  if (!['attack', 'defend', 'flee'].includes(action)) {
-    return res.status(400).json({ error: 'Invalid action' });
-  }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -2542,10 +2624,15 @@ app.post('/api/monsters/turn', async (req, res) => {
 
   } catch (e) {
     if (e && e.code === 'NO_SESSION') return res.status(400).json({ error: 'No fight in progress' });
-    console.error('/api/monsters/turn error:', e);
+    logError('/api/monsters/turn error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
+
+// Safety net for any error that isn't already caught by a route's own
+// try/catch (e.g. a thrown error in middleware, or a bug in code we haven't
+// wrapped yet). Must be registered after all routes, before app.listen().
+Sentry.setupExpressErrorHandler(app);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {

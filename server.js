@@ -2632,7 +2632,7 @@ app.post('/api/monsters/turn', validate(schemas.monstersTurn), async (req, res) 
 // Safety net for any error that isn't already caught by a route's own
 // try/catch (e.g. a thrown error in middleware, or a bug in code we haven't
 // wrapped yet). Must be registered after all routes, before app.listen().
-Sentry.setupExpressErrorHandler(app);
+//Sentry.setupExpressErrorHandler(app);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {

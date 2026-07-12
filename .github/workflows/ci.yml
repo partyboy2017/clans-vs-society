@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    # Ephemeral Postgres for this run only — lets us actually validate that
+    # schema.prisma applies cleanly, instead of just checking JS syntax.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      SESSION_SECRET: ci-test-secret
+      GOOGLE_CLIENT_ID: ci-test-client-id
+      GOOGLE_CLIENT_SECRET: ci-test-client-secret
+      CALLBACK_URL: http://localhost:3000/auth/google/callback
+      PORT: 3000
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Catches things like the seed script's unescaped apostrophe, or a
+      # bad edit that leaves a route missing its closing brace — before
+      # they ever reach Railway.
+      - name: Syntax check every JS file
+        run: |
+          find . -name "*.js" \
+            -not -path "./node_modules/*" \
+            -print0 | xargs -0 -n1 node --check
+
+      # Catches a schema.prisma that doesn't actually match reality — the
+      # exact class of bug behind the Stats/Item column drift and the
+      # missing CombatSession table we hit earlier in this project.
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Apply schema to a clean database
+        run: npx prisma db push --accept-data-loss
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      # Catches things `node --check` can't see, like a require() pointing
+      # at a file that was never actually committed (this is exactly what
+      # happened with instrument.js) — by actually booting the server and
+      # confirming it stays up.
+      - name: Smoke test — server boots without crashing
+        run: |
+          timeout 8 node server.js > server_output.log 2>&1 &
+          SERVER_PID=$!
+          sleep 4
+          if kill -0 $SERVER_PID 2>/dev/null; then
+            echo "Server started successfully."
+            kill $SERVER_PID
+          else
+            echo "Server crashed on startup. Output:"
+            cat server_output.log
+            exit 1
+          fi

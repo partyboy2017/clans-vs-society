@@ -146,6 +146,7 @@
     <div class="modal-status" id="modal-status"></div>
     <div class="modal-travel" id="modal-travel"></div>
     <div class="modal-desc" id="modal-desc"></div>
+    <button class="wagon-build-btn" id="modal-travel-btn" style="margin-bottom:0.7rem;display:none;"></button>
     <button class="modal-close" onclick="closeModal()">Close</button>
   </div>
 </div>
@@ -163,31 +164,31 @@
       href: '/dashboard', desc: 'The last great capital of Karthûl, and the seat from which every lord begins their rise. Home is always one road away.' },
     { name: 'Icewind Citadel', region: 'Frostreach — The Shivering North', x: 50.1, y: 17.4,
       desc: 'A fortress carved into the northern ice, said to guard secrets older than the kingdom itself.',
-      travelDays: 56, mode: 'road' },
+      travelDays: 56, mode: 'road', cityId: 'icewind-citadel' },
     { name: 'Stonehall', region: 'Silverpeaks — Dwarven Hold', x: 43.0, y: 30.1,
       desc: 'A mountain stronghold of the dwarven clans, rich in ore and older grudges.',
-      travelDays: 36, mode: 'road' },
+      travelDays: 36, mode: 'road', cityId: 'stonehall' },
     { name: 'Greenwatch', region: 'Verdant Wilds — The Emerald Expanse', x: 18.4, y: 42.6,
       desc: 'A watchpost on the edge of an endless forest, where rangers keep count of what moves among the trees.',
-      travelDays: 63, mode: 'road' },
+      travelDays: 63, mode: 'road', cityId: 'greenwatch' },
     { name: 'Tempest Haven', region: 'Stormcoast — Lands of Tempest', x: 67.1, y: 40.3,
       desc: 'A harbor town that has weathered a thousand storms, and sailors who claim to have weathered worse.',
-      travelDays: 54, mode: 'road' },
+      travelDays: 54, mode: 'road', cityId: 'tempest-haven' },
     { name: 'Drakenholm', region: 'Isle of Legends', x: 82.4, y: 27.0,
       desc: 'A floating isle wreathed in storm clouds, spoken of more in legend than in any confirmed sighting.',
       travelDays: 34, mode: 'sea' },
     { name: 'Sunspear Oasis', region: 'Sandscarre — The Endless Dunes', x: 22.1, y: 74.7,
       desc: 'The only reliable water for a hundred miles in any direction — and fiercely contested for it.',
-      travelDays: 61, mode: 'road' },
+      travelDays: 61, mode: 'road', cityId: 'sunspear-oasis' },
     { name: 'Bogtimber', region: 'Mireveil — The Sunken Wilds', x: 39.9, y: 77.3,
       desc: 'A settlement built on stilts above the marsh, where the locals trust the swamp more than strangers.',
-      travelDays: 37, mode: 'road' },
+      travelDays: 37, mode: 'road', cityId: 'bogtimber' },
     { name: 'Blackgate', region: 'Ashenreach — Land of Fire and Fury', x: 61.2, y: 78.0,
       desc: 'A town living in the shadow of an active volcano, out of necessity rather than choice.',
-      travelDays: 51, mode: 'road' },
+      travelDays: 51, mode: 'road', cityId: 'blackgate' },
     { name: 'Luminara', region: 'Celestial Isles — Pearls of the South', x: 85.0, y: 69.0,
       desc: 'A glittering archipelago city, as beautiful as it is difficult to reach.',
-      travelDays: 34, mode: 'sea' },
+      travelDays: 34, mode: 'sea', cityId: 'luminara' },
   ];
 
   function formatTravelTime(days, mode){
@@ -223,16 +224,35 @@
     document.getElementById('modal-desc').textContent = poi.desc;
 
     const statusEl = document.getElementById('modal-status');
-    statusEl.textContent = 'Uncharted — coming soon';
-    statusEl.className = 'modal-status';
-
     const travelEl = document.getElementById('modal-travel');
-    if (hasWagon) {
+    const travelBtn = document.getElementById('modal-travel-btn');
+
+    if (!poi.cityId) {
+      // No hub page built for this settlement yet.
+      statusEl.textContent = 'Uncharted — coming soon';
+      statusEl.className = 'modal-status';
+      travelEl.textContent = hasWagon
+        ? formatTravelTime(poi.travelDays, poi.mode)
+        : '🔒 A wagon is required to travel this far. Build one below (Level 10+).';
+      travelEl.style.display = 'block';
+      travelBtn.style.display = 'none';
+    } else if (hasWagon) {
+      statusEl.textContent = 'Charted — ready to visit';
+      statusEl.className = 'modal-status live';
       travelEl.textContent = formatTravelTime(poi.travelDays, poi.mode);
       travelEl.style.display = 'block';
+      travelBtn.style.display = 'block';
+      travelBtn.disabled = false;
+      travelBtn.textContent = `Travel to ${poi.name}`;
+      travelBtn.onclick = () => { window.location.href = `/city/${poi.cityId}`; };
     } else {
+      statusEl.textContent = 'Charted — wagon required';
+      statusEl.className = 'modal-status';
       travelEl.textContent = '🔒 A wagon is required to travel this far. Build one below (Level 10+).';
       travelEl.style.display = 'block';
+      travelBtn.style.display = 'block';
+      travelBtn.disabled = true;
+      travelBtn.textContent = 'Requires a Wagon';
     }
 
     document.getElementById('modal-overlay').classList.add('show');

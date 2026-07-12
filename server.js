@@ -709,6 +709,14 @@ app.get('/market', (req, res) => {
   if (!req.user.characterClass) return res.redirect('/choose-class');
   res.sendFile(path.join(__dirname, 'public', 'market.html'));
 });
+
+app.get('/city/:cityId', (req, res) => {
+  if (!req.isAuthenticated())   return res.redirect('/');
+  if (!req.user.characterName)  return res.redirect('/choose-name');
+  if (!req.user.characterClass) return res.redirect('/choose-class');
+  if (!CITIES.find(c => c.id === req.params.cityId)) return res.redirect('/realm-map');
+  res.sendFile(path.join(__dirname, 'public', 'city.html'));
+});
 // ─── API: auth ────────────────────────────────────────────────────────────────
 
 app.post('/api/logout', (req, res) => {
@@ -2167,6 +2175,90 @@ const LOOT_TABLES = {
   ],
 };
 
+// ─── CITIES ───────────────────────────────────────────────────────────────────
+// Static config for the settlements a lord can travel to (see /realm-map).
+// Aurelia is the capital and is handled by the existing /dashboard route, so
+// it isn't listed here. Every other entry gets its own hub page at
+// /city/:id — reachable once the player has built a wagon (see WAGON_RECIPE
+// above). shopItemNames reference rows in the Item table (prisma/seed-items.js);
+// nearbyZoneIds/nearbyRaidIds cross-reference MONSTER_ZONES and NPC_LOCATIONS
+// below purely for flavor — the hunting/raid systems themselves are global
+// and not gated by location.
+const CITIES = [
+  {
+    id: 'icewind-citadel', name: 'Icewind Citadel', region: 'Frostreach — The Shivering North',
+    tagline: 'A fortress carved into the northern ice, said to guard secrets older than the kingdom itself.',
+    lore: 'The Citadel has stood since before the fracturing of Karthûl, its halls cut directly into a glacier that never fully melts. Its garrison answers to no house but its own, trading furs, ironwork, and old grudges with any lord who survives the road north.',
+    travelDays: 56, mode: 'road',
+    shopItemNames: ['Healing Potion', 'Energy Draught', 'Iron Bar'],
+    nearbyZoneIds: ['ruins'],
+    nearbyRaidIds: ['manor', 'treasury'],
+  },
+  {
+    id: 'stonehall', name: 'Stonehall', region: 'Silverpeaks — Dwarven Hold',
+    tagline: 'A mountain stronghold of the dwarven clans, rich in ore and older grudges.',
+    lore: "Carved rather than built, Stonehall's halls run deeper than any outsider has mapped. Its forges never go cold, and its smiths are said to strike a fairer bargain than most lords of the surface — provided you don't ask what they mine for.",
+    travelDays: 36, mode: 'road',
+    shopItemNames: ['Logs', 'Nails', 'Iron Bar', 'Minor Healing Potion'],
+    nearbyZoneIds: ['ruins', 'woods'],
+    nearbyRaidIds: ['caravan'],
+  },
+  {
+    id: 'greenwatch', name: 'Greenwatch', region: 'Verdant Wilds — The Emerald Expanse',
+    tagline: 'A watchpost on the edge of an endless forest, where rangers keep count of what moves among the trees.',
+    lore: "Half garrison, half trading post, Greenwatch exists to keep the forest's dangers on one side of its palisade. Its rangers trade pelts and tonics brewed from herbs no city apothecary would recognize.",
+    travelDays: 63, mode: 'road',
+    shopItemNames: ['Minor Healing Potion', 'Scroll of Wisdom', 'Logs'],
+    nearbyZoneIds: ['woods'],
+    nearbyRaidIds: ['village'],
+  },
+  {
+    id: 'tempest-haven', name: 'Tempest Haven', region: 'Stormcoast — Lands of Tempest',
+    tagline: 'A harbor town that has weathered a thousand storms, and sailors who claim to have weathered worse.',
+    lore: "Ships arrive battered and leave the same way — Tempest Haven's harbor is the only safe anchorage for a hundred miles of coastline that seems to hate ships. Its taverns trade in salvage, rumor, and remedies for the sea-sick.",
+    travelDays: 54, mode: 'road',
+    shopItemNames: ['Energy Draught', 'Elixir of Vigor', 'Healing Potion'],
+    nearbyZoneIds: ['marsh'],
+    nearbyRaidIds: ['caravan', 'manor'],
+  },
+  {
+    id: 'sunspear-oasis', name: 'Sunspear Oasis', region: 'Sandscarre — The Endless Dunes',
+    tagline: 'The only reliable water for a hundred miles in any direction — and fiercely contested for it.',
+    lore: "Every road across Sandscarre bends toward Sunspear eventually, whether its travelers plan it or not. The oasis has changed hands more times than its well-keepers can count, and the current claimants sell water, shade, and healing draughts at a price only the desperate pay twice.",
+    travelDays: 61, mode: 'road',
+    shopItemNames: ['Minor Healing Potion', 'Healing Potion', 'Energy Draught'],
+    nearbyZoneIds: ['woods'],
+    nearbyRaidIds: ['village', 'caravan'],
+  },
+  {
+    id: 'bogtimber', name: 'Bogtimber', region: 'Mireveil — The Sunken Wilds',
+    tagline: 'A settlement built on stilts above the marsh, where the locals trust the swamp more than strangers.',
+    lore: "Bogtimber rises out of the Blighted Marsh on a lattice of blackened pilings, its people long past being unsettled by what surfaces at night. What they can't grow or trap, they distill — mostly into things that are technically medicine.",
+    travelDays: 37, mode: 'road',
+    shopItemNames: ['Minor Healing Potion', 'Elixir of Vigor', 'Scroll of Wisdom'],
+    nearbyZoneIds: ['marsh'],
+    nearbyRaidIds: ['village'],
+  },
+  {
+    id: 'blackgate', name: 'Blackgate', region: 'Ashenreach — Land of Fire and Fury',
+    tagline: 'A town living in the shadow of an active volcano, out of necessity rather than choice.',
+    lore: "Ash falls on Blackgate more days than not, and its people have simply stopped sweeping it away. What the volcano doesn't threaten to destroy, it provides for — the region's ironwork is unmatched, tempered in heat no forge could replicate.",
+    travelDays: 51, mode: 'road',
+    shopItemNames: ['Iron Bar', 'Nails', 'Healing Potion'],
+    nearbyZoneIds: ['rift'],
+    nearbyRaidIds: ['manor', 'treasury'],
+  },
+  {
+    id: 'luminara', name: 'Luminara', region: 'Celestial Isles — Pearls of the South',
+    tagline: 'A glittering archipelago city, as beautiful as it is difficult to reach.',
+    lore: "Luminara is spread across a dozen linked islets, its bridges and lantern-towers visible for miles out to sea. Reaching it takes a voyage most lords never attempt twice, but its markets deal in comforts and cures found nowhere else in Karthûl.",
+    travelDays: 34, mode: 'sea',
+    shopItemNames: ['Elixir of Vigor', 'Scroll of Wisdom', 'Energy Draught'],
+    nearbyZoneIds: [],
+    nearbyRaidIds: [],
+  },
+];
+
 const MONSTER_ZONES = [
   {
     id: 'woods',
@@ -2352,6 +2444,60 @@ app.post('/api/wagon/build', async (req, res) => {
     if (e && e.code === 'NOT_ENOUGH')     return res.status(400).json({ error: `Not enough ${e.itemName}` });
     if (e && e.code === 'MISSING_ITEM')   return res.status(500).json({ error: `${e.itemName} is not yet available — ask the developer to seed it` });
     logError('/api/wagon/build error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+app.get('/api/cities', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  try {
+    const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    res.json({
+      hasWagon: !!stats?.hasWagon,
+      cities: CITIES.map(c => ({
+        id: c.id, name: c.name, region: c.region, tagline: c.tagline,
+        travelDays: c.travelDays, mode: c.mode,
+      })),
+    });
+  } catch (e) {
+    logError('/api/cities error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+app.get('/api/cities/:cityId', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const city = CITIES.find(c => c.id === req.params.cityId);
+  if (!city) return res.status(404).json({ error: 'Unknown settlement' });
+
+  try {
+    const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    const shopItems = await prisma.item.findMany({
+      where: { name: { in: city.shopItemNames } },
+      orderBy: { basePrice: 'asc' },
+    });
+    const nearbyZones = MONSTER_ZONES
+      .filter(z => city.nearbyZoneIds.includes(z.id))
+      .map(z => ({ id: z.id, name: z.name, tier: z.tier, desc: z.desc, levelMin: z.levelMin, levelMax: z.levelMax }));
+    const nearbyRaids = NPC_LOCATIONS
+      .filter(l => city.nearbyRaidIds.includes(l.id))
+      .map(l => ({ id: l.id, name: l.name, risk: l.risk, desc: l.desc }));
+
+    res.json({
+      id: city.id,
+      name: city.name,
+      region: city.region,
+      tagline: city.tagline,
+      lore: city.lore,
+      travelDays: city.travelDays,
+      mode: city.mode,
+      hasWagon: !!stats?.hasWagon,
+      shopItems,
+      nearbyZones,
+      nearbyRaids,
+    });
+  } catch (e) {
+    logError('/api/cities/:cityId error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });

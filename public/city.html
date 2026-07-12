@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clans vs Society — Settlement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#1C1A17;--bg-panel:#25211C;--bg-panel-2:#2C2620;--parchment:#DCCEA6;--rust:#8B3A2A;--rust-bright:#B0492F;--brass:#B08D45;--brass-dim:#8A6F3A;--bone:#ECE4D2;--ash:#93897A;--green:#4A7C59;--green-bright:#5C9E70;--line:rgba(176,141,69,0.22);}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--bone);font-family:'EB Garamond',serif;font-size:17px;line-height:1.5;min-height:100vh;}
+  .shell{display:grid;grid-template-columns:220px 1fr;grid-template-rows:54px 1fr;min-height:100vh;}
+  .topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 1.4rem;background:rgba(28,26,23,0.95);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10;}
+  .brand{display:flex;align-items:center;gap:0.6rem;font-family:'Cinzel',serif;font-size:0.9rem;letter-spacing:0.1em;text-transform:uppercase;}
+  .brand svg{width:24px;height:24px;}
+  .topbar-right{display:flex;align-items:center;gap:1.2rem;}
+  .player-name{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--brass);letter-spacing:0.08em;}
+  .logout{font-family:'JetBrains Mono',monospace;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ash);text-decoration:none;border:1px solid var(--line);padding:0.35rem 0.7rem;transition:color 0.2s,border-color 0.2s;}
+  .logout:hover{color:var(--bone);border-color:var(--brass-dim);}
+  .sidebar{background:var(--bg-panel);border-right:1px solid var(--line);padding:1.4rem 0;display:flex;flex-direction:column;gap:0.2rem;}
+  .nav-label{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ash);padding:0.8rem 1.2rem 0.4rem;}
+  .nav-item{display:flex;align-items:center;gap:0.7rem;padding:0.6rem 1.2rem;color:var(--ash);text-decoration:none;font-family:'EB Garamond',serif;font-size:1rem;transition:color 0.15s,background 0.15s;border-left:2px solid transparent;cursor:pointer;}
+  .nav-item:hover{color:var(--bone);background:rgba(176,141,69,0.06);}
+  .nav-item.active{color:var(--parchment);border-left-color:var(--rust-bright);background:rgba(139,58,42,0.12);}
+  .nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:0.7;}
+  .nav-item.active svg{opacity:1;}
+  .nav-divider{height:1px;background:var(--line);margin:0.6rem 1.2rem;}
+  .main{padding:1.8rem 2rem;overflow-y:auto;}
+
+  .back-link{display:inline-flex;align-items:center;gap:0.4rem;font-family:'JetBrains Mono',monospace;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ash);text-decoration:none;margin-bottom:1rem;transition:color 0.15s;}
+  .back-link:hover{color:var(--parchment);}
+
+  .page-title{font-family:'Cinzel',serif;font-size:1.5rem;font-weight:600;letter-spacing:0.06em;color:var(--parchment);margin-bottom:0.3rem;}
+  .page-region{font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--brass);margin-bottom:0.6rem;}
+  .page-sub{font-size:0.95rem;color:var(--ash);font-style:italic;margin-bottom:1.6rem;max-width:70ch;}
+
+  .info-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.3rem 1.4rem;margin-bottom:1.2rem;}
+  .info-title{font-family:'Cinzel',serif;font-size:0.95rem;letter-spacing:0.05em;color:var(--parchment);margin-bottom:0.6rem;padding-bottom:0.6rem;border-bottom:1px solid var(--line);}
+  .info-desc{font-size:0.95rem;color:var(--bone);line-height:1.7;}
+
+  .travel-pill{display:inline-flex;align-items:center;gap:0.4rem;font-family:'JetBrains Mono',monospace;font-size:0.68rem;letter-spacing:0.06em;color:var(--brass);background:var(--bg-panel-2);border:1px solid var(--line);padding:0.4rem 0.8rem;margin-top:0.8rem;}
+
+  .lock-card{background:var(--bg-panel);border:1px solid var(--rust);padding:2rem;text-align:center;margin-bottom:1.2rem;}
+  .lock-icon{font-size:1.8rem;margin-bottom:0.6rem;}
+  .lock-title{font-family:'Cinzel',serif;font-size:1.1rem;color:var(--parchment);margin-bottom:0.5rem;}
+  .lock-desc{font-size:0.9rem;color:var(--ash);font-style:italic;margin-bottom:1.2rem;}
+  .lock-btn{font-family:'JetBrains Mono',monospace;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.7rem 1.4rem;border:1px solid var(--brass-dim);color:var(--brass);background:transparent;text-decoration:none;display:inline-block;transition:background 0.15s,color 0.15s;}
+  .lock-btn:hover{background:var(--brass);color:var(--bg);}
+
+  .section-title{font-family:'Cinzel',serif;font-size:1rem;letter-spacing:0.05em;color:var(--parchment);margin:1.8rem 0 0.8rem;}
+
+  /* SHOP */
+  .shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.8rem;}
+  .shop-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.1rem;transition:border-color 0.15s;}
+  .shop-card:hover{border-color:var(--brass-dim);}
+  .item-type{font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--brass);margin-bottom:0.4rem;}
+  .item-name{font-family:'Cinzel',serif;font-size:1rem;color:var(--parchment);margin-bottom:0.3rem;}
+  .item-effect{font-size:0.82rem;color:var(--green-bright);margin-bottom:0.3rem;}
+  .item-desc{font-size:0.8rem;color:var(--ash);font-style:italic;margin-bottom:0.8rem;line-height:1.5;}
+  .shop-footer{display:flex;align-items:center;justify-content:space-between;margin-top:0.6rem;padding-top:0.6rem;border-top:1px solid var(--line);}
+  .shop-price{font-family:'Cinzel',serif;font-size:1rem;color:var(--brass);}
+  .buy-btn{font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.08em;padding:0.35rem 0.8rem;background:var(--green);color:var(--bone);border:none;cursor:pointer;transition:background 0.15s;}
+  .buy-btn:hover:not(:disabled){background:var(--green-bright);}
+  .buy-btn:disabled{background:var(--bg-panel-2);color:var(--ash);border:1px solid var(--line);cursor:not-allowed;}
+
+  /* NEARBY LINKS */
+  .link-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0.8rem;}
+  .link-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.1rem;text-decoration:none;color:inherit;display:block;transition:border-color 0.15s,transform 0.1s;}
+  .link-card:hover{border-color:var(--brass-dim);transform:translateY(-1px);}
+  .link-risk{font-family:'JetBrains Mono',monospace;font-size:0.56rem;letter-spacing:0.14em;margin-bottom:0.4rem;text-transform:uppercase;}
+  .link-risk.LOW{color:var(--green-bright);}
+  .link-risk.MEDIUM{color:var(--brass);}
+  .link-risk.HIGH{color:var(--rust-bright);}
+  .link-risk.EXTREME{color:#cc3333;}
+  .link-risk.END{color:#cc3333;}
+  .link-name{font-family:'Cinzel',serif;font-size:0.98rem;color:var(--parchment);margin-bottom:0.35rem;}
+  .link-desc{font-size:0.8rem;color:var(--ash);font-style:italic;line-height:1.5;margin-bottom:0.6rem;}
+  .link-cta{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--brass);}
+
+  .empty-state{text-align:center;padding:2rem;color:var(--ash);font-style:italic;background:var(--bg-panel);border:1px solid var(--line);}
+
+  .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--bg-panel-2);border:1px solid var(--brass-dim);padding:0.8rem 1.2rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;letter-spacing:0.06em;color:var(--bone);opacity:0;transform:translateY(8px);transition:opacity 0.2s,transform 0.2s;pointer-events:none;max-width:300px;z-index:100;}
+  .toast.show{opacity:1;transform:translateY(0);}
+
+  @media(max-width:800px){.shell{grid-template-columns:1fr;}.sidebar{display:none;}}
+  .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(28,26,23,0.97);border-top:1px solid var(--line);z-index:20;padding-bottom:env(safe-area-inset-bottom);}
+  .mobile-nav-inner{display:flex;justify-content:space-around;align-items:stretch;}
+  .mn-item{display:flex;flex-direction:column;align-items:center;gap:0.25rem;padding:0.6rem 0.3rem;color:var(--ash);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;flex:1;transition:color 0.15s;-webkit-tap-highlight-color:transparent;}
+  .mn-item.active{color:var(--parchment);}
+  .mn-item:hover{color:var(--bone);}
+  .mn-item svg{width:20px;height:20px;flex-shrink:0;}
+  @media(max-width:800px){.mobile-nav{display:block;}.main{padding:1.2rem 1rem 5rem !important;}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="18" stroke="var(--brass)" stroke-width="1.5"/>
+        <path d="M12 24 L14 14 L17 18 L20 12 L23 18 L26 14 L28 24 Z" stroke="var(--brass)" stroke-width="1.3" stroke-linejoin="round"/>
+      </svg>
+      Clans vs Society
+    </div>
+    <div class="topbar-right">
+      <span class="player-name" id="player-name">Loading...</span>
+      <a class="logout" href="/logout">Leave Realm</a>
+    </div>
+  </header>
+
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <main class="main">
+    <a class="back-link" href="/realm-map">← Back to the Map of Karthûl</a>
+
+    <div class="page-region" id="city-region">Loading...</div>
+    <div class="page-title" id="city-name">—</div>
+    <div class="page-sub" id="city-tagline"></div>
+
+    <div id="content">
+      <div class="empty-state">Charting the road ahead...</div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="/nav.js"></script>
+<script>
+  const cityId = window.location.pathname.split('/city/')[1];
+  let myGold = 0;
+
+  function showToast(msg){ const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800); }
+
+  function riskClass(tierOrRisk){
+    const key = (tierOrRisk || '').toUpperCase();
+    if (key === 'END GAME') return 'END';
+    if (['LOW','MEDIUM','HIGH','EXTREME'].includes(key)) return key;
+    return 'LOW';
+  }
+
+  function renderLocked(city){
+    document.getElementById('content').innerHTML = `
+      <div class="lock-card">
+        <div class="lock-icon">🔒</div>
+        <div class="lock-title">The Road Is Too Far to Walk</div>
+        <div class="lock-desc">Reaching ${city.name} takes a wagon — build one from the Realm Map once you're Level 10, then set out again.</div>
+        <a class="lock-btn" href="/realm-map">Return to the Map</a>
+      </div>
+      <div class="info-card">
+        <div class="info-title">What Travelers Say</div>
+        <div class="info-desc">${city.lore}</div>
+        <div class="travel-pill">${city.mode === 'sea' ? '⛵' : '🐎'} ~${city.travelDays} days ${city.mode === 'sea' ? 'by sea' : 'by road'} from Aurelia</div>
+      </div>
+    `;
+  }
+
+  function renderCity(city){
+    const shopHtml = city.shopItems.length ? `
+      <div class="shop-grid">
+        ${city.shopItems.map(i => `
+          <div class="shop-card">
+            <div class="item-type">${i.type}</div>
+            <div class="item-name">${i.name}</div>
+            ${i.effect ? `<div class="item-effect">${i.effect}</div>` : ''}
+            <div class="item-desc">${i.description}</div>
+            <div class="shop-footer">
+              <div class="shop-price">${i.basePrice.toLocaleString()} g</div>
+              <button class="buy-btn" onclick="buy(${i.id}, '${i.name.replace(/'/g, "\\'")}', ${i.basePrice})">Buy</button>
+            </div>
+          </div>`).join('')}
+      </div>` : `<div class="empty-state">No goods for sale here right now.</div>`;
+
+    const zonesHtml = city.nearbyZones.length ? `
+      <div class="link-grid">
+        ${city.nearbyZones.map(z => `
+          <a class="link-card" href="/monsters">
+            <div class="link-risk ${riskClass(z.tier)}">${z.tier} · LVL ${z.levelMin}–${z.levelMax}</div>
+            <div class="link-name">${z.name}</div>
+            <div class="link-desc">${z.desc}</div>
+            <div class="link-cta">Hunt this ground →</div>
+          </a>`).join('')}
+      </div>` : `<div class="empty-state">No hunting grounds within easy reach. Try the Monsters page for the full map.</div>`;
+
+    const raidsHtml = city.nearbyRaids.length ? `
+      <div class="link-grid">
+        ${city.nearbyRaids.map(r => `
+          <a class="link-card" href="/raids">
+            <div class="link-risk ${riskClass(r.risk)}">${r.risk} RISK</div>
+            <div class="link-name">${r.name}</div>
+            <div class="link-desc">${r.desc}</div>
+            <div class="link-cta">Plan a raid →</div>
+          </a>`).join('')}
+      </div>` : `<div class="empty-state">No known raid targets nearby. Try the Raids page for the full list.</div>`;
+
+    document.getElementById('content').innerHTML = `
+      <div class="info-card">
+        <div class="info-title">${city.name}</div>
+        <div class="info-desc">${city.lore}</div>
+        <div class="travel-pill">${city.mode === 'sea' ? '⛵' : '🐎'} ~${city.travelDays} days ${city.mode === 'sea' ? 'by sea' : 'by road'} from Aurelia</div>
+      </div>
+
+      <div class="section-title">Local Shop</div>
+      ${shopHtml}
+
+      <div class="section-title">Nearby Hunting Grounds</div>
+      ${zonesHtml}
+
+      <div class="section-title">Nearby Raid Targets</div>
+      ${raidsHtml}
+    `;
+  }
+
+  async function buy(itemId, name, price){
+    if (myGold < price) { showToast('Not enough gold.'); return; }
+    try {
+      const res = await fetch('/api/shop/buy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId, quantity: 1 }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error); return; }
+      showToast(`Purchased: ${name}`);
+      myGold -= price;
+      await loadMe();
+    } catch (e) {
+      showToast('Something went wrong. Try again.');
+    }
+  }
+
+  async function loadMe(){
+    const res = await fetch('/api/me');
+    if (!res.ok) { window.location.href = '/'; return; }
+    const data = await res.json();
+    document.getElementById('player-name').textContent = data.username;
+    myGold = data.stats?.gold ?? 0;
+  }
+
+  async function loadCity(){
+    try {
+      const res = await fetch(`/api/cities/${cityId}`);
+      const city = await res.json();
+      if (!res.ok) {
+        document.getElementById('content').innerHTML = `<div class="empty-state">${city.error || 'Unknown settlement.'}</div>`;
+        return;
+      }
+
+      document.getElementById('city-region').textContent = city.region;
+      document.getElementById('city-name').textContent = city.name;
+      document.getElementById('city-tagline').textContent = city.tagline;
+      document.title = `Clans vs Society — ${city.name}`;
+
+      if (!city.hasWagon) {
+        renderLocked(city);
+      } else {
+        renderCity(city);
+      }
+    } catch (e) {
+      console.error('loadCity error:', e);
+      document.getElementById('content').innerHTML = `<div class="empty-state">Something went wrong loading this settlement.</div>`;
+    }
+  }
+
+  loadMe();
+  loadCity();
+</script>
+<nav class="mobile-nav" id="mobile-nav"></nav>
+</body>
+</html>

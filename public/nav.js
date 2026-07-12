@@ -18,7 +18,7 @@
       section: 'Social',
       items: [
         { href: '/house',         label: 'House',         soon: true, disabled: true, icon: '<path d="M12 3l8 4v5c0 5-3.5 8.5-8 9-4.5-0.5-8-4-8-9V7z" stroke-linecap="round" stroke-linejoin="round"/>' },
-        { href: '/realm-map',     label: 'Realm Map',     soon: true, disabled: true, icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' },
+        { href: '/realm-map',     label: 'Realm Map',     icon: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' },
         { href: '/market',        label: 'Market',        soon: true, disabled: true, icon: '<path d="M3 3h18v13H3z" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 21h8M12 17v4" stroke-linecap="round"/>' },
         { href: '/achievements',  label: 'Achievements',  soon: true, disabled: true, icon: '<path d="M12 2l2 7h7l-5.5 4 2 7L12 16l-5.5 4 2-7L3 9h7z" stroke-linejoin="round"/>' },
       ]

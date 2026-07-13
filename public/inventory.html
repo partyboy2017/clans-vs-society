@@ -67,6 +67,16 @@
   .item-btn.sell{background:var(--bg-panel-2);border:1px solid var(--brass-dim);color:var(--brass);}
   .item-btn.sell:hover:not(:disabled){background:var(--brass-dim);color:var(--bone);}
 
+  .qty-row{display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin-bottom:0.7rem;}
+  .qty-label{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ash);}
+  .qty-stepper{display:flex;align-items:center;border:1px solid var(--line);}
+  .qty-btn{background:var(--bg-panel-2);border:none;color:var(--brass);font-family:'JetBrains Mono',monospace;font-size:0.85rem;width:24px;height:24px;cursor:pointer;line-height:1;}
+  .qty-btn:hover{background:var(--brass-dim);color:var(--bone);}
+  .qty-btn:disabled{opacity:0.35;cursor:not-allowed;}
+  .qty-input{width:38px;text-align:center;background:var(--bg);border:none;border-left:1px solid var(--line);border-right:1px solid var(--line);color:var(--bone);font-family:'JetBrains Mono',monospace;font-size:0.75rem;padding:0.3rem 0;}
+  .qty-input:focus{outline:none;}
+  .qty-input::-webkit-inner-spin-button,.qty-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+
   .empty-state{text-align:center;padding:2.5rem;color:var(--ash);font-style:italic;background:var(--bg-panel);border:1px solid var(--line);}
 
   .equip-panel{background:var(--bg-panel);border:1px solid var(--line);padding:1.4rem;display:flex;justify-content:center;}
@@ -264,6 +274,7 @@
 <script src="/nav.js"></script>
 <script>
   let myGold = 0;
+  const storeQty = {}; // itemId -> current chosen quantity
 
   function showToast(msg){ const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800); }
 
@@ -289,6 +300,7 @@
   }
 
   const FALLBACK_ICON = '/assets/items/_fallback/default-item.png';
+  const MAX_QTY = 99;
 
   function itemIconHtml(iconPath, itemName){
     const src = iconPath || FALLBACK_ICON;
@@ -328,6 +340,11 @@
     });
   }
 
+  function clampQty(n){
+    if (Number.isNaN(n)) return 1;
+    return Math.max(1, Math.min(MAX_QTY, Math.floor(n)));
+  }
+
   function renderStore(items){
     const grid = document.getElementById('store-grid');
     if(!items.length){
@@ -335,15 +352,26 @@
       return;
     }
     grid.innerHTML = items.map(item => {
-      const affordable = myGold >= item.basePrice;
+      if (!(item.id in storeQty)) storeQty[item.id] = 1;
+      const qty = storeQty[item.id];
+      const totalCost = item.basePrice * qty;
+      const affordable = myGold >= totalCost;
       return `
         <div class="item-card">
           <div class="item-type ${item.type}">${item.type}</div>
           ${itemIconHtml(item.icon, item.name)}
           <div class="item-name">${item.name}</div>
           <div class="item-desc">${item.description}</div>
+          <div class="qty-row">
+            <span class="qty-label">Qty</span>
+            <div class="qty-stepper">
+              <button type="button" class="qty-btn" data-qty-action="dec" data-item-id="${item.id}" ${qty<=1?'disabled':''}>−</button>
+              <input class="qty-input" type="number" min="1" max="${MAX_QTY}" value="${qty}" data-qty-input="${item.id}">
+              <button type="button" class="qty-btn" data-qty-action="inc" data-item-id="${item.id}" ${qty>=MAX_QTY?'disabled':''}>+</button>
+            </div>
+          </div>
           <div class="item-footer">
-            <span class="item-price">${item.basePrice} g</span>
+            <span class="item-price">${totalCost.toLocaleString()} g</span>
             <button class="item-btn buy" ${affordable?'':'disabled'} data-item-id="${item.id}" data-item-name="${item.name.replace(/"/g,'&quot;')}">
               ${affordable ? 'Buy' : 'Too costly'}
             </button>
@@ -351,8 +379,23 @@
         </div>`;
     }).join('');
 
+    grid.querySelectorAll('.qty-btn[data-qty-action]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.itemId;
+        const delta = btn.dataset.qtyAction === 'inc' ? 1 : -1;
+        storeQty[id] = clampQty((storeQty[id] || 1) + delta);
+        loadStore();
+      });
+    });
+    grid.querySelectorAll('.qty-input[data-qty-input]').forEach(input => {
+      input.addEventListener('change', () => {
+        const id = input.dataset.qtyInput;
+        storeQty[id] = clampQty(parseInt(input.value, 10));
+        loadStore();
+      });
+    });
     grid.querySelectorAll('.item-btn[data-item-id]:not(:disabled)').forEach(btn => {
-      btn.addEventListener('click', () => buyItem(btn.dataset.itemId, btn.dataset.itemName));
+      btn.addEventListener('click', () => buyItem(btn.dataset.itemId, btn.dataset.itemName, storeQty[btn.dataset.itemId] || 1));
     });
   }
 
@@ -404,17 +447,22 @@
     await Promise.all([loadInventory(), loadStore()]);
   }
 
-  async function buyItem(itemId, itemName){
+  async function buyItem(itemId, itemName, quantity){
+    const qty = clampQty(parseInt(quantity, 10) || 1);
     const res = await fetch('/api/shop/buy', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ itemId: parseInt(itemId, 10), quantity: 1 })
+      body: JSON.stringify({ itemId: parseInt(itemId, 10), quantity: qty })
     });
     const data = await res.json();
     if(!res.ok){ showToast(data.error); return; }
 
-    addLog(`You bought <span class="gain">${itemName}</span>. <span class="spend">-${data.cost} gold</span>`);
-    showToast(`Bought ${itemName}`);
+    const qtyLabel = data.quantity > 1 ? `${data.quantity}x ` : '';
+    addLog(`You bought <span class="gain">${qtyLabel}${itemName}</span>. <span class="spend">-${data.cost} gold</span>`);
+    showToast(`Bought ${qtyLabel}${itemName}`);
+
+    // Reset that item's quantity picker back to 1 after a successful purchase.
+    storeQty[itemId] = 1;
 
     await loadPlayer();
     await Promise.all([loadStore(), loadInventory()]);

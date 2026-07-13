@@ -99,9 +99,11 @@
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.78rem;
     padding: 0.3rem 0;
+    -moz-appearance: textfield;
+    appearance: textfield;
   }
   .qty-input:focus{ outline: none; border-color: var(--brass-dim); }
-  .qty-input::-webkit-inner-spin-button,.qty-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+  .qty-input::-webkit-inner-spin-button,.qty-input::-webkit-outer-spin-button{-webkit-appearance:none;appearance:none;margin:0;}
 
   .empty-state{text-align:center;padding:2.5rem;color:var(--ash);font-style:italic;background:var(--bg-panel);border:1px solid var(--line);}
 

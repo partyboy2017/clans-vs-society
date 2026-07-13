@@ -68,6 +68,7 @@ model Stats {
 
   hasWagon Boolean @default(false)
   wagonTier Int @default(0)
+  currentCityId String?
 
   lastStrengthTrain DateTime?
   lastDefenseTrain  DateTime?

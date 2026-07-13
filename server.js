@@ -2576,6 +2576,12 @@ app.get('/api/cities/:cityId', async (req, res) => {
       .filter(l => city.nearbyRaidIds.includes(l.id))
       .map(l => ({ id: l.id, name: l.name, risk: l.risk, desc: l.desc }));
 
+    // Visiting an unlocked city page means the player is now there — record
+    // it as their current location so other systems can key off it later.
+    if (stats?.hasWagon && stats.currentCityId !== city.id) {
+      await prisma.stats.update({ where: { userId: req.user.id }, data: { currentCityId: city.id } });
+    }
+
     res.json({
       id: city.id,
       name: city.name,
@@ -2586,12 +2592,25 @@ app.get('/api/cities/:cityId', async (req, res) => {
       mode: city.mode,
       hasWagon: !!stats?.hasWagon,
       wagonTier,
+      currentCityId: stats?.hasWagon ? city.id : (stats?.currentCityId ?? null),
       shopItems,
       nearbyZones,
       nearbyRaids,
     });
   } catch (e) {
     logError('/api/cities/:cityId error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// Returning to the capital — clears currentCityId (null means Aurelia).
+app.post('/api/travel/home', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  try {
+    await prisma.stats.update({ where: { userId: req.user.id }, data: { currentCityId: null } });
+    res.json({ ok: true, currentCityId: null });
+  } catch (e) {
+    logError('/api/travel/home error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });

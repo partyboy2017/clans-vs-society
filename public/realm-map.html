@@ -229,7 +229,12 @@
   let wagonTier = 0;
 
   function openPoi(poi){
-    if (poi.href) { window.location.href = poi.href; return; }
+    if (poi.href) {
+      fetch('/api/travel/home', { method: 'POST' }).catch(() => {}).finally(() => {
+        window.location.href = poi.href;
+      });
+      return;
+    }
     document.getElementById('modal-region').textContent = poi.region;
     document.getElementById('modal-title').textContent = poi.name;
     document.getElementById('modal-desc').textContent = poi.desc;

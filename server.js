@@ -2039,12 +2039,67 @@ app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
 // The Basic Wagon is the first unlock toward inter-city travel. Requires
 // Level 10 and enough crafting materials, purchasable from the General
 // Store or found in the wild later.
-const WAGON_MIN_LEVEL = 10;
-const WAGON_RECIPE = [
-  { itemName: 'Logs',     qty: 10 },
-  { itemName: 'Nails',    qty: 15 },
-  { itemName: 'Iron Bar', qty: 5 },
+// Wagon progression — 4 tiers. Each tier is gated by level + gold + crafting
+// materials, and applies a speedMultiplier to every city's base travelHours
+// (see CITIES below). Tier 1 (Basic Wagon) is the minimum needed to travel
+// at all; tiers 2-4 are pure quality-of-life upgrades that shorten the trip.
+const WAGON_TIERS = [
+  {
+    tier: 1, name: 'Basic Wagon',
+    minLevel: 10, gold: 0,
+    materials: [
+      { itemName: 'Logs',     qty: 10 },
+      { itemName: 'Nails',    qty: 15 },
+      { itemName: 'Iron Bar', qty: 5 },
+    ],
+    speedMultiplier: 1.0,
+    desc: 'A rickety cart, but it rolls. Enough to get you off the road out of Aurelia.',
+  },
+  {
+    tier: 2, name: 'Reinforced Wagon',
+    minLevel: 20, gold: 500,
+    materials: [
+      { itemName: 'Logs',     qty: 20 },
+      { itemName: 'Nails',    qty: 25 },
+      { itemName: 'Iron Bar', qty: 15 },
+    ],
+    speedMultiplier: 0.7,
+    desc: 'Iron-shod wheels and a sturdier frame. Noticeably faster over rough roads.',
+  },
+  {
+    tier: 3, name: 'Swift Wagon',
+    minLevel: 35, gold: 2500,
+    materials: [
+      { itemName: 'Logs',     qty: 30 },
+      { itemName: 'Nails',    qty: 40 },
+      { itemName: 'Iron Bar', qty: 30 },
+    ],
+    speedMultiplier: 0.45,
+    desc: 'Lighter, tighter, and pulled by a matched team. Built for lords in a hurry.',
+  },
+  {
+    tier: 4, name: 'Royal Caravan',
+    minLevel: 50, gold: 10000,
+    materials: [
+      { itemName: 'Logs',        qty: 40 },
+      { itemName: 'Iron Bar',    qty: 50 },
+      { itemName: 'Ancient Coin', qty: 10 },
+    ],
+    speedMultiplier: 0.25,
+    desc: 'A royal-grade caravan with a paid escort. The fastest way across Karthûl short of magic.',
+  },
 ];
+const WAGON_MIN_LEVEL = WAGON_TIERS[0].minLevel;
+const WAGON_RECIPE = WAGON_TIERS[0].materials;
+
+function wagonSpeedMultiplier(tier) {
+  const t = WAGON_TIERS.find(w => w.tier === tier);
+  return t ? t.speedMultiplier : 1.0;
+}
+
+function effectiveTravelHours(baseHours, wagonTier) {
+  return Math.max(1, Math.round(baseHours * wagonSpeedMultiplier(wagonTier)));
+}
 
 const LOOT_TABLES = {
   'Feral Wolf': [
@@ -2189,7 +2244,7 @@ const CITIES = [
     id: 'icewind-citadel', name: 'Icewind Citadel', region: 'Frostreach — The Shivering North',
     tagline: 'A fortress carved into the northern ice, said to guard secrets older than the kingdom itself.',
     lore: 'The Citadel has stood since before the fracturing of Karthûl, its halls cut directly into a glacier that never fully melts. Its garrison answers to no house but its own, trading furs, ironwork, and old grudges with any lord who survives the road north.',
-    travelDays: 56, mode: 'road',
+    travelHours: 4, mode: 'road',
     shopItemNames: ['Healing Potion', 'Energy Draught', 'Iron Bar'],
     nearbyZoneIds: ['ruins'],
     nearbyRaidIds: ['manor', 'treasury'],
@@ -2198,7 +2253,7 @@ const CITIES = [
     id: 'stonehall', name: 'Stonehall', region: 'Silverpeaks — Dwarven Hold',
     tagline: 'A mountain stronghold of the dwarven clans, rich in ore and older grudges.',
     lore: "Carved rather than built, Stonehall's halls run deeper than any outsider has mapped. Its forges never go cold, and its smiths are said to strike a fairer bargain than most lords of the surface — provided you don't ask what they mine for.",
-    travelDays: 36, mode: 'road',
+    travelHours: 3, mode: 'road',
     shopItemNames: ['Logs', 'Nails', 'Iron Bar', 'Minor Healing Potion'],
     nearbyZoneIds: ['ruins', 'woods'],
     nearbyRaidIds: ['caravan'],
@@ -2207,7 +2262,7 @@ const CITIES = [
     id: 'greenwatch', name: 'Greenwatch', region: 'Verdant Wilds — The Emerald Expanse',
     tagline: 'A watchpost on the edge of an endless forest, where rangers keep count of what moves among the trees.',
     lore: "Half garrison, half trading post, Greenwatch exists to keep the forest's dangers on one side of its palisade. Its rangers trade pelts and tonics brewed from herbs no city apothecary would recognize.",
-    travelDays: 63, mode: 'road',
+    travelHours: 5, mode: 'road',
     shopItemNames: ['Minor Healing Potion', 'Scroll of Wisdom', 'Logs'],
     nearbyZoneIds: ['woods'],
     nearbyRaidIds: ['village'],
@@ -2216,7 +2271,7 @@ const CITIES = [
     id: 'tempest-haven', name: 'Tempest Haven', region: 'Stormcoast — Lands of Tempest',
     tagline: 'A harbor town that has weathered a thousand storms, and sailors who claim to have weathered worse.',
     lore: "Ships arrive battered and leave the same way — Tempest Haven's harbor is the only safe anchorage for a hundred miles of coastline that seems to hate ships. Its taverns trade in salvage, rumor, and remedies for the sea-sick.",
-    travelDays: 54, mode: 'road',
+    travelHours: 4, mode: 'road',
     shopItemNames: ['Energy Draught', 'Elixir of Vigor', 'Healing Potion'],
     nearbyZoneIds: ['marsh'],
     nearbyRaidIds: ['caravan', 'manor'],
@@ -2225,7 +2280,7 @@ const CITIES = [
     id: 'sunspear-oasis', name: 'Sunspear Oasis', region: 'Sandscarre — The Endless Dunes',
     tagline: 'The only reliable water for a hundred miles in any direction — and fiercely contested for it.',
     lore: "Every road across Sandscarre bends toward Sunspear eventually, whether its travelers plan it or not. The oasis has changed hands more times than its well-keepers can count, and the current claimants sell water, shade, and healing draughts at a price only the desperate pay twice.",
-    travelDays: 61, mode: 'road',
+    travelHours: 5, mode: 'road',
     shopItemNames: ['Minor Healing Potion', 'Healing Potion', 'Energy Draught'],
     nearbyZoneIds: ['woods'],
     nearbyRaidIds: ['village', 'caravan'],
@@ -2234,7 +2289,7 @@ const CITIES = [
     id: 'bogtimber', name: 'Bogtimber', region: 'Mireveil — The Sunken Wilds',
     tagline: 'A settlement built on stilts above the marsh, where the locals trust the swamp more than strangers.',
     lore: "Bogtimber rises out of the Blighted Marsh on a lattice of blackened pilings, its people long past being unsettled by what surfaces at night. What they can't grow or trap, they distill — mostly into things that are technically medicine.",
-    travelDays: 37, mode: 'road',
+    travelHours: 3, mode: 'road',
     shopItemNames: ['Minor Healing Potion', 'Elixir of Vigor', 'Scroll of Wisdom'],
     nearbyZoneIds: ['marsh'],
     nearbyRaidIds: ['village'],
@@ -2243,7 +2298,7 @@ const CITIES = [
     id: 'blackgate', name: 'Blackgate', region: 'Ashenreach — Land of Fire and Fury',
     tagline: 'A town living in the shadow of an active volcano, out of necessity rather than choice.',
     lore: "Ash falls on Blackgate more days than not, and its people have simply stopped sweeping it away. What the volcano doesn't threaten to destroy, it provides for — the region's ironwork is unmatched, tempered in heat no forge could replicate.",
-    travelDays: 51, mode: 'road',
+    travelHours: 4, mode: 'road',
     shopItemNames: ['Iron Bar', 'Nails', 'Healing Potion'],
     nearbyZoneIds: ['rift'],
     nearbyRaidIds: ['manor', 'treasury'],
@@ -2252,7 +2307,7 @@ const CITIES = [
     id: 'luminara', name: 'Luminara', region: 'Celestial Isles — Pearls of the South',
     tagline: 'A glittering archipelago city, as beautiful as it is difficult to reach.',
     lore: "Luminara is spread across a dozen linked islets, its bridges and lantern-towers visible for miles out to sea. Reaching it takes a voyage most lords never attempt twice, but its markets deal in comforts and cures found nowhere else in Karthûl.",
-    travelDays: 34, mode: 'sea',
+    travelHours: 3, mode: 'sea',
     shopItemNames: ['Elixir of Vigor', 'Scroll of Wisdom', 'Energy Draught'],
     nearbyZoneIds: [],
     nearbyRaidIds: [],
@@ -2382,18 +2437,37 @@ app.get('/api/wagon/status', async (req, res) => {
       include: { item: true },
     });
 
-    const progress = WAGON_RECIPE.map(req_ => {
-      const owned = inventory.find(inv => inv.item.name === req_.itemName)?.quantity || 0;
-      return { itemName: req_.itemName, need: req_.qty, have: Math.min(owned, req_.qty) };
+    const currentTier = stats.wagonTier || 0;
+    const nextTierConfig = WAGON_TIERS.find(w => w.tier === currentTier + 1);
+
+    const tiers = WAGON_TIERS.map(w => {
+      const owned = w.tier <= currentTier;
+      const isNext = w.tier === currentTier + 1;
+      const progress = isNext ? w.materials.map(req_ => {
+        const have = inventory.find(inv => inv.item.name === req_.itemName)?.quantity || 0;
+        return { itemName: req_.itemName, need: req_.qty, have: Math.min(have, req_.qty) };
+      }) : undefined;
+      return {
+        tier: w.tier, name: w.name, desc: w.desc,
+        minLevel: w.minLevel, gold: w.gold, materials: w.materials,
+        speedMultiplier: w.speedMultiplier,
+        owned, isNext, progress,
+      };
     });
 
     res.json({
-      hasWagon: stats.hasWagon,
+      hasWagon: currentTier >= 1,
+      wagonTier: currentTier,
       level: stats.level,
-      minLevel: WAGON_MIN_LEVEL,
-      meetsLevel: stats.level >= WAGON_MIN_LEVEL,
-      progress,
-      canBuild: stats.level >= WAGON_MIN_LEVEL && progress.every(p => p.have >= p.need),
+      gold: stats.gold,
+      tiers,
+      canUpgrade: !!nextTierConfig
+        && stats.level >= nextTierConfig.minLevel
+        && stats.gold >= nextTierConfig.gold
+        && nextTierConfig.materials.every(req_ => {
+          const have = inventory.find(inv => inv.item.name === req_.itemName)?.quantity || 0;
+          return have >= req_.qty;
+        }),
     });
   } catch (e) {
     logError('/api/wagon/status error:', e);
@@ -2401,6 +2475,8 @@ app.get('/api/wagon/status', async (req, res) => {
   }
 });
 
+// Builds the Basic Wagon (tier 1) or upgrades to the next tier — same flow,
+// since each tier is just "the next thing you don't have yet".
 app.post('/api/wagon/build', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
 
@@ -2411,18 +2487,22 @@ app.post('/api/wagon/build', async (req, res) => {
       `;
       const stats = statsRows[0];
       if (!stats) throw { code: 'NO_STATS' };
-      if (stats.hasWagon) throw { code: 'ALREADY_HAVE' };
-      if (stats.level < WAGON_MIN_LEVEL) throw { code: 'LEVEL_TOO_LOW' };
+
+      const currentTier = stats.wagonTier || 0;
+      const nextTier = WAGON_TIERS.find(w => w.tier === currentTier + 1);
+      if (!nextTier) throw { code: 'MAX_TIER' };
+      if (stats.level < nextTier.minLevel) throw { code: 'LEVEL_TOO_LOW', minLevel: nextTier.minLevel };
+      if (stats.gold < nextTier.gold) throw { code: 'NOT_ENOUGH_GOLD', gold: nextTier.gold };
 
       // Verify and consume each required material.
-      for (const req_ of WAGON_RECIPE) {
+      for (const req_ of nextTier.materials) {
         const item = await tx.item.findFirst({ where: { name: req_.itemName } });
         if (!item) throw { code: 'MISSING_ITEM', itemName: req_.itemName };
 
         const inv = await tx.inventory.findFirst({ where: { userId: req.user.id, itemId: item.id } });
         if (!inv || inv.quantity < req_.qty) throw { code: 'NOT_ENOUGH', itemName: req_.itemName };
       }
-      for (const req_ of WAGON_RECIPE) {
+      for (const req_ of nextTier.materials) {
         const item = await tx.item.findFirst({ where: { name: req_.itemName } });
         const inv = await tx.inventory.findFirst({ where: { userId: req.user.id, itemId: item.id } });
         if (inv.quantity - req_.qty <= 0) {
@@ -2432,17 +2512,27 @@ app.post('/api/wagon/build', async (req, res) => {
         }
       }
 
-      await tx.stats.update({ where: { userId: req.user.id }, data: { hasWagon: true } });
+      await tx.stats.update({
+        where: { userId: req.user.id },
+        data: {
+          wagonTier: nextTier.tier,
+          hasWagon: true,
+          gold: { decrement: nextTier.gold },
+        },
+      });
+
+      req._builtTierName = nextTier.name;
     });
 
-    logActivity(req.user.id, 'level', 'Built a Basic Wagon! Travel across Karthûl is now possible.');
+    logActivity(req.user.id, 'level', `Acquired the ${req._builtTierName}! Travel across Karthûl just got faster.`);
     res.json({ ok: true });
 
   } catch (e) {
-    if (e && e.code === 'ALREADY_HAVE')   return res.status(400).json({ error: 'You already own a wagon' });
-    if (e && e.code === 'LEVEL_TOO_LOW')  return res.status(400).json({ error: `You must be at least Level ${WAGON_MIN_LEVEL} to build a wagon` });
-    if (e && e.code === 'NOT_ENOUGH')     return res.status(400).json({ error: `Not enough ${e.itemName}` });
-    if (e && e.code === 'MISSING_ITEM')   return res.status(500).json({ error: `${e.itemName} is not yet available — ask the developer to seed it` });
+    if (e && e.code === 'MAX_TIER')        return res.status(400).json({ error: 'You already own the best wagon available' });
+    if (e && e.code === 'LEVEL_TOO_LOW')   return res.status(400).json({ error: `You must be at least Level ${e.minLevel} for this wagon` });
+    if (e && e.code === 'NOT_ENOUGH_GOLD') return res.status(400).json({ error: `You need ${e.gold} gold for this wagon` });
+    if (e && e.code === 'NOT_ENOUGH')      return res.status(400).json({ error: `Not enough ${e.itemName}` });
+    if (e && e.code === 'MISSING_ITEM')    return res.status(500).json({ error: `${e.itemName} is not yet available — ask the developer to seed it` });
     logError('/api/wagon/build error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
@@ -2452,11 +2542,13 @@ app.get('/api/cities', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   try {
     const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    const wagonTier = stats?.wagonTier || 0;
     res.json({
       hasWagon: !!stats?.hasWagon,
+      wagonTier,
       cities: CITIES.map(c => ({
         id: c.id, name: c.name, region: c.region, tagline: c.tagline,
-        travelDays: c.travelDays, mode: c.mode,
+        travelHours: effectiveTravelHours(c.travelHours, wagonTier), mode: c.mode,
       })),
     });
   } catch (e) {
@@ -2472,6 +2564,7 @@ app.get('/api/cities/:cityId', async (req, res) => {
 
   try {
     const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    const wagonTier = stats?.wagonTier || 0;
     const shopItems = await prisma.item.findMany({
       where: { name: { in: city.shopItemNames } },
       orderBy: { basePrice: 'asc' },
@@ -2489,9 +2582,10 @@ app.get('/api/cities/:cityId', async (req, res) => {
       region: city.region,
       tagline: city.tagline,
       lore: city.lore,
-      travelDays: city.travelDays,
+      travelHours: effectiveTravelHours(city.travelHours, wagonTier),
       mode: city.mode,
       hasWagon: !!stats?.hasWagon,
+      wagonTier,
       shopItems,
       nearbyZones,
       nearbyRaids,

@@ -132,6 +132,13 @@
 
   function showToast(msg){ const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800); }
 
+  function travelPill(city){
+    const icon = city.mode === 'sea' ? '⛵' : '🐎';
+    const label = city.mode === 'sea' ? 'by sea' : 'by road';
+    const unit = city.travelHours === 1 ? 'hour' : 'hours';
+    return `${icon} ~${city.travelHours} ${unit} ${label} from Aurelia`;
+  }
+
   function riskClass(tierOrRisk){
     const key = (tierOrRisk || '').toUpperCase();
     if (key === 'END GAME') return 'END';
@@ -150,7 +157,7 @@
       <div class="info-card">
         <div class="info-title">What Travelers Say</div>
         <div class="info-desc">${city.lore}</div>
-        <div class="travel-pill">${city.mode === 'sea' ? '⛵' : '🐎'} ~${city.travelDays} days ${city.mode === 'sea' ? 'by sea' : 'by road'} from Aurelia</div>
+        <div class="travel-pill">${travelPill(city)}</div>
       </div>
     `;
   }
@@ -197,7 +204,7 @@
       <div class="info-card">
         <div class="info-title">${city.name}</div>
         <div class="info-desc">${city.lore}</div>
-        <div class="travel-pill">${city.mode === 'sea' ? '⛵' : '🐎'} ~${city.travelDays} days ${city.mode === 'sea' ? 'by sea' : 'by road'} from Aurelia</div>
+        <div class="travel-pill">${travelPill(city)}</div>
       </div>
 
       <div class="section-title">Local Shop</div>

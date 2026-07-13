@@ -156,46 +156,56 @@
 <script>
   // Coordinates are percentages of the image's width/height, so markers stay
   // pinned to the artwork regardless of how large the image renders.
-  // Travel time is derived from the map's own scale bar (~1000km per ~170px
-  // at this image's resolution) and a fantasy travel pace: 40 km/day by
-  // road, 110 km/day by sea (faster, but only for the isolated isles).
+  // Travel time is expressed in hours (not days) so a trip is a short-lived
+  // wait rather than a multi-day commitment. Base hours assume a Basic
+  // Wagon (tier 1); higher wagon tiers apply a speed multiplier on top.
   const POINTS_OF_INTEREST = [
     { name: 'Aurelia', region: 'Eldric Kingdoms — Heart of Civilization', x: 45.2, y: 53.8, capital: true,
       href: '/dashboard', desc: 'The last great capital of Karthûl, and the seat from which every lord begins their rise. Home is always one road away.' },
     { name: 'Icewind Citadel', region: 'Frostreach — The Shivering North', x: 50.1, y: 17.4,
       desc: 'A fortress carved into the northern ice, said to guard secrets older than the kingdom itself.',
-      travelDays: 56, mode: 'road', cityId: 'icewind-citadel' },
+      travelHours: 4, mode: 'road', cityId: 'icewind-citadel' },
     { name: 'Stonehall', region: 'Silverpeaks — Dwarven Hold', x: 43.0, y: 30.1,
       desc: 'A mountain stronghold of the dwarven clans, rich in ore and older grudges.',
-      travelDays: 36, mode: 'road', cityId: 'stonehall' },
+      travelHours: 3, mode: 'road', cityId: 'stonehall' },
     { name: 'Greenwatch', region: 'Verdant Wilds — The Emerald Expanse', x: 18.4, y: 42.6,
       desc: 'A watchpost on the edge of an endless forest, where rangers keep count of what moves among the trees.',
-      travelDays: 63, mode: 'road', cityId: 'greenwatch' },
+      travelHours: 5, mode: 'road', cityId: 'greenwatch' },
     { name: 'Tempest Haven', region: 'Stormcoast — Lands of Tempest', x: 67.1, y: 40.3,
       desc: 'A harbor town that has weathered a thousand storms, and sailors who claim to have weathered worse.',
-      travelDays: 54, mode: 'road', cityId: 'tempest-haven' },
+      travelHours: 4, mode: 'road', cityId: 'tempest-haven' },
     { name: 'Drakenholm', region: 'Isle of Legends', x: 82.4, y: 27.0,
       desc: 'A floating isle wreathed in storm clouds, spoken of more in legend than in any confirmed sighting.',
-      travelDays: 34, mode: 'sea' },
+      travelHours: 3, mode: 'sea' },
     { name: 'Sunspear Oasis', region: 'Sandscarre — The Endless Dunes', x: 22.1, y: 74.7,
       desc: 'The only reliable water for a hundred miles in any direction — and fiercely contested for it.',
-      travelDays: 61, mode: 'road', cityId: 'sunspear-oasis' },
+      travelHours: 5, mode: 'road', cityId: 'sunspear-oasis' },
     { name: 'Bogtimber', region: 'Mireveil — The Sunken Wilds', x: 39.9, y: 77.3,
       desc: 'A settlement built on stilts above the marsh, where the locals trust the swamp more than strangers.',
-      travelDays: 37, mode: 'road', cityId: 'bogtimber' },
+      travelHours: 3, mode: 'road', cityId: 'bogtimber' },
     { name: 'Blackgate', region: 'Ashenreach — Land of Fire and Fury', x: 61.2, y: 78.0,
       desc: 'A town living in the shadow of an active volcano, out of necessity rather than choice.',
-      travelDays: 51, mode: 'road', cityId: 'blackgate' },
+      travelHours: 4, mode: 'road', cityId: 'blackgate' },
     { name: 'Luminara', region: 'Celestial Isles — Pearls of the South', x: 85.0, y: 69.0,
       desc: 'A glittering archipelago city, as beautiful as it is difficult to reach.',
-      travelDays: 34, mode: 'sea', cityId: 'luminara' },
+      travelHours: 3, mode: 'sea', cityId: 'luminara' },
   ];
 
-  function formatTravelTime(days, mode){
-    const weeks = Math.round(days / 7 * 10) / 10;
+  // Mirrors WAGON_TIERS speedMultiplier in server.js — keep in sync.
+  const WAGON_SPEED_MULTIPLIER = { 0: 1.0, 1: 1.0, 2: 0.7, 3: 0.45, 4: 0.25 };
+
+  function effectiveHours(baseHours, tier){
+    const mult = WAGON_SPEED_MULTIPLIER[tier] ?? 1.0;
+    return Math.max(1, Math.round(baseHours * mult));
+  }
+
+  function formatTravelTime(hours, mode, tier){
+    const shown = effectiveHours(hours, tier ?? wagonTier);
     const icon = mode === 'sea' ? '⛵' : '🐎';
     const label = mode === 'sea' ? 'by sea' : 'by road';
-    return `${icon} ~${days} days (${weeks} weeks) ${label} from Aurelia`;
+    return shown === 1
+      ? `${icon} ~1 hour ${label} from Aurelia`
+      : `${icon} ~${shown} hours ${label} from Aurelia`;
   }
 
   function buildMarkers(){
@@ -216,6 +226,7 @@
   }
 
   let hasWagon = false;
+  let wagonTier = 0;
 
   function openPoi(poi){
     if (poi.href) { window.location.href = poi.href; return; }
@@ -232,14 +243,14 @@
       statusEl.textContent = 'Uncharted — coming soon';
       statusEl.className = 'modal-status';
       travelEl.textContent = hasWagon
-        ? formatTravelTime(poi.travelDays, poi.mode)
+        ? formatTravelTime(poi.travelHours, poi.mode)
         : '🔒 A wagon is required to travel this far. Build one below (Level 10+).';
       travelEl.style.display = 'block';
       travelBtn.style.display = 'none';
     } else if (hasWagon) {
       statusEl.textContent = 'Charted — ready to visit';
       statusEl.className = 'modal-status live';
-      travelEl.textContent = formatTravelTime(poi.travelDays, poi.mode);
+      travelEl.textContent = formatTravelTime(poi.travelHours, poi.mode);
       travelEl.style.display = 'block';
       travelBtn.style.display = 'block';
       travelBtn.disabled = false;
@@ -269,22 +280,34 @@
       if (!res.ok) return;
 
       hasWagon = data.hasWagon;
+      wagonTier = data.wagonTier;
       const sub = document.getElementById('wagon-sub');
       const progressEl = document.getElementById('wagon-progress');
       const btn = document.getElementById('wagon-build-btn');
 
-      if (data.hasWagon) {
-        sub.innerHTML = `<span class="wagon-owned">✓ Wagon Owned</span> — travel times are now shown when you click a city.`;
+      // Tier ladder — shows owned tiers as checked off, the next tier with
+      // its requirements, and locked future tiers greyed out.
+      const ownedList = data.tiers.filter(t => t.owned)
+        .map(t => `<span class="wagon-owned">✓ ${t.name}</span>`).join(' ');
+      const nextTier = data.tiers.find(t => t.isNext);
+
+      if (!nextTier) {
+        sub.innerHTML = `${ownedList} — you own the fastest wagon in Karthûl.`;
         progressEl.innerHTML = '';
         btn.style.display = 'none';
         return;
       }
 
-      sub.textContent = data.meetsLevel
-        ? `You're ready to build — gather the materials below (available at the General Store).`
-        : `Requires Level ${data.minLevel}. You are currently Level ${data.level}.`;
+      const meetsLevel = data.level >= nextTier.minLevel;
+      const meetsGold = data.gold >= nextTier.gold;
 
-      progressEl.innerHTML = data.progress.map(p => {
+      sub.innerHTML = (ownedList ? ownedList + '<br>' : '') +
+        `<strong>${nextTier.name}</strong> — ${nextTier.desc}<br>` +
+        (meetsLevel
+          ? `Requires ${nextTier.gold.toLocaleString()} gold (you have ${data.gold.toLocaleString()}) and the materials below.`
+          : `Requires Level ${nextTier.minLevel}. You are currently Level ${data.level}.`);
+
+      progressEl.innerHTML = nextTier.progress.map(p => {
         const pct = Math.round((p.have / p.need) * 100);
         const complete = p.have >= p.need;
         return `
@@ -296,8 +319,10 @@
       }).join('');
 
       btn.style.display = 'block';
-      btn.disabled = !data.canBuild;
-      btn.textContent = data.canBuild ? 'Build Basic Wagon' : (data.meetsLevel ? 'Missing Materials' : `Requires Level ${data.minLevel}`);
+      btn.disabled = !data.canUpgrade;
+      btn.textContent = data.canUpgrade
+        ? `Build ${nextTier.name}`
+        : (!meetsLevel ? `Requires Level ${nextTier.minLevel}` : (!meetsGold ? 'Not Enough Gold' : 'Missing Materials'));
 
     } catch (e) {
       console.error('loadWagonStatus error:', e);
@@ -318,7 +343,7 @@
         await loadWagonStatus();
         return;
       }
-      showToast('Wagon built! You can now see travel times when clicking a city.');
+      showToast('Wagon upgraded! Travel times just got shorter.');
       await loadWagonStatus();
     } catch (e) {
       console.error('buildWagon error:', e);

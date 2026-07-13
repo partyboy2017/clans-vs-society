@@ -69,12 +69,38 @@
 
   .qty-row{display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin-bottom:0.7rem;}
   .qty-label{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ash);}
-  .qty-stepper{display:flex;align-items:center;border:1px solid var(--line);}
-  .qty-btn{background:var(--bg-panel-2);border:none;color:var(--brass);font-family:'JetBrains Mono',monospace;font-size:0.85rem;width:24px;height:24px;cursor:pointer;line-height:1;}
-  .qty-btn:hover{background:var(--brass-dim);color:var(--bone);}
-  .qty-btn:disabled{opacity:0.35;cursor:not-allowed;}
-  .qty-input{width:38px;text-align:center;background:var(--bg);border:none;border-left:1px solid var(--line);border-right:1px solid var(--line);color:var(--bone);font-family:'JetBrains Mono',monospace;font-size:0.75rem;padding:0.3rem 0;}
-  .qty-input:focus{outline:none;}
+  .qty-stepper{display:flex;align-items:center;gap:0.55rem;}
+  .qty-btn{
+    background: var(--rust);
+    border: 1.5px solid var(--brass);
+    color: var(--brass);
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  }
+  .qty-btn:hover:not(:disabled){ background: var(--rust-bright); border-color: var(--bone); color: var(--bone); transform: translateY(-1px); }
+  .qty-btn:active:not(:disabled){ transform: translateY(0); }
+  .qty-btn:disabled{ opacity: 0.35; cursor: not-allowed; border-color: var(--brass-dim); color: var(--brass-dim); }
+  .qty-input{
+    width: 36px;
+    text-align: center;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--bone);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    padding: 0.3rem 0;
+  }
+  .qty-input:focus{ outline: none; border-color: var(--brass-dim); }
   .qty-input::-webkit-inner-spin-button,.qty-input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
 
   .empty-state{text-align:center;padding:2.5rem;color:var(--ash);font-style:italic;background:var(--bg-panel);border:1px solid var(--line);}

@@ -176,7 +176,7 @@
       travelHours: 4, mode: 'road', cityId: 'tempest-haven' },
     { name: 'Drakenholm', region: 'Isle of Legends', x: 82.4, y: 27.0,
       desc: 'A floating isle wreathed in storm clouds, spoken of more in legend than in any confirmed sighting.',
-      travelHours: 3, mode: 'sea' },
+      travelHours: 3, mode: 'sea', cityId: 'drakenholm' },
     { name: 'Sunspear Oasis', region: 'Sandscarre — The Endless Dunes', x: 22.1, y: 74.7,
       desc: 'The only reliable water for a hundred miles in any direction — and fiercely contested for it.',
       travelHours: 5, mode: 'road', cityId: 'sunspear-oasis' },
@@ -260,7 +260,7 @@
       travelBtn.style.display = 'block';
       travelBtn.disabled = false;
       travelBtn.textContent = `Travel to ${poi.name}`;
-      travelBtn.onclick = () => { window.location.href = `/city/${poi.cityId}`; };
+      travelBtn.onclick = () => { window.location.href = `/traveling?to=${poi.cityId}`; };
     } else {
       statusEl.textContent = 'Charted — wagon required';
       statusEl.className = 'modal-status';

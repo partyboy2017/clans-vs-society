@@ -717,6 +717,15 @@ app.get('/city/:cityId', (req, res) => {
   if (!CITIES.find(c => c.id === req.params.cityId)) return res.redirect('/realm-map');
   res.sendFile(path.join(__dirname, 'public', 'city.html'));
 });
+
+// Shown while a lord is en route to a settlement — the actual page render
+// is data-driven client-side from /api/cities/:cityId, same as city.html.
+app.get('/traveling', (req, res) => {
+  if (!req.isAuthenticated())   return res.redirect('/');
+  if (!req.user.characterName)  return res.redirect('/choose-name');
+  if (!req.user.characterClass) return res.redirect('/choose-class');
+  res.sendFile(path.join(__dirname, 'public', 'traveling.html'));
+});
 // ─── API: auth ────────────────────────────────────────────────────────────────
 
 app.post('/api/logout', (req, res) => {
@@ -2311,6 +2320,15 @@ const CITIES = [
     shopItemNames: ['Elixir of Vigor', 'Scroll of Wisdom', 'Energy Draught'],
     nearbyZoneIds: [],
     nearbyRaidIds: [],
+  },
+  {
+    id: 'drakenholm', name: 'Drakenholm', region: 'Isle of Legends',
+    tagline: 'A floating isle wreathed in storm clouds, spoken of more in legend than in any confirmed sighting.',
+    lore: "No chart agrees on where Drakenholm sits from one season to the next — sailors swear the isle drifts on currents no compass can read, tethered to the sky by something older than Karthûl itself. Those who do find it return with tales, scars, and treasures no mainland smith could forge.",
+    travelHours: 3, mode: 'sea',
+    shopItemNames: ['Elixir of Vigor', 'Ancient Coin', 'Healing Potion'],
+    nearbyZoneIds: ['rift'],
+    nearbyRaidIds: ['treasury'],
   },
 ];
 

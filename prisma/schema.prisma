@@ -36,7 +36,7 @@ model ActivityLog {
   id        Int      @id @default(autoincrement())
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
-  category  String   // 'training' | 'raid' | 'monster' | 'inventory' | 'level' | 'status'
+  category  String   // 'training' | 'raid' | 'monster' | 'inventory' | 'level' | 'status' | 'travel'
   message   String
   createdAt DateTime @default(now())
 
@@ -69,6 +69,13 @@ model Stats {
   hasWagon Boolean @default(false)
   wagonTier Int @default(0)
   currentCityId String?
+
+  // Real, server-tracked travel — travelArrivesAt is the source of truth for
+  // when a journey actually completes. Client UI only ever displays what the
+  // server reports; it never decides arrival on its own.
+  travelDestination String?
+  travelStartedAt   DateTime?
+  travelArrivesAt   DateTime?
 
   lastStrengthTrain DateTime?
   lastDefenseTrain  DateTime?

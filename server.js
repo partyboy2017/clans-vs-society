@@ -155,6 +155,9 @@ const schemas = {
   monstersTurn: z.object({
     action: z.enum(['attack', 'defend', 'flee'], { message: 'Invalid action' }),
   }),
+  travelStart: z.object({
+    cityId: z.string().min(1, 'cityId is required'),
+  }),
 };
 
 // ─── Skill trees ──────────────────────────────────────────────────────────────
@@ -710,16 +713,34 @@ app.get('/market', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'market.html'));
 });
 
-app.get('/city/:cityId', (req, res) => {
+app.get('/city/:cityId', async (req, res) => {
   if (!req.isAuthenticated())   return res.redirect('/');
   if (!req.user.characterName)  return res.redirect('/choose-name');
   if (!req.user.characterClass) return res.redirect('/choose-class');
-  if (!CITIES.find(c => c.id === req.params.cityId)) return res.redirect('/realm-map');
-  res.sendFile(path.join(__dirname, 'public', 'city.html'));
+  const city = CITIES.find(c => c.id === req.params.cityId);
+  if (!city) return res.redirect('/realm-map');
+
+  try {
+    const stats = await resolveTravelIfArrived(req.user.id);
+    if (stats?.currentCityId === city.id) {
+      // Already there (arrival was just resolved above, or was resolved earlier).
+      return res.sendFile(path.join(__dirname, 'public', 'city.html'));
+    }
+    if (stats?.travelDestination === city.id) {
+      // Still en route — send them to the travel screen instead of letting
+      // them skip the wait by hitting this URL directly.
+      return res.redirect(`/traveling?to=${city.id}`);
+    }
+    // Never set out for this city at all — start at the map.
+    return res.redirect('/realm-map');
+  } catch (e) {
+    logError('/city/:cityId error:', e);
+    return res.redirect('/realm-map');
+  }
 });
 
 // Shown while a lord is en route to a settlement — the actual page render
-// is data-driven client-side from /api/cities/:cityId, same as city.html.
+// is data-driven client-side from /api/travel/status, same pattern as city.html.
 app.get('/traveling', (req, res) => {
   if (!req.isAuthenticated())   return res.redirect('/');
   if (!req.user.characterName)  return res.redirect('/choose-name');
@@ -1830,6 +1851,31 @@ async function checkStatus(userId) {
   return stats;
 }
 
+// ─── Travel ───────────────────────────────────────────────────────────────────
+// Travel now takes real wall-clock time — travelDestination/travelStartedAt/
+// travelArrivesAt on Stats persist the journey so it survives refreshes,
+// logouts, and direct URL visits. This helper is called at the top of every
+// travel-aware route: if the stored arrival time has passed, it resolves the
+// journey (clears the travel fields, sets currentCityId) before anything
+// else reads the row, so callers never have to duplicate this check.
+async function resolveTravelIfArrived(userId) {
+  const stats = await prisma.stats.findUnique({ where: { userId } });
+  if (!stats) return null;
+  if (stats.travelDestination && stats.travelArrivesAt && Date.now() >= new Date(stats.travelArrivesAt).getTime()) {
+    const arrivedCityId = stats.travelDestination;
+    return prisma.stats.update({
+      where: { userId },
+      data: {
+        travelDestination: null,
+        travelStartedAt:   null,
+        travelArrivesAt:   null,
+        currentCityId:     arrivedCityId,
+      },
+    });
+  }
+  return stats;
+}
+
 app.get('/api/raid/status', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   try {
@@ -2581,8 +2627,26 @@ app.get('/api/cities/:cityId', async (req, res) => {
   if (!city) return res.status(404).json({ error: 'Unknown settlement' });
 
   try {
-    const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
-    const wagonTier = stats?.wagonTier || 0;
+    // resolveTravelIfArrived is the single source of truth for whether the
+    // player has actually reached this settlement — it finalizes an
+    // arrival if travelArrivesAt has passed, and does nothing otherwise.
+    // We no longer grant access just because the player owns a wagon; the
+    // real wall-clock journey has to have actually completed.
+    const stats = await resolveTravelIfArrived(req.user.id);
+    if (!stats) return res.status(404).json({ error: 'No stats found' });
+
+    if (stats.travelDestination) {
+      return res.status(409).json({
+        error: 'You are still en route — the journey is not over yet.',
+        travelDestination: stats.travelDestination,
+        arrivesAt: stats.travelArrivesAt,
+      });
+    }
+    if (stats.currentCityId !== city.id) {
+      return res.status(403).json({ error: 'You have not traveled to this settlement yet.' });
+    }
+
+    const wagonTier = stats.wagonTier || 0;
     const shopItems = await prisma.item.findMany({
       where: { name: { in: city.shopItemNames } },
       orderBy: { basePrice: 'asc' },
@@ -2594,12 +2658,6 @@ app.get('/api/cities/:cityId', async (req, res) => {
       .filter(l => city.nearbyRaidIds.includes(l.id))
       .map(l => ({ id: l.id, name: l.name, risk: l.risk, desc: l.desc }));
 
-    // Visiting an unlocked city page means the player is now there — record
-    // it as their current location so other systems can key off it later.
-    if (stats?.hasWagon && stats.currentCityId !== city.id) {
-      await prisma.stats.update({ where: { userId: req.user.id }, data: { currentCityId: city.id } });
-    }
-
     res.json({
       id: city.id,
       name: city.name,
@@ -2608,9 +2666,9 @@ app.get('/api/cities/:cityId', async (req, res) => {
       lore: city.lore,
       travelHours: effectiveTravelHours(city.travelHours, wagonTier),
       mode: city.mode,
-      hasWagon: !!stats?.hasWagon,
+      hasWagon: !!stats.hasWagon,
       wagonTier,
-      currentCityId: stats?.hasWagon ? city.id : (stats?.currentCityId ?? null),
+      currentCityId: stats.currentCityId,
       shopItems,
       nearbyZones,
       nearbyRaids,
@@ -2622,13 +2680,148 @@ app.get('/api/cities/:cityId', async (req, res) => {
 });
 
 // Returning to the capital — clears currentCityId (null means Aurelia).
+// This stays instant (per the lore, "home is always one road away"); it
+// also cancels any journey in progress so state never gets stuck.
 app.post('/api/travel/home', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   try {
-    await prisma.stats.update({ where: { userId: req.user.id }, data: { currentCityId: null } });
+    await prisma.stats.update({
+      where: { userId: req.user.id },
+      data: {
+        currentCityId:      null,
+        travelDestination:  null,
+        travelStartedAt:    null,
+        travelArrivesAt:    null,
+      },
+    });
     res.json({ ok: true, currentCityId: null });
   } catch (e) {
     logError('/api/travel/home error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// Begin a real-time journey to a city. Duration is genuine wall-clock time
+// (city.travelHours, adjusted for wagon tier) — travelArrivesAt is what
+// every other travel-aware endpoint checks against, so there's no way to
+// shortcut the wait by refreshing, closing the tab, or hitting a city URL
+// directly.
+app.post('/api/travel/start', validate(schemas.travelStart), async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const { cityId } = req.body;
+  const city = CITIES.find(c => c.id === cityId);
+  if (!city) return res.status(400).json({ error: 'Unknown settlement' });
+
+  try {
+    const stats = await resolveTravelIfArrived(req.user.id);
+    if (!stats) return res.status(404).json({ error: 'No stats found' });
+    if (!stats.hasWagon) return res.status(400).json({ error: 'A wagon is required to travel this far' });
+
+    if (stats.currentCityId === cityId) {
+      return res.status(400).json({ error: `You are already in ${city.name}` });
+    }
+
+    if (stats.travelDestination) {
+      const destCity = CITIES.find(c => c.id === stats.travelDestination);
+      return res.status(409).json({
+        error: `You are already on the road to ${destCity ? destCity.name : 'another settlement'}`,
+        travelDestination: stats.travelDestination,
+        arrivesAt: stats.travelArrivesAt,
+      });
+    }
+
+    const hours = effectiveTravelHours(city.travelHours, stats.wagonTier || 0);
+    const startedAt = new Date();
+    const arrivesAt = new Date(startedAt.getTime() + hours * 60 * 60 * 1000);
+
+    await prisma.stats.update({
+      where: { userId: req.user.id },
+      data: {
+        travelDestination: cityId,
+        travelStartedAt:   startedAt,
+        travelArrivesAt:   arrivesAt,
+      },
+    });
+
+    logActivity(req.user.id, 'level', `Set out for ${city.name} — arriving in ${hours} hour${hours === 1 ? '' : 's'}.`);
+
+    res.json({
+      ok: true,
+      cityId,
+      name: city.name,
+      region: city.region,
+      mode: city.mode,
+      hours,
+      startedAt,
+      arrivesAt,
+    });
+  } catch (e) {
+    logError('/api/travel/start error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// Cancel a journey in progress — the player stays wherever they departed
+// from (currentCityId is untouched). No refund of the elapsed time, since
+// none was "spent" other than the wait itself.
+app.post('/api/travel/cancel', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  try {
+    const stats = await resolveTravelIfArrived(req.user.id);
+    if (!stats) return res.status(404).json({ error: 'No stats found' });
+    if (!stats.travelDestination) return res.status(400).json({ error: 'You are not traveling' });
+
+    await prisma.stats.update({
+      where: { userId: req.user.id },
+      data: { travelDestination: null, travelStartedAt: null, travelArrivesAt: null },
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    logError('/api/travel/cancel error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// Polled by traveling.html (and checked by realm-map.html) for the
+// authoritative journey state — always derived from travelArrivesAt, a
+// real timestamp, never a client-side timer.
+app.get('/api/travel/status', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  try {
+    const before = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    const stats = await resolveTravelIfArrived(req.user.id);
+    if (!stats) return res.status(404).json({ error: 'No stats found' });
+
+    const justArrived = !!(before?.travelDestination && !stats.travelDestination);
+
+    if (!stats.travelDestination) {
+      return res.json({
+        traveling: false,
+        arrived: justArrived,
+        cityId: justArrived ? before.travelDestination : null,
+        currentCityId: stats.currentCityId,
+      });
+    }
+
+    const city = CITIES.find(c => c.id === stats.travelDestination);
+    const startedAtMs  = new Date(stats.travelStartedAt).getTime();
+    const arrivesAtMs  = new Date(stats.travelArrivesAt).getTime();
+    const remainingMs  = Math.max(0, arrivesAtMs - Date.now());
+    const totalMs       = Math.max(1, arrivesAtMs - startedAtMs);
+
+    res.json({
+      traveling: true,
+      cityId: stats.travelDestination,
+      name: city?.name,
+      region: city?.region,
+      mode: city?.mode,
+      startedAt: stats.travelStartedAt,
+      arrivesAt: stats.travelArrivesAt,
+      remainingMs,
+      totalMs,
+    });
+  } catch (e) {
+    logError('/api/travel/status error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });

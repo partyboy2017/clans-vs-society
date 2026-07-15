@@ -112,6 +112,14 @@
     <div class="page-title">Map of Karthûl</div>
     <div class="page-sub">A fallen kingdom's known lands. Click a point of interest to learn more.</div>
 
+    <div class="info-card" id="travel-status-banner" style="display:none; border-color: var(--brass-dim); flex-direction:row; align-items:center; justify-content:space-between; gap:1rem;">
+      <div>
+        <div class="info-title" style="margin-bottom:0.3rem;">You Are On the Road</div>
+        <div class="info-desc" id="travel-status-text" style="margin:0;">—</div>
+      </div>
+      <button class="wagon-build-btn" style="width:auto;margin-top:0;padding:0.7rem 1.2rem;white-space:nowrap;" onclick="if(currentTravel) window.location.href='/traveling?to='+currentTravel.cityId;">View Journey</button>
+    </div>
+
     <div class="map-panel">
       <div class="map-image-wrap" id="map-wrap">
         <img class="map-image" src="/assets/map/karthul-map.png" alt="Map of the Realm of Karthûl">
@@ -227,9 +235,44 @@
 
   let hasWagon = false;
   let wagonTier = 0;
+  let currentTravel = null; // populated by loadTravelStatus(); { cityId, name, arrivesAt, remainingMs } or null
+
+  function formatDuration(ms){
+    if (ms <= 0) return '0s';
+    let totalSeconds = Math.ceil(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    totalSeconds -= hours * 3600;
+    const minutes = Math.floor(totalSeconds / 60);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }
+
+  async function loadTravelStatus(){
+    try {
+      const status = await fetch('/api/travel/status').then(r => r.json());
+      currentTravel = status.traveling ? status : null;
+      const banner = document.getElementById('travel-status-banner');
+      if (!banner) return;
+      if (currentTravel) {
+        banner.style.display = 'flex';
+        document.getElementById('travel-status-text').textContent =
+          `You set out for ${currentTravel.name} and have ${formatDuration(currentTravel.remainingMs)} left on the road.`;
+      } else {
+        banner.style.display = 'none';
+      }
+    } catch (e) {
+      console.error('loadTravelStatus error:', e);
+    }
+  }
 
   function openPoi(poi){
     if (poi.href) {
+      if (currentTravel) {
+        // Don't silently cancel an in-progress journey — send them to watch
+        // it instead of teleporting home.
+        window.location.href = `/traveling?to=${currentTravel.cityId}`;
+        return;
+      }
       fetch('/api/travel/home', { method: 'POST' }).catch(() => {}).finally(() => {
         window.location.href = poi.href;
       });
@@ -243,7 +286,18 @@
     const travelEl = document.getElementById('modal-travel');
     const travelBtn = document.getElementById('modal-travel-btn');
 
-    if (!poi.cityId) {
+    if (currentTravel) {
+      // Already on the road somewhere — no starting a second journey.
+      const toSameCity = poi.cityId && currentTravel.cityId === poi.cityId;
+      statusEl.textContent = toSameCity ? 'You are already headed here' : 'You are already traveling';
+      statusEl.className = 'modal-status';
+      travelEl.textContent = `${formatDuration(currentTravel.remainingMs)} remaining to ${currentTravel.name}.`;
+      travelEl.style.display = 'block';
+      travelBtn.style.display = 'block';
+      travelBtn.disabled = false;
+      travelBtn.textContent = 'View Journey';
+      travelBtn.onclick = () => { window.location.href = `/traveling?to=${currentTravel.cityId}`; };
+    } else if (!poi.cityId) {
       // No hub page built for this settlement yet.
       statusEl.textContent = 'Uncharted — coming soon';
       statusEl.className = 'modal-status';
@@ -260,7 +314,29 @@
       travelBtn.style.display = 'block';
       travelBtn.disabled = false;
       travelBtn.textContent = `Travel to ${poi.name}`;
-      travelBtn.onclick = () => { window.location.href = `/traveling?to=${poi.cityId}`; };
+      travelBtn.onclick = async () => {
+        travelBtn.disabled = true;
+        travelBtn.textContent = 'Setting out...';
+        try {
+          const res = await fetch('/api/travel/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cityId: poi.cityId }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            showToast(data.error || 'Could not begin the journey.');
+            travelBtn.disabled = false;
+            travelBtn.textContent = `Travel to ${poi.name}`;
+            return;
+          }
+          window.location.href = `/traveling?to=${poi.cityId}`;
+        } catch (e) {
+          showToast('Something went wrong. Try again.');
+          travelBtn.disabled = false;
+          travelBtn.textContent = `Travel to ${poi.name}`;
+        }
+      };
     } else {
       statusEl.textContent = 'Charted — wagon required';
       statusEl.className = 'modal-status';
@@ -365,6 +441,7 @@
   buildMarkers();
   loadPlayer();
   loadWagonStatus();
+  loadTravelStatus();
 </script>
 <nav class="mobile-nav" id="mobile-nav"></nav>
 </body>

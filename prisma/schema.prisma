@@ -66,9 +66,13 @@ model Stats {
 
   gold Int @default(0)
 
-  hasWagon Boolean @default(false)
+  hasWagon  Boolean @default(false)
   wagonTier Int @default(0)
   currentCityId String?
+
+  // NEW — travel in progress
+  travelDestinationId String?
+  travelArrivalAt     DateTime?
 
   // Real, server-tracked travel — travelArrivesAt is the source of truth for
   // when a journey actually completes. Client UI only ever displays what the

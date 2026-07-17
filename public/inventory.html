@@ -6,44 +6,12 @@
 <title>Clans vs Society — Inventory</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/theme.css">
 <style>
-  :root{--bg:#1C1A17;--bg-panel:#25211C;--bg-panel-2:#2C2620;--parchment:#DCCEA6;--rust:#8B3A2A;--rust-bright:#B0492F;--brass:#B08D45;--brass-dim:#8A6F3A;--bone:#ECE4D2;--ash:#93897A;--green:#4A7C59;--green-bright:#5C9E70;--line:rgba(176,141,69,0.22);}
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg);color:var(--bone);font-family:'EB Garamond',serif;font-size:17px;line-height:1.5;min-height:100vh;}
-  .shell{display:grid;grid-template-columns:220px 1fr;grid-template-rows:54px 1fr;min-height:100vh;}
-  .topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 1.4rem;background:rgba(28,26,23,0.95);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10;}
-  .brand{display:flex;align-items:center;gap:0.6rem;font-family:'Cinzel',serif;font-size:0.9rem;letter-spacing:0.1em;text-transform:uppercase;}
-  .brand svg{width:24px;height:24px;}
-  .topbar-right{display:flex;align-items:center;gap:1.2rem;}
-  .player-name{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--brass);letter-spacing:0.08em;}
-  .logout{font-family:'JetBrains Mono',monospace;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ash);text-decoration:none;border:1px solid var(--line);padding:0.35rem 0.7rem;transition:color 0.2s,border-color 0.2s;}
-  .logout:hover{color:var(--bone);border-color:var(--brass-dim);}
-  .sidebar{background:var(--bg-panel);border-right:1px solid var(--line);padding:1.4rem 0;display:flex;flex-direction:column;gap:0.2rem;}
-  .nav-label{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ash);padding:0.8rem 1.2rem 0.4rem;}
-  .nav-item{display:flex;align-items:center;gap:0.7rem;padding:0.6rem 1.2rem;color:var(--ash);text-decoration:none;font-family:'EB Garamond',serif;font-size:1rem;transition:color 0.15s,background 0.15s;border-left:2px solid transparent;cursor:pointer;}
-  .nav-item:hover{color:var(--bone);background:rgba(176,141,69,0.06);}
-  .nav-item.active{color:var(--parchment);border-left-color:var(--rust-bright);background:rgba(139,58,42,0.12);}
-  .nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:0.7;}
-  .nav-item.active svg{opacity:1;}
-  .nav-divider{height:1px;background:var(--line);margin:0.6rem 1.2rem;}
-  .main{padding:1.8rem 2rem;overflow-y:auto;}
-  .page-title{font-family:'Cinzel',serif;font-size:1.3rem;font-weight:600;letter-spacing:0.06em;color:var(--parchment);margin-bottom:0.3rem;}
-  .page-sub{font-size:0.95rem;color:var(--ash);font-style:italic;margin-bottom:1.4rem;}
-
-  .resources{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.4rem;}
-  .resource-card{background:var(--bg-panel);border:1px solid var(--line);padding:1rem 1.1rem;}
-  .resource-label{font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--ash);margin-bottom:0.5rem;display:flex;justify-content:space-between;}
-  .resource-label span{color:var(--brass);}
-  .bar-track{height:6px;background:rgba(255,255,255,0.07);overflow:hidden;margin-bottom:0.4rem;}
-  .bar-fill{height:100%;transition:width 0.6s ease;}
-  .bar-health{background:var(--rust-bright);}
-  .bar-energy{background:var(--brass);}
-  .resource-value{font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--bone);}
-  @media(max-width:480px){.resources{grid-template-columns:1fr 1fr;}}
-
-  .tabs{display:flex;gap:1.5rem;border-bottom:1px solid var(--line);margin-bottom:1.4rem;}
-  .tab{font-family:'JetBrains Mono',monospace;font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;background:none;border:none;color:var(--ash);padding:0 0 0.9rem;cursor:pointer;border-bottom:2px solid transparent;transition:color 0.15s;}
-  .tab.active{color:var(--bone);border-bottom-color:var(--rust-bright);}
+  /* ── PAGE-SPECIFIC STYLES ONLY ──
+     Tokens, shell, sidebar, resource bars, panel, log, toast, tabs,
+     mobile nav all come from /theme.css. Item cards and the equipment
+     silhouette panel are unique to this page. */
 
   .items-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;}
   .item-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.1rem;display:flex;flex-direction:column;transition:border-color 0.15s;}
@@ -67,76 +35,13 @@
   .item-btn.sell{background:var(--bg-panel-2);border:1px solid var(--brass-dim);color:var(--brass);}
   .item-btn.sell:hover:not(:disabled){background:var(--brass-dim);color:var(--bone);}
 
-  .qty-row{display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin-bottom:0.7rem;}
-  .qty-label{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ash);}
-  .qty-stepper{display:flex;align-items:center;gap:0.55rem;}
-  .qty-btn{
-    background: var(--rust);
-    border: 1.5px solid var(--brass);
-    color: var(--brass);
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.85rem;
-    line-height: 1;
-    cursor: pointer;
-    transition: background 0.15s, border-color 0.15s, transform 0.1s;
-  }
-  .qty-btn:hover:not(:disabled){ background: var(--rust-bright); border-color: var(--bone); color: var(--bone); transform: translateY(-1px); }
-  .qty-btn:active:not(:disabled){ transform: translateY(0); }
-  .qty-btn:disabled{ opacity: 0.35; cursor: not-allowed; border-color: var(--brass-dim); color: var(--brass-dim); }
-  .qty-input{
-    width: 36px;
-    text-align: center;
-    background: var(--bg);
-    border: 1px solid var(--line);
-    color: var(--bone);
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.78rem;
-    padding: 0.3rem 0;
-    -moz-appearance: textfield;
-    appearance: textfield;
-  }
-  .qty-input:focus{ outline: none; border-color: var(--brass-dim); }
-  .qty-input::-webkit-inner-spin-button,.qty-input::-webkit-outer-spin-button{-webkit-appearance:none;appearance:none;margin:0;}
-
-  .empty-state{text-align:center;padding:2.5rem;color:var(--ash);font-style:italic;background:var(--bg-panel);border:1px solid var(--line);}
-
   .equip-panel{background:var(--bg-panel);border:1px solid var(--line);padding:1.4rem;display:flex;justify-content:center;}
   .equip-svg{width:100%;max-width:420px;height:auto;}
   .slot-label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;fill:var(--ash);}
   .slot-soon{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.06em;fill:var(--rust-bright);}
 
-  .panel{background:var(--bg-panel);border:1px solid var(--line);padding:1.2rem 1.3rem;margin-top:1.4rem;}
-  .panel-title{font-family:'Cinzel',serif;font-size:0.82rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--parchment);margin-bottom:1rem;padding-bottom:0.6rem;border-bottom:1px solid var(--line);}
-  .log-list{display:flex;flex-direction:column;max-height:220px;overflow-y:auto;}
-  .log-entry{padding:0.5rem 0;border-bottom:1px solid rgba(176,141,69,0.08);display:flex;gap:0.8rem;font-size:0.9rem;}
-  .log-entry:last-child{border-bottom:none;}
-  .log-time{font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--ash);white-space:nowrap;padding-top:0.15rem;min-width:48px;}
-  .log-text{color:var(--bone);}
-  .gain{color:var(--green-bright);}
-  .spend{color:var(--rust-bright);}
-
-  .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--bg-panel-2);border:1px solid var(--brass-dim);padding:0.8rem 1.2rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;letter-spacing:0.06em;color:var(--bone);opacity:0;transform:translateY(8px);transition:opacity 0.2s,transform 0.2s;pointer-events:none;max-width:300px;z-index:100;}
-  .toast.show{opacity:1;transform:translateY(0);}
-
   @media(max-width:1000px){.items-grid{grid-template-columns:repeat(2,1fr);}}
   @media(max-width:600px){.items-grid{grid-template-columns:1fr;}}
-  @media(max-width:800px){.shell{grid-template-columns:1fr;}.sidebar{display:none;}}
-
-  .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(28,26,23,0.97);border-top:1px solid var(--line);z-index:20;padding-bottom:env(safe-area-inset-bottom);}
-  .mobile-nav-inner{display:flex;justify-content:space-around;align-items:stretch;}
-  .mn-item{display:flex;flex-direction:column;align-items:center;gap:0.25rem;padding:0.6rem 0.3rem;color:var(--ash);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;flex:1;transition:color 0.15s;-webkit-tap-highlight-color:transparent;}
-  .mn-item.active{color:var(--parchment);}
-  .mn-item:hover{color:var(--bone);}
-  .mn-item svg{width:20px;height:20px;flex-shrink:0;}
-  @media(max-width:800px){.mobile-nav{display:block;}.main{padding:1.2rem 1rem 5rem !important;}}
-
 </style>
 </head>
 <body>
@@ -161,16 +66,16 @@
     <div class="page-title">Inventory</div>
     <div class="page-sub">Your satchel of potions, trinkets, and spoils. Use what you carry, or stock up at the store.</div>
 
-    <div class="resources">
+    <div class="resources two-col">
       <div class="resource-card">
-        <div class="resource-label">Health <span id="hp-val">—</span></div>
-        <div class="bar-track"><div class="bar-fill bar-health" id="hp-val-bar" style="width:0%"></div></div>
-        <div class="resource-value" id="hp-val-text">— / —</div>
+        <div class="resource-label">Health <span id="hp-pct">—</span></div>
+        <div class="bar-track"><div class="bar-fill bar-health" id="hp-bar" style="width:0%"></div></div>
+        <div class="resource-value" id="hp-text">— / —</div>
       </div>
       <div class="resource-card">
-        <div class="resource-label">Energy <span id="en-val">—</span></div>
-        <div class="bar-track"><div class="bar-fill bar-energy" id="en-val-bar" style="width:0%"></div></div>
-        <div class="resource-value" id="en-val-text">— / —</div>
+        <div class="resource-label">Energy <span id="en-pct">—</span></div>
+        <div class="bar-track"><div class="bar-fill bar-energy" id="en-bar" style="width:0%"></div></div>
+        <div class="resource-value" id="en-text">— / —</div>
       </div>
     </div>
 
@@ -300,23 +205,12 @@
 <div class="toast" id="toast"></div>
 
 <script src="/nav.js"></script>
+<script src="/ui.js"></script>
 <script>
+  /* showToast, addLog, updateResourceBars, apiPost all come from /ui.js now. */
+
   let myGold = 0;
-  const storeQty = {}; // itemId -> current chosen quantity
-
-  function showToast(msg){ const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800); }
-
-  function addLog(text){
-    const list = document.getElementById('log-list');
-    const ph = document.getElementById('log-placeholder');
-    if(ph) ph.closest('.log-entry').remove();
-    const now = new Date();
-    const time = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
-    const entry = document.createElement('div');
-    entry.className = 'log-entry';
-    entry.innerHTML = `<span class="log-time">${time}</span><span class="log-text">${text}</span>`;
-    list.insertBefore(entry, list.firstChild);
-  }
+  const FALLBACK_ICON = '/assets/items/_fallback/default-item.png';
 
   function switchTab(tab){
     document.getElementById('tab-items').classList.toggle('active', tab === 'items');
@@ -327,10 +221,7 @@
     document.getElementById('pane-equipment').style.display = tab === 'equipment' ? 'block' : 'none';
   }
 
-  const FALLBACK_ICON = '/assets/items/_fallback/default-item.png';
-  const MAX_QTY = 99;
-
-  function itemIconHtml(iconPath, itemName){
+  function itemIconHtml(iconPath){
     const src = iconPath || FALLBACK_ICON;
     return `<div class="item-icon-wrap"><img src="${src}" alt="" width="52" height="52" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_ICON}';"></div>`;
   }
@@ -347,7 +238,7 @@
       return `
         <div class="item-card">
           <div class="item-type ${inv.item.type}">${inv.item.type}</div>
-          ${itemIconHtml(inv.item.icon, inv.item.name)}
+          ${itemIconHtml(inv.item.icon)}
           <div class="item-name">${inv.item.name}</div>
           <div class="item-desc">${inv.item.description}</div>
           <div class="item-footer">
@@ -368,11 +259,6 @@
     });
   }
 
-  function clampQty(n){
-    if (Number.isNaN(n)) return 1;
-    return Math.max(1, Math.min(MAX_QTY, Math.floor(n)));
-  }
-
   function renderStore(items){
     const grid = document.getElementById('store-grid');
     if(!items.length){
@@ -380,26 +266,15 @@
       return;
     }
     grid.innerHTML = items.map(item => {
-      if (!(item.id in storeQty)) storeQty[item.id] = 1;
-      const qty = storeQty[item.id];
-      const totalCost = item.basePrice * qty;
-      const affordable = myGold >= totalCost;
+      const affordable = myGold >= item.basePrice;
       return `
         <div class="item-card">
           <div class="item-type ${item.type}">${item.type}</div>
-          ${itemIconHtml(item.icon, item.name)}
+          ${itemIconHtml(item.icon)}
           <div class="item-name">${item.name}</div>
           <div class="item-desc">${item.description}</div>
-          <div class="qty-row">
-            <span class="qty-label">Qty</span>
-            <div class="qty-stepper">
-              <button type="button" class="qty-btn" data-qty-action="dec" data-item-id="${item.id}" ${qty<=1?'disabled':''}>−</button>
-              <input class="qty-input" type="number" min="1" max="${MAX_QTY}" value="${qty}" data-qty-input="${item.id}">
-              <button type="button" class="qty-btn" data-qty-action="inc" data-item-id="${item.id}" ${qty>=MAX_QTY?'disabled':''}>+</button>
-            </div>
-          </div>
           <div class="item-footer">
-            <span class="item-price">${totalCost.toLocaleString()} g</span>
+            <span class="item-price">${item.basePrice} g</span>
             <button class="item-btn buy" ${affordable?'':'disabled'} data-item-id="${item.id}" data-item-name="${item.name.replace(/"/g,'&quot;')}">
               ${affordable ? 'Buy' : 'Too costly'}
             </button>
@@ -407,23 +282,8 @@
         </div>`;
     }).join('');
 
-    grid.querySelectorAll('.qty-btn[data-qty-action]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.dataset.itemId;
-        const delta = btn.dataset.qtyAction === 'inc' ? 1 : -1;
-        storeQty[id] = clampQty((storeQty[id] || 1) + delta);
-        loadStore();
-      });
-    });
-    grid.querySelectorAll('.qty-input[data-qty-input]').forEach(input => {
-      input.addEventListener('change', () => {
-        const id = input.dataset.qtyInput;
-        storeQty[id] = clampQty(parseInt(input.value, 10));
-        loadStore();
-      });
-    });
     grid.querySelectorAll('.item-btn[data-item-id]:not(:disabled)').forEach(btn => {
-      btn.addEventListener('click', () => buyItem(btn.dataset.itemId, btn.dataset.itemName, storeQty[btn.dataset.itemId] || 1));
+      btn.addEventListener('click', () => buyItem(btn.dataset.itemId, btn.dataset.itemName));
     });
   }
 
@@ -440,13 +300,10 @@
   }
 
   async function useItem(inventoryId, itemName){
-    const res = await fetch('/api/inventory/use', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ inventoryId: parseInt(inventoryId, 10) })
-    });
-    const data = await res.json();
-    if(!res.ok){ showToast(data.error); return; }
+    let data;
+    try {
+      data = await apiPost('/api/inventory/use', { inventoryId: parseInt(inventoryId, 10) });
+    } catch(e){ showToast(e.message); return; }
 
     const gains = (data.applied || []).map(a => `<span class="gain">+${a.amount} ${a.stat}</span>`).join(' ');
     addLog(`You used <span class="gain">${itemName}</span>. ${gains}`);
@@ -460,52 +317,29 @@
   }
 
   async function sellItem(inventoryId, itemName){
-    const res = await fetch('/api/inventory/sell', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ inventoryId: parseInt(inventoryId, 10), quantity: 1 })
-    });
-    const data = await res.json();
-    if(!res.ok){ showToast(data.error); return; }
+    let data;
+    try {
+      data = await apiPost('/api/inventory/sell', { inventoryId: parseInt(inventoryId, 10), quantity: 1 });
+    } catch(e){ showToast(e.message); return; }
 
-    addLog(`You sold <span class="spend">${itemName}</span> for <span class="gain">+${data.totalValue} gold</span>.`);
+    addLog(`You sold <span class="loss">${itemName}</span> for <span class="gain">+${data.totalValue} gold</span>.`);
     showToast(`Sold ${itemName} for ${data.totalValue}g`);
 
     await loadPlayer();
     await Promise.all([loadInventory(), loadStore()]);
   }
 
-  async function buyItem(itemId, itemName, quantity){
-    const qty = clampQty(parseInt(quantity, 10) || 1);
-    const res = await fetch('/api/shop/buy', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ itemId: parseInt(itemId, 10), quantity: qty })
-    });
-    const data = await res.json();
-    if(!res.ok){ showToast(data.error); return; }
+  async function buyItem(itemId, itemName){
+    let data;
+    try {
+      data = await apiPost('/api/shop/buy', { itemId: parseInt(itemId, 10), quantity: 1 });
+    } catch(e){ showToast(e.message); return; }
 
-    const qtyLabel = data.quantity > 1 ? `${data.quantity}x ` : '';
-    addLog(`You bought <span class="gain">${qtyLabel}${itemName}</span>. <span class="spend">-${data.cost} gold</span>`);
-    showToast(`Bought ${qtyLabel}${itemName}`);
-
-    // Reset that item's quantity picker back to 1 after a successful purchase.
-    storeQty[itemId] = 1;
+    addLog(`You bought <span class="gain">${itemName}</span>. <span class="loss">-${data.cost} gold</span>`);
+    showToast(`Bought ${itemName}`);
 
     await loadPlayer();
     await Promise.all([loadStore(), loadInventory()]);
-  }
-
-  function updateResourceBars(stats){
-    const hpPct = Math.max(0, Math.min(100, Math.round((stats.health/stats.maxHealth)*100)));
-    document.getElementById('hp-val').textContent = hpPct + '%';
-    document.getElementById('hp-val-bar').style.width = hpPct + '%';
-    document.getElementById('hp-val-text').textContent = `${stats.health} / ${stats.maxHealth}`;
-
-    const enPct = Math.max(0, Math.min(100, Math.round((stats.energy/stats.maxEnergy)*100)));
-    document.getElementById('en-val').textContent = enPct + '%';
-    document.getElementById('en-val-bar').style.width = enPct + '%';
-    document.getElementById('en-val-text').textContent = `${stats.energy} / ${stats.maxEnergy}`;
   }
 
   async function loadPlayer(){

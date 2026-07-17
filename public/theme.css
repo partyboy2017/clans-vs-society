@@ -97,6 +97,18 @@ body{
 .status-title{ font-family:'Cinzel',serif; font-size:1rem; color:var(--parchment); margin-bottom:0.2rem; }
 .status-timer{ font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--ash); letter-spacing:0.08em; }
 
+/* ── LEVEL-UP / STAT-POINTS BANNERS ── */
+.levelup-banner{ display:none; align-items:center; gap:1rem; background:rgba(139,58,42,0.18); border:1px solid var(--rust-bright); padding:0.9rem 1.2rem; margin-bottom:1.4rem; }
+.levelup-banner.show{ display:flex; }
+.levelup-banner .lu-icon{ font-size:1.6rem; flex-shrink:0; }
+.levelup-banner .lu-title{ font-family:'Cinzel',serif; font-size:1rem; color:var(--parchment); letter-spacing:0.06em; }
+.levelup-banner .lu-sub{ font-size:0.85rem; color:var(--ash); font-style:italic; }
+
+.statpoints-banner{ display:none; align-items:center; justify-content:space-between; background:rgba(74,124,89,0.12); border:1px solid var(--green-bright); padding:0.8rem 1.2rem; margin-bottom:1.4rem; gap:1rem; }
+.statpoints-banner.show{ display:flex; }
+.statpoints-banner .sp-text{ font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--green-bright); letter-spacing:0.08em; }
+.statpoints-banner .sp-sub{ font-size:0.85rem; color:var(--ash); font-style:italic; margin-top:0.2rem; }
+
 /* ── PANELS (logs, forms, stat blocks) ── */
 .panel{ background:var(--bg-panel); border:1px solid var(--line); padding:1.2rem 1.3rem; }
 .panel-title{ font-family:'Cinzel',serif; font-size:0.82rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--parchment); margin-bottom:1rem; padding-bottom:0.6rem; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }

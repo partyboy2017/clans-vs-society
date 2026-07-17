@@ -6,449 +6,68 @@
 <title>Clans vs Society — Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/theme.css">
 <style>
-  :root{
-    --bg: #1C1A17;
-    --bg-panel: #25211C;
-    --bg-panel-2: #2C2620;
-    --parchment: #DCCEA6;
-    --rust: #8B3A2A;
-    --rust-bright: #B0492F;
-    --brass: #B08D45;
-    --brass-dim: #8A6F3A;
-    --bone: #ECE4D2;
-    --ash: #93897A;
-    --green: #4A7C59;
-    --green-bright: #5C9E70;
-    --line: rgba(176,141,69,0.22);
-  }
+  /* ── PAGE-SPECIFIC STYLES ONLY ──
+     Tokens, shell, sidebar, resource bars, status/levelup/statpoints
+     banners, panel, log, toast, mobile nav all come from /theme.css.
+     Combat-stat rows, the spend-point buttons, and the action list
+     are unique to this page. */
 
-  *{ box-sizing: border-box; margin: 0; padding: 0; }
-
-  body{
-    background: var(--bg);
-    color: var(--bone);
-    font-family: 'EB Garamond', serif;
-    font-size: 17px;
-    line-height: 1.5;
-    min-height: 100vh;
-  }
-
-  .shell{
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    grid-template-rows: 54px 1fr;
-    min-height: 100vh;
-  }
-
-  .topbar{
-    grid-column: 1 / -1;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 1.4rem;
-    background: rgba(28,26,23,0.95);
-    border-bottom: 1px solid var(--line);
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
-  .brand{
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    font-family: 'Cinzel', serif;
-    font-size: 0.9rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-  .brand svg{ width: 24px; height: 24px; }
-  .topbar-right{
-    display: flex;
-    align-items: center;
-    gap: 1.2rem;
-  }
-  .player-name{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.72rem;
-    color: var(--brass);
-    letter-spacing: 0.08em;
-  }
-  .logout{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.68rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ash);
-    text-decoration: none;
-    border: 1px solid var(--line);
-    padding: 0.35rem 0.7rem;
-    transition: color 0.2s, border-color 0.2s;
-  }
-  .logout:hover{ color: var(--bone); border-color: var(--brass-dim); }
-
-  .sidebar{
-    background: var(--bg-panel);
-    border-right: 1px solid var(--line);
-    padding: 1.4rem 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
-  .nav-label{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--ash);
-    padding: 0.8rem 1.2rem 0.4rem;
-  }
-  .nav-item{
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    padding: 0.6rem 1.2rem;
-    color: var(--ash);
-    text-decoration: none;
-    font-family: 'EB Garamond', serif;
-    font-size: 1rem;
-    transition: color 0.15s, background 0.15s;
-    border-left: 2px solid transparent;
-    cursor: pointer;
-  }
-  .nav-item:hover{ color: var(--bone); background: rgba(176,141,69,0.06); }
-  .nav-item.active{ color: var(--parchment); border-left-color: var(--rust-bright); background: rgba(139,58,42,0.12); }
-  .nav-item svg{ width: 15px; height: 15px; flex-shrink: 0; opacity: 0.7; }
-  .nav-item.active svg{ opacity: 1; }
-  .nav-divider{ height: 1px; background: var(--line); margin: 0.6rem 1.2rem; }
-
-  .main{
-    padding: 1.8rem 2rem;
-    overflow-y: auto;
-  }
-
-  .page-title{
-    font-family: 'Cinzel', serif;
-    font-size: 1.3rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    color: var(--parchment);
-    margin-bottom: 0.3rem;
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    flex-wrap: wrap;
-  }
+  .page-title{ display:flex; align-items:center; gap:0.7rem; flex-wrap:wrap; }
   .class-badge{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.62rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    padding: 0.25rem 0.65rem;
-    border: 1px solid var(--brass);
-    color: var(--brass);
-    vertical-align: middle;
-  }
-  .page-sub{
-    font-size: 0.95rem;
-    color: var(--ash);
-    font-style: italic;
-    margin-bottom: 1.8rem;
-  }
-
-  /* JAIL / HOSPITAL STATUS BANNER */
-  .status-banner{display:none;align-items:center;gap:1rem;padding:1rem 1.4rem;margin-bottom:1.4rem;border:1px solid;}
-  .status-banner.show{display:flex;}
-  .status-banner.jail{background:rgba(139,58,42,0.15);border-color:var(--rust-bright);}
-  .status-banner.hospital{background:rgba(74,124,89,0.12);border-color:var(--green);}
-  .status-icon{font-size:1.6rem;flex-shrink:0;}
-  .status-title{font-family:'Cinzel',serif;font-size:1rem;color:var(--parchment);margin-bottom:0.2rem;}
-  .status-timer{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--ash);letter-spacing:0.08em;}
-
-  /* LEVEL UP BANNER */
-  .levelup-banner{
-    display: none;
-    align-items: center;
-    gap: 1rem;
-    background: rgba(139,58,42,0.18);
-    border: 1px solid var(--rust-bright);
-    padding: 0.9rem 1.2rem;
-    margin-bottom: 1.4rem;
-  }
-  .levelup-banner.show{ display: flex; }
-  .levelup-banner .lu-title{
-    font-family: 'Cinzel', serif;
-    font-size: 1rem;
-    color: var(--parchment);
-    letter-spacing: 0.06em;
-  }
-  .levelup-banner .lu-sub{
-    font-size: 0.85rem;
-    color: var(--ash);
-    font-style: italic;
-  }
-  .levelup-banner .lu-icon{
-    font-size: 1.6rem;
-    flex-shrink: 0;
-  }
-
-  /* STAT POINTS BANNER */
-  .statpoints-banner{
-    display: none;
-    align-items: center;
-    justify-content: space-between;
-    background: rgba(74,124,89,0.12);
-    border: 1px solid var(--green-bright);
-    padding: 0.8rem 1.2rem;
-    margin-bottom: 1.4rem;
-    gap: 1rem;
-  }
-  .statpoints-banner.show{ display: flex; }
-  .statpoints-banner .sp-text{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.72rem;
-    color: var(--green-bright);
-    letter-spacing: 0.08em;
-  }
-  .statpoints-banner .sp-sub{
-    font-size: 0.85rem;
-    color: var(--ash);
-    font-style: italic;
-    margin-top: 0.2rem;
-  }
-
-  .resources{
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin-bottom: 1.8rem;
-  }
-  .resource-card{
-    background: var(--bg-panel);
-    border: 1px solid var(--line);
-    padding: 1rem 1.1rem;
-  }
-  .resource-label{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.62rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--ash);
-    margin-bottom: 0.5rem;
-    display: flex;
-    justify-content: space-between;
-  }
-  .resource-label span{ color: var(--brass); }
-  .bar-track{
-    height: 6px;
-    background: rgba(255,255,255,0.07);
-    overflow: hidden;
-    margin-bottom: 0.4rem;
-  }
-  .bar-fill{
-    height: 100%;
-    transition: width 0.6s ease;
-  }
-  .bar-health{ background: var(--rust-bright); }
-  .bar-energy{ background: var(--brass); }
-  .bar-xp{ background: var(--green-bright); }
-  .resource-value{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.75rem;
-    color: var(--bone);
+    font-family:'JetBrains Mono',monospace; font-size:0.62rem; letter-spacing:0.1em; text-transform:uppercase;
+    padding:0.25rem 0.65rem; border:1px solid var(--brass); color:var(--brass); vertical-align:middle;
   }
 
   .grid-1{ display:block; margin-bottom:1rem; }
-  .grid-2{
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    margin-bottom: 1rem;
-  }
+  .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem; }
 
-  .panel{
-    background: var(--bg-panel);
-    border: 1px solid var(--line);
-    padding: 1.2rem 1.3rem;
-  }
-  .panel-title{
-    font-family: 'Cinzel', serif;
-    font-size: 0.82rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--parchment);
-    margin-bottom: 1rem;
-    padding-bottom: 0.6rem;
-    border-bottom: 1px solid var(--line);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .panel-badge{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.6rem;
-    background: var(--rust);
-    color: var(--bone);
-    padding: 0.15rem 0.5rem;
-    letter-spacing: 0.08em;
-  }
+  .panel-badge{ font-family:'JetBrains Mono',monospace; font-size:0.6rem; background:var(--rust); color:var(--bone); padding:0.15rem 0.5rem; letter-spacing:0.08em; }
 
-  .stat-row{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid rgba(176,141,69,0.1);
-  }
-  .stat-row:last-child{ border-bottom: none; }
-  .stat-name{
-    font-size: 0.95rem;
-    color: var(--ash);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .stat-name svg{ width: 13px; height: 13px; color: var(--brass); }
-  .stat-val{
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.82rem;
-    color: var(--bone);
-  }
+  .stat-row{ display:flex; justify-content:space-between; align-items:center; padding:0.5rem 0; border-bottom:1px solid rgba(176,141,69,0.1); }
+  .stat-row:last-child{ border-bottom:none; }
+  .stat-name{ font-size:0.95rem; color:var(--ash); display:flex; align-items:center; gap:0.5rem; }
+  .stat-name svg{ width:13px; height:13px; color:var(--brass); }
+  .stat-val{ display:flex; align-items:center; gap:0.6rem; font-family:'JetBrains Mono',monospace; font-size:0.82rem; color:var(--bone); }
 
-  /* SPEND BUTTON */
   .spend-btn{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.08em;
-    background: var(--green);
-    color: var(--bone);
-    border: none;
-    padding: 0.2rem 0.5rem;
-    cursor: pointer;
-    display: none;
-    transition: background 0.15s;
+    font-family:'JetBrains Mono',monospace; font-size:0.6rem; letter-spacing:0.08em;
+    background:var(--green); color:var(--bone); border:none; padding:0.2rem 0.5rem; cursor:pointer;
+    display:none; transition:background 0.15s;
   }
-  .spend-btn:hover{ background: var(--green-bright); }
-  .spend-btn.visible{ display: inline-block; }
+  .spend-btn:hover{ background:var(--green-bright); }
+  .spend-btn.visible{ display:inline-block; }
 
-  .action-list{
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-  }
+  .action-list{ display:flex; flex-direction:column; gap:0.6rem; }
   .action-item{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.7rem 0.9rem;
-    background: var(--bg-panel-2);
-    border: 1px solid var(--line);
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s, opacity 0.15s;
+    display:flex; justify-content:space-between; align-items:center; padding:0.7rem 0.9rem;
+    background:var(--bg-panel-2); border:1px solid var(--line); cursor:pointer;
+    transition:border-color 0.15s, background 0.15s, opacity 0.15s;
   }
-  .action-item:hover:not(.disabled){ border-color: var(--brass-dim); background: rgba(176,141,69,0.06); }
-  .action-item.disabled{ opacity: 0.4; cursor: not-allowed; pointer-events: none; }
-  .action-name{
-    font-family: 'Cinzel', serif;
-    font-size: 0.88rem;
-    color: var(--parchment);
-    margin-bottom: 0.15rem;
-  }
-  .action-desc{
-    font-size: 0.82rem;
-    color: var(--ash);
-    font-style: italic;
-  }
-  .action-cost{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.65rem;
-    color: var(--brass);
-    letter-spacing: 0.08em;
-    text-align: right;
-    white-space: nowrap;
-    margin-left: 1rem;
-  }
+  .action-item:hover:not(.disabled){ border-color:var(--brass-dim); background:rgba(176,141,69,0.06); }
+  .action-item.disabled{ opacity:0.4; cursor:not-allowed; pointer-events:none; }
+  .action-name{ font-family:'Cinzel',serif; font-size:0.88rem; color:var(--parchment); margin-bottom:0.15rem; }
+  .action-desc{ font-size:0.82rem; color:var(--ash); font-style:italic; }
+  .action-cost{ font-family:'JetBrains Mono',monospace; font-size:0.65rem; color:var(--brass); letter-spacing:0.08em; text-align:right; white-space:nowrap; margin-left:1rem; }
 
-  .log-list{
-    display: flex;
-    flex-direction: column;
-    max-height: 280px;
-    overflow-y: auto;
-  }
-  .log-entry{
-    padding: 0.55rem 0;
-    border-bottom: 1px solid rgba(176,141,69,0.08);
-    display: flex;
-    gap: 0.8rem;
-    font-size: 0.9rem;
-  }
-  .log-entry:last-child{ border-bottom: none; }
-  .log-time{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.62rem;
-    color: var(--ash);
-    white-space: nowrap;
-    padding-top: 0.15rem;
-    min-width: 48px;
-  }
-  .log-text{ color: var(--bone); }
-  .log-text .gain{ color: var(--green-bright); }
-  .log-text .loss{ color: var(--rust-bright); }
-  .log-text .levelup{ color: var(--brass); font-family: 'Cinzel', serif; }
-  .log-category{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:0.55rem;letter-spacing:0.08em;text-transform:uppercase;padding:0.1rem 0.4rem;border:1px solid var(--line);margin-right:0.5rem;color:var(--ash);vertical-align:1px;}
-  .log-category.training{color:var(--brass);border-color:var(--brass-dim);}
-  .log-category.raid{color:var(--rust-bright);border-color:var(--rust-bright);}
-  .log-category.monster{color:var(--green-bright);border-color:var(--green-bright);}
-  .log-category.inventory{color:var(--ash);border-color:var(--line);}
-  .log-category.level{color:var(--parchment);border-color:var(--brass);}
+  /* activity-log category badges — page-specific enough to keep local */
+  .log-category{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:0.55rem; letter-spacing:0.08em; text-transform:uppercase; padding:0.1rem 0.4rem; border:1px solid var(--line); margin-right:0.5rem; color:var(--ash); vertical-align:1px; }
+  .log-category.training{ color:var(--brass); border-color:var(--brass-dim); }
+  .log-category.raid{ color:var(--rust-bright); border-color:var(--rust-bright); }
+  .log-category.monster{ color:var(--green-bright); border-color:var(--green-bright); }
+  .log-category.inventory{ color:var(--ash); border-color:var(--line); }
+  .log-category.level{ color:var(--parchment); border-color:var(--brass); }
 
-  .toast{
-    position: fixed;
-    bottom: 1.5rem;
-    right: 1.5rem;
-    background: var(--bg-panel-2);
-    border: 1px solid var(--brass-dim);
-    padding: 0.8rem 1.2rem;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.72rem;
-    letter-spacing: 0.06em;
-    color: var(--bone);
-    opacity: 0;
-    transform: translateY(8px);
-    transition: opacity 0.2s, transform 0.2s;
-    pointer-events: none;
-    max-width: 300px;
-    z-index: 100;
+  @media(max-width:800px){
+    .resources{ grid-template-columns:1fr 1fr; }
+    .grid-2{ grid-template-columns:1fr; }
+    .log-list{ max-height:none; }
   }
-  .toast.show{ opacity: 1; transform: translateY(0); }
-  .toast.levelup-toast{ border-color: var(--rust-bright); }
-
-  @media (max-width: 800px){
-    .shell{ grid-template-columns: 1fr; }
-    .sidebar{ display: none; }
-    .resources{ grid-template-columns: 1fr 1fr; }
-    .grid-1{ display:block; margin-bottom:1rem; }
-    .grid-2{ grid-template-columns: 1fr; }
-    .log-list{ max-height: none; }
-  }
-
-  /* ── MOBILE NAV ── */
-  .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(28,26,23,0.97);border-top:1px solid var(--line);z-index:20;padding-bottom:env(safe-area-inset-bottom);}
-  .mobile-nav-inner{display:flex;justify-content:space-around;align-items:stretch;}
-  .mn-item{display:flex;flex-direction:column;align-items:center;gap:0.25rem;padding:0.6rem 0.3rem;color:var(--ash);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;flex:1;transition:color 0.15s;-webkit-tap-highlight-color:transparent;}
-  .mn-item.active{color:var(--parchment);}
-  .mn-item:hover{color:var(--bone);}
-  .mn-item svg{width:20px;height:20px;flex-shrink:0;}
-  @media(max-width:800px){.mobile-nav{display:block;}.main{padding:1.2rem 1rem 5rem !important;}}
-
-
   @media(max-width:480px){
-    .resources{grid-template-columns:1fr 1fr;}
-    .grid-2{grid-template-columns:1fr;}
-    .topbar .player-name{display:none;}
+    .resources{ grid-template-columns:1fr 1fr; }
+    .grid-2{ grid-template-columns:1fr; }
+    .topbar .player-name{ display:none; }
   }
 </style>
 </head>
@@ -514,23 +133,23 @@
     <!-- RESOURCE BARS -->
     <div class="resources">
       <div class="resource-card">
-        <div class="resource-label">Health <span id="hp-val">—</span></div>
+        <div class="resource-label">Health <span id="hp-pct">—</span></div>
         <div class="bar-track"><div class="bar-fill bar-health" id="hp-bar" style="width:0%"></div></div>
         <div class="resource-value" id="hp-text">— / —</div>
       </div>
       <div class="resource-card">
-        <div class="resource-label">Energy <span id="en-val">—</span></div>
+        <div class="resource-label">Energy <span id="en-pct">—</span></div>
         <div class="bar-track"><div class="bar-fill bar-energy" id="en-bar" style="width:0%"></div></div>
         <div class="resource-value" id="en-text">— / —</div>
       </div>
       <div class="resource-card">
-        <div class="resource-label">Experience <span id="xp-val">—</span></div>
+        <div class="resource-label">Experience <span id="xp-pct">—</span></div>
         <div class="bar-track"><div class="bar-fill bar-xp" id="xp-bar" style="width:0%"></div></div>
         <div class="resource-value" id="xp-text">Level —</div>
       </div>
     </div>
 
-    <div class="grid-1">
+    <div class="grid-2">
 
       <!-- STATS -->
       <div class="panel">
@@ -583,6 +202,18 @@
           <span class="stat-val" style="color:var(--brass);" id="stat-gold">—</span>
         </div>
       </div>
+
+      <!-- ACTIONS -->
+      <div class="panel">
+        <div class="panel-title">Quick Actions</div>
+        <div class="action-list">
+          <div class="action-item" id="action-patrol" onclick="doAction('patrol')">
+            <div class="action-info">
+              <div class="action-name">Patrol the King's Road</div>
+              <div class="action-desc">Collect tolls from passing merchants</div>
+            </div>
+            <div class="action-cost">10 ENERGY<br>+GOLD &amp; XP</div>
+          </div>
           <div class="action-item" id="action-rest" onclick="doAction('rest')">
             <div class="action-info">
               <div class="action-name">Rest at the Inn</div>
@@ -611,55 +242,13 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="/nav.js"></script>
+<script src="/ui.js"></script>
 <script>
+  /* showToast, addLog, updateResourceBars, updateStatusBanners,
+     formatMs, apiPost all come from /ui.js now. */
+
   let playerStats = null;
-  let jailInterval = null;
-  let jailRemainingMs = 0;
-  let hospitalRemainingMs = 0;
-
-  function formatMs(ms){
-    if(ms <= 0) return '0s';
-    const s = Math.ceil(ms/1000), m = Math.floor(s/60), sec = s%60;
-    return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
-  }
-
-  function updateStatusBanners(stats){
-    const now = Date.now();
-    const jailBanner = document.getElementById('jail-banner');
-    const hospitalBanner = document.getElementById('hospital-banner');
-
-    if(stats.inJail && stats.jailUntil){
-      jailBanner.classList.add('show');
-      jailRemainingMs = Math.max(0, new Date(stats.jailUntil).getTime() - now);
-      document.getElementById('jail-timer').textContent = `Released in ${formatMs(jailRemainingMs)}`;
-    } else {
-      jailBanner.classList.remove('show');
-      jailRemainingMs = 0;
-    }
-
-    if(stats.inHospital && stats.hospitalUntil){
-      hospitalBanner.classList.add('show');
-      hospitalRemainingMs = Math.max(0, new Date(stats.hospitalUntil).getTime() - now);
-      document.getElementById('hospital-timer').textContent = `Discharged in ${formatMs(hospitalRemainingMs)}`;
-    } else {
-      hospitalBanner.classList.remove('show');
-      hospitalRemainingMs = 0;
-    }
-
-    if(jailInterval) clearInterval(jailInterval);
-    jailInterval = setInterval(() => {
-      if(jailRemainingMs > 0){
-        jailRemainingMs = Math.max(0, jailRemainingMs - 1000);
-        document.getElementById('jail-timer').textContent = `Released in ${formatMs(jailRemainingMs)}`;
-        if(jailRemainingMs === 0){ loadPlayer(); }
-      }
-      if(hospitalRemainingMs > 0){
-        hospitalRemainingMs = Math.max(0, hospitalRemainingMs - 1000);
-        document.getElementById('hospital-timer').textContent = `Discharged in ${formatMs(hospitalRemainingMs)}`;
-        if(hospitalRemainingMs === 0){ loadPlayer(); }
-      }
-    }, 1000);
-  }
 
   async function loadPlayer(){
     try {
@@ -677,26 +266,15 @@
       }
       document.getElementById('level-line').textContent = `Level ${data.stats.level} — ${data.stats.xp} XP earned`;
 
-      updateStatusBanners(data.stats);
+      updateStatusBanners(
+        {
+          inJail: data.stats.inJail, jailUntil: data.stats.jailUntil,
+          inHospital: data.stats.inHospital, hospitalUntil: data.stats.hospitalUntil,
+        },
+        loadPlayer // re-fetch once a timer expires
+      );
 
-      // Health
-      const hpPct = Math.round((data.stats.health / data.stats.maxHealth) * 100);
-      document.getElementById('hp-bar').style.width = hpPct + '%';
-      document.getElementById('hp-val').textContent = hpPct + '%';
-      document.getElementById('hp-text').textContent = `${data.stats.health} / ${data.stats.maxHealth}`;
-
-      // Energy
-      const enPct = Math.round((data.stats.energy / data.stats.maxEnergy) * 100);
-      document.getElementById('en-bar').style.width = enPct + '%';
-      document.getElementById('en-val').textContent = enPct + '%';
-      document.getElementById('en-text').textContent = `${data.stats.energy} / ${data.stats.maxEnergy}`;
-
-      // XP
-      const xpNeeded = data.stats.level * 100;
-      const xpPct = Math.min(Math.round((data.stats.xp / xpNeeded) * 100), 100);
-      document.getElementById('xp-bar').style.width = xpPct + '%';
-      document.getElementById('xp-val').textContent = xpPct + '%';
-      document.getElementById('xp-text').textContent = `Level ${data.stats.level} — ${data.stats.xp}/${xpNeeded} XP`;
+      updateResourceBars(data.stats);
 
       // Combat stats
       document.getElementById('stat-strength').textContent = data.stats.strength;
@@ -705,10 +283,7 @@
       document.getElementById('stat-dexterity').textContent = data.stats.dexterity;
       document.getElementById('stat-gold').textContent = data.stats.gold.toLocaleString() + ' g';
 
-      // Stat points
       updateStatPointUI(data.stats.statPoints);
-
-      // Disable actions based on resources
       updateActionStates(data.stats);
 
     } catch(e){
@@ -730,79 +305,49 @@
   }
 
   function updateActionStates(stats){
-    const patrolEl = document.getElementById('action-patrol');
-    if (patrolEl) patrolEl.classList.toggle('disabled', stats.energy < 10);
-
-    const restEl = document.getElementById('action-rest');
-    if (restEl) restEl.classList.toggle('disabled', stats.gold < 30);
-  }
-
-  function addLog(text){
-    const list = document.getElementById('log-list');
-    const now = new Date();
-    const time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
-    const entry = document.createElement('div');
-    entry.className = 'log-entry';
-    entry.innerHTML = `<span class="log-time">${time}</span><span class="log-text">${text}</span>`;
-    list.insertBefore(entry, list.firstChild);
-  }
-
-  function showToast(msg, isLevelUp = false){
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.className = 'toast' + (isLevelUp ? ' levelup-toast' : '');
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 3200);
+    document.getElementById('action-patrol')?.classList.toggle('disabled', stats.energy < 10);
+    document.getElementById('action-rest')?.classList.toggle('disabled', stats.gold < 30);
   }
 
   async function doAction(action){
     if(!playerStats) return;
 
+    let data;
     try {
-      const res = await fetch(`/api/action/${action}`, { method: 'POST' });
-      const data = await res.json();
-
-      if(!res.ok){
-        showToast(data.error);
-        return;
-      }
-
-      if(action === 'patrol'){
-        addLog(`You patrol the king's road and collect tolls. A merchant grumbles but pays. <span class="gain">+${data.goldGain} gold</span> <span class="gain">+${data.xpGain} xp</span>`);
-      } else if(action === 'rest'){
-        addLog(`You rest at the inn. The straw mattress is rough but the fire is warm. <span class="gain">Health & Energy restored</span>`);
-      }
-
-      if(data.leveledUp){
-        const banner = document.getElementById('levelup-banner');
-        document.getElementById('levelup-title').textContent = `You have reached Level ${data.newLevel}!`;
-        banner.classList.add('show');
-        addLog(`<span class="levelup">⚔ Level ${data.newLevel} achieved! You have been granted 3 stat points.</span>`);
-        showToast(`Level ${data.newLevel}! 3 stat points awarded.`, true);
-        setTimeout(() => banner.classList.remove('show'), 6000);
-      }
-
-      await loadPlayer();
-
+      data = await apiPost(`/api/action/${action}`);
     } catch(e){
-      showToast('Something went wrong. Try again.');
+      showToast(e.message);
+      return;
     }
+
+    if(action === 'patrol'){
+      addLog(`You patrol the king's road and collect tolls. A merchant grumbles but pays. <span class="gain">+${data.goldGain} gold</span> <span class="gain">+${data.xpGain} xp</span>`);
+    } else if(action === 'rest'){
+      addLog(`You rest at the inn. The straw mattress is rough but the fire is warm. <span class="gain">Health & Energy restored</span>`);
+    }
+
+    if(data.leveledUp){
+      const banner = document.getElementById('levelup-banner');
+      document.getElementById('levelup-title').textContent = `You have reached Level ${data.newLevel}!`;
+      banner.classList.add('show');
+      addLog(`<span class="levelup">⚔ Level ${data.newLevel} achieved! You have been granted 3 stat points.</span>`);
+      showToast(`Level ${data.newLevel}! 3 stat points awarded.`, true);
+      setTimeout(() => banner.classList.remove('show'), 6000);
+    }
+
+    await loadPlayer();
   }
 
   async function spendStat(stat){
+    let data;
     try {
-      const res = await fetch('/api/spend-stat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stat })
-      });
-      const data = await res.json();
-      if(!res.ok){ showToast(data.error); return; }
-      addLog(`You focus your gained strength into your <span class="gain">${stat}</span>. It is now ${data.newValue}.`);
-      await loadPlayer();
+      data = await apiPost('/api/spend-stat', { stat });
     } catch(e){
-      showToast('Something went wrong.');
+      showToast(e.message);
+      return;
     }
+    addLog(`You focus your gained strength into your <span class="gain">${stat}</span>. It is now ${data.newValue}.`);
+    await loadPlayer();
   }
 
   function formatLogTime(iso){
@@ -838,8 +383,5 @@
   loadActivityLog();
 </script>
 
-<script src="/nav.js"></script>
-<nav class="mobile-nav" id="mobile-nav"></nav>
 </body>
 </html>
-

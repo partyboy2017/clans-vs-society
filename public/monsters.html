@@ -6,48 +6,12 @@
 <title>Clans vs Society — Monsters</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/theme.css">
 <style>
-  :root{--bg:#1C1A17;--bg-panel:#25211C;--bg-panel-2:#2C2620;--parchment:#DCCEA6;--rust:#8B3A2A;--rust-bright:#B0492F;--brass:#B08D45;--brass-dim:#8A6F3A;--bone:#ECE4D2;--ash:#93897A;--green:#4A7C59;--green-bright:#5C9E70;--line:rgba(176,141,69,0.22);}
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg);color:var(--bone);font-family:'EB Garamond',serif;font-size:17px;line-height:1.5;min-height:100vh;}
-  .shell{display:grid;grid-template-columns:220px 1fr;grid-template-rows:54px 1fr;min-height:100vh;}
-  .topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 1.4rem;background:rgba(28,26,23,0.95);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10;}
-  .brand{display:flex;align-items:center;gap:0.6rem;font-family:'Cinzel',serif;font-size:0.9rem;letter-spacing:0.1em;text-transform:uppercase;}
-  .brand svg{width:24px;height:24px;}
-  .topbar-right{display:flex;align-items:center;gap:1.2rem;}
-  .player-name{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--brass);letter-spacing:0.08em;}
-  .logout{font-family:'JetBrains Mono',monospace;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ash);text-decoration:none;border:1px solid var(--line);padding:0.35rem 0.7rem;transition:color 0.2s,border-color 0.2s;}
-  .logout:hover{color:var(--bone);border-color:var(--brass-dim);}
-  .sidebar{background:var(--bg-panel);border-right:1px solid var(--line);padding:1.4rem 0;display:flex;flex-direction:column;gap:0.2rem;}
-  .nav-label{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ash);padding:0.8rem 1.2rem 0.4rem;}
-  .nav-item{display:flex;align-items:center;gap:0.7rem;padding:0.6rem 1.2rem;color:var(--ash);text-decoration:none;font-family:'EB Garamond',serif;font-size:1rem;transition:color 0.15s,background 0.15s;border-left:2px solid transparent;cursor:pointer;}
-  .nav-item:hover{color:var(--bone);background:rgba(176,141,69,0.06);}
-  .nav-item.active{color:var(--parchment);border-left-color:var(--rust-bright);background:rgba(139,58,42,0.12);}
-  .nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:0.7;}
-  .nav-item.active svg{opacity:1;}
-  .nav-divider{height:1px;background:var(--line);margin:0.6rem 1.2rem;}
-  .main{padding:1.8rem 2rem;overflow-y:auto;}
-  .page-title{font-family:'Cinzel',serif;font-size:1.3rem;font-weight:600;letter-spacing:0.06em;color:var(--parchment);margin-bottom:0.3rem;}
-  .page-sub{font-size:0.95rem;color:var(--ash);font-style:italic;margin-bottom:1.4rem;}
-
-  .resources{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.4rem;}
-  .resource-card{background:var(--bg-panel);border:1px solid var(--line);padding:1rem 1.1rem;}
-  .resource-label{font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--ash);margin-bottom:0.5rem;display:flex;justify-content:space-between;}
-  .resource-label span{color:var(--brass);}
-  .bar-track{height:6px;background:rgba(255,255,255,0.07);overflow:hidden;margin-bottom:0.4rem;}
-  .bar-fill{height:100%;transition:width 0.6s ease;}
-  .bar-health{background:var(--rust-bright);}
-  .bar-energy{background:var(--brass);}
-  .resource-value{font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--bone);}
-  @media(max-width:480px){.resources{grid-template-columns:1fr 1fr;}}
-
-  .status-banner{display:none;align-items:center;gap:1rem;padding:1rem 1.4rem;margin-bottom:1.4rem;border:1px solid;}
-  .status-banner.show{display:flex;}
-  .status-banner.jail{background:rgba(139,58,42,0.15);border-color:var(--rust-bright);}
-  .status-banner.hospital{background:rgba(74,124,89,0.12);border-color:var(--green);}
-  .status-icon{font-size:1.6rem;flex-shrink:0;}
-  .status-title{font-family:'Cinzel',serif;font-size:1rem;color:var(--parchment);margin-bottom:0.2rem;}
-  .status-timer{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--ash);letter-spacing:0.08em;}
+  /* ── PAGE-SPECIFIC STYLES ONLY ──
+     Tokens, shell, sidebar, resource bars, status banners, panel, log,
+     toast, modal, mobile nav all come from /theme.css. Zone cards and
+     the combat VS panel are unique to this page, so they stay here. */
 
   .zones-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.4rem;}
   .zone-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.3rem;transition:border-color 0.15s;}
@@ -67,6 +31,9 @@
   .zone-btn:hover:not(:disabled){background:var(--rust-bright);transform:translateY(-1px);}
   .zone-btn:disabled{background:var(--bg-panel-2);color:var(--ash);border:1px solid var(--line);cursor:not-allowed;transform:none;}
 
+  /* COMBAT VS PANEL — bespoke: two live gauges for one fight, distinct
+     from the page-level player HP/EN bars above, so left as custom CSS
+     rather than folded into theme.css's .resources component. */
   .combat-panel{background:var(--bg-panel);border:1px solid var(--line);padding:1.6rem;margin-bottom:1.4rem;}
   .combat-vs{display:flex;align-items:center;justify-content:center;gap:1.2rem;margin-bottom:1.6rem;}
   .combat-side{flex:1;max-width:280px;}
@@ -87,51 +54,10 @@
   .combat-btn.flee{color:var(--ash);}
   .combat-btn:disabled{opacity:0.4;cursor:not-allowed;}
 
-  .panel{background:var(--bg-panel);border:1px solid var(--line);padding:1.2rem 1.3rem;margin-top:1rem;}
-  .panel-title{font-family:'Cinzel',serif;font-size:0.82rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--parchment);margin-bottom:1rem;padding-bottom:0.6rem;border-bottom:1px solid var(--line);}
-  .log-list{display:flex;flex-direction:column;max-height:220px;overflow-y:auto;}
-  .log-entry{padding:0.5rem 0;border-bottom:1px solid rgba(176,141,69,0.08);display:flex;gap:0.8rem;font-size:0.9rem;}
-  .log-entry:last-child{border-bottom:none;}
-  .log-time{font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--ash);white-space:nowrap;padding-top:0.15rem;min-width:48px;}
-  .log-text{color:var(--bone);}
-  .win{color:var(--green-bright);}
-  .loss{color:var(--rust-bright);}
-  .gold-gain{color:var(--brass);}
-  .levelup{color:var(--brass);font-family:'Cinzel',serif;}
-
-  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:200;}
-  .modal-overlay.show{display:flex;}
-  .modal{background:var(--bg-panel);border:1px solid var(--line);padding:2rem 2.2rem;max-width:400px;width:90%;position:relative;}
-  .modal::before,.modal::after{content:"";position:absolute;left:0;right:0;height:4px;background:linear-gradient(90deg,transparent,var(--brass-dim),transparent);opacity:0.5;}
-  .modal::before{top:0;}
-  .modal::after{bottom:0;}
-  .modal-icon{font-size:2.4rem;text-align:center;margin-bottom:0.8rem;}
-  .modal-title{font-family:'Cinzel',serif;font-size:1.3rem;color:var(--parchment);text-align:center;margin-bottom:0.5rem;letter-spacing:0.06em;}
-  .modal-sub{font-size:0.95rem;color:var(--ash);font-style:italic;text-align:center;margin-bottom:1.4rem;line-height:1.6;}
-  .modal-stats{display:flex;flex-direction:column;gap:0.5rem;margin-bottom:1.4rem;}
-  .modal-stat{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:0.72rem;padding:0.4rem 0;border-bottom:1px solid rgba(176,141,69,0.1);}
-  .modal-stat:last-child{border-bottom:none;}
-  .modal-stat .label{color:var(--ash);letter-spacing:0.08em;}
-  .modal-stat .value{color:var(--bone);}
-  .modal-stat .value.pos{color:var(--green-bright);}
-  .modal-stat .value.neg{color:var(--rust-bright);}
-  .modal-close{width:100%;font-family:'JetBrains Mono',monospace;font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.8rem;border:none;cursor:pointer;background:var(--rust);color:var(--bone);transition:background 0.15s;}
-  .modal-close:hover{background:var(--rust-bright);}
-
-  .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--bg-panel-2);border:1px solid var(--brass-dim);padding:0.8rem 1.2rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;letter-spacing:0.06em;color:var(--bone);opacity:0;transform:translateY(8px);transition:opacity 0.2s,transform 0.2s;pointer-events:none;max-width:300px;z-index:100;}
-  .toast.show{opacity:1;transform:translateY(0);}
+  /* one-off log color not covered by theme.css's .gain/.loss/.levelup */
+  .log-text .gold-gain{ color: var(--brass); }
 
   @media(max-width:900px){.zones-grid{grid-template-columns:1fr;}.combat-vs{flex-direction:column;}.combat-divider{transform:rotate(90deg);}}
-  @media(max-width:800px){.shell{grid-template-columns:1fr;}.sidebar{display:none;}}
-
-  .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(28,26,23,0.97);border-top:1px solid var(--line);z-index:20;padding-bottom:env(safe-area-inset-bottom);}
-  .mobile-nav-inner{display:flex;justify-content:space-around;align-items:stretch;}
-  .mn-item{display:flex;flex-direction:column;align-items:center;gap:0.25rem;padding:0.6rem 0.3rem;color:var(--ash);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;flex:1;transition:color 0.15s;-webkit-tap-highlight-color:transparent;}
-  .mn-item.active{color:var(--parchment);}
-  .mn-item:hover{color:var(--bone);}
-  .mn-item svg{width:20px;height:20px;flex-shrink:0;}
-  @media(max-width:800px){.mobile-nav{display:block;}.main{padding:1.2rem 1rem 5rem !important;}}
-
 </style>
 </head>
 <body>
@@ -156,16 +82,16 @@
     <div class="page-title">Monsters</div>
     <div class="page-sub">Venture into the wilds and test your steel against the creatures that dwell there.</div>
 
-    <div class="resources">
+    <div class="resources two-col">
       <div class="resource-card">
-        <div class="resource-label">Health <span id="hp-val">—</span></div>
-        <div class="bar-track"><div class="bar-fill bar-health" id="hp-val-bar" style="width:0%"></div></div>
-        <div class="resource-value" id="hp-val-text">— / —</div>
+        <div class="resource-label">Health <span id="hp-pct">—</span></div>
+        <div class="bar-track"><div class="bar-fill bar-health" id="hp-bar" style="width:0%"></div></div>
+        <div class="resource-value" id="hp-text">— / —</div>
       </div>
       <div class="resource-card">
-        <div class="resource-label">Energy <span id="en-val">—</span></div>
-        <div class="bar-track"><div class="bar-fill bar-energy" id="en-val-bar" style="width:0%"></div></div>
-        <div class="resource-value" id="en-val-text">— / —</div>
+        <div class="resource-label">Energy <span id="en-pct">—</span></div>
+        <div class="bar-track"><div class="bar-fill bar-energy" id="en-bar" style="width:0%"></div></div>
+        <div class="resource-value" id="en-text">— / —</div>
       </div>
     </div>
 
@@ -241,46 +167,15 @@
 <div class="toast" id="toast"></div>
 
 <script src="/nav.js"></script>
+<script src="/ui.js"></script>
 <script>
+  /* showToast, addLog, updateResourceBars, updateStatusBanners,
+     showModal/closeModal, formatMs, apiPost all come from /ui.js now. */
+
   let myStats = null;
   let currentSession = null;
-  let jailInterval = null;
-  let jailRemainingMs = 0;
-  let hospitalRemainingMs = 0;
   let isRestricted = false;
   let actionInFlight = false;
-
-  function showToast(msg){ const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800); }
-
-  function addLog(text){
-    const list = document.getElementById('log-list');
-    const ph = document.getElementById('log-placeholder');
-    if(ph) ph.closest('.log-entry').remove();
-    const now = new Date();
-    const time = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
-    const entry = document.createElement('div');
-    entry.className = 'log-entry';
-    entry.innerHTML = `<span class="log-time">${time}</span><span class="log-text">${text}</span>`;
-    list.insertBefore(entry, list.firstChild);
-  }
-
-  function formatMs(ms){
-    if(ms <= 0) return '0s';
-    const s = Math.ceil(ms/1000), m = Math.floor(s/60), sec = s%60;
-    return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
-  }
-
-  function showModal(icon, title, sub, stats){
-    document.getElementById('modal-icon').textContent = icon;
-    document.getElementById('modal-title').textContent = title;
-    document.getElementById('modal-sub').textContent = sub;
-    document.getElementById('modal-stats').innerHTML = stats.map(s =>
-      `<div class="modal-stat"><span class="label">${s.label}</span><span class="value ${s.cls||''}">${s.value}</span></div>`
-    ).join('');
-    document.getElementById('modal-overlay').classList.add('show');
-  }
-
-  function closeModal(){ document.getElementById('modal-overlay').classList.remove('show'); }
 
   function renderZones(zones){
     const grid = document.getElementById('zones-grid');
@@ -316,7 +211,7 @@
     document.getElementById('monster-name').textContent = session.monsterName;
     document.getElementById('monster-level').textContent = `LEVEL ${session.monsterLevel}`;
     updateMonsterBar(session.monsterHealth, session.monsterMaxHealth);
-    updatePlayerBar(myStats.health, myStats.maxHealth);
+    updatePlayerCombatBar(myStats.health, myStats.maxHealth);
   }
 
   function showZoneSelectView(){
@@ -325,13 +220,15 @@
     document.getElementById('zone-select').style.display = 'block';
   }
 
+  // Named distinctly from ui.js's updateResourceBars — this fills the
+  // small in-fight gauges in the VS panel, not the page-level HP bar.
   function updateMonsterBar(hp, maxHp){
     const pct = Math.max(0, Math.min(100, Math.round((hp/maxHp)*100)));
     document.getElementById('monster-hp-bar').style.width = pct + '%';
     document.getElementById('monster-hp-text').textContent = `${Math.max(0,hp)} / ${maxHp}`;
   }
 
-  function updatePlayerBar(hp, maxHp){
+  function updatePlayerCombatBar(hp, maxHp){
     const pct = Math.max(0, Math.min(100, Math.round((hp/maxHp)*100)));
     document.getElementById('player-hp-bar').style.width = pct + '%';
     document.getElementById('player-hp-text').textContent = `${Math.max(0,hp)} / ${maxHp}`;
@@ -347,17 +244,12 @@
     if(actionInFlight) return;
     actionInFlight = true;
     try {
-      const res = await fetch('/api/monsters/start', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ zoneId })
-      });
-      const data = await res.json();
-      if(!res.ok){ showToast(data.error); return; }
-
-      addLog(`You venture into the <span class="win">${zoneName}</span> and encounter a <span class="loss">${data.session.monsterName}</span> (Level ${data.session.monsterLevel}).`);
+      const data = await apiPost('/api/monsters/start', { zoneId });
+      addLog(`You venture into the <span class="gain">${zoneName}</span> and encounter a <span class="loss">${data.session.monsterName}</span> (Level ${data.session.monsterLevel}).`);
       await loadPlayer();
       showCombatView(data.session);
+    } catch(e){
+      showToast(e.message);
     } finally {
       actionInFlight = false;
     }
@@ -369,13 +261,7 @@
     setCombatButtonsDisabled(true);
 
     try {
-      const res = await fetch('/api/monsters/turn', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ action })
-      });
-      const data = await res.json();
-      if(!res.ok){ showToast(data.error); return; }
+      const data = await apiPost('/api/monsters/turn', { action });
 
       if(data.fled){
         addLog(`You fled from the <span class="loss">${currentSession.monsterName}</span>.`);
@@ -387,7 +273,7 @@
 
       (data.log || []).forEach(entry => {
         if(entry.actor === 'player' && entry.action === 'attack'){
-          addLog(`You strike the ${currentSession.monsterName} for <span class="win">${entry.amount} damage</span>.`);
+          addLog(`You strike the ${currentSession.monsterName} for <span class="gain">${entry.amount} damage</span>.`);
         } else if(entry.actor === 'player' && entry.action === 'defend'){
           addLog(`You brace yourself, ready to defend.`);
         } else if(entry.actor === 'monster'){
@@ -396,7 +282,7 @@
       });
 
       if(data.won){
-        addLog(`<span class="win">You defeated the ${data.monsterName}!</span> <span class="gold-gain">+${data.goldReward} gold</span> <span class="win">+${data.xpReward} XP</span>`);
+        addLog(`<span class="gain">You defeated the ${data.monsterName}!</span> <span class="gold-gain">+${data.goldReward} gold</span> <span class="gain">+${data.xpReward} XP</span>`);
 
         const modalStats = [
           { label: 'GOLD GAINED', value: `+${data.goldReward} g`, cls: 'pos' },
@@ -405,7 +291,7 @@
 
         if(data.drops && data.drops.length){
           data.drops.forEach(d => {
-            addLog(`You found <span class="win">${d.qty}x ${d.name}</span>.`);
+            addLog(`You found <span class="gain">${d.qty}x ${d.name}</span>.`);
             modalStats.push({ label: 'ITEM FOUND', value: `${d.qty}x ${d.name}`, cls: 'pos' });
           });
         }
@@ -431,41 +317,15 @@
 
       // Ongoing — update bars from the latest session snapshot
       updateMonsterBar(data.session.monsterHealth, data.session.monsterMaxHealth);
-      updatePlayerBar(data.playerHealth, myStats.maxHealth);
+      updatePlayerCombatBar(data.playerHealth, myStats.maxHealth);
       currentSession = data.session;
 
+    } catch(e){
+      showToast(e.message);
     } finally {
       actionInFlight = false;
       setCombatButtonsDisabled(false);
     }
-  }
-
-  function startStatusTick(){
-    if(jailInterval) clearInterval(jailInterval);
-    jailInterval = setInterval(() => {
-      if(jailRemainingMs > 0){
-        jailRemainingMs = Math.max(0, jailRemainingMs - 1000);
-        document.getElementById('jail-timer').textContent = `Released in ${formatMs(jailRemainingMs)}`;
-        if(jailRemainingMs === 0){ loadZonesAndStatus(); }
-      }
-      if(hospitalRemainingMs > 0){
-        hospitalRemainingMs = Math.max(0, hospitalRemainingMs - 1000);
-        document.getElementById('hospital-timer').textContent = `Discharged in ${formatMs(hospitalRemainingMs)}`;
-        if(hospitalRemainingMs === 0){ loadZonesAndStatus(); }
-      }
-    }, 1000);
-  }
-
-  function updateResourceBars(stats){
-    const hpPct = Math.max(0, Math.min(100, Math.round((stats.health/stats.maxHealth)*100)));
-    document.getElementById('hp-val').textContent = hpPct + '%';
-    document.getElementById('hp-val-bar').style.width = hpPct + '%';
-    document.getElementById('hp-val-text').textContent = `${stats.health} / ${stats.maxHealth}`;
-
-    const enPct = Math.max(0, Math.min(100, Math.round((stats.energy/stats.maxEnergy)*100)));
-    document.getElementById('en-val').textContent = enPct + '%';
-    document.getElementById('en-val-bar').style.width = enPct + '%';
-    document.getElementById('en-val-text').textContent = `${stats.energy} / ${stats.maxEnergy}`;
   }
 
   async function loadPlayer(){
@@ -476,31 +336,15 @@
     document.getElementById('player-name').textContent = data.username;
     updateResourceBars(myStats);
 
-    const now = Date.now();
     isRestricted = myStats.inJail || myStats.inHospital;
 
-    const jailBanner = document.getElementById('jail-banner');
-    const hospitalBanner = document.getElementById('hospital-banner');
-
-    if(myStats.inJail && myStats.jailUntil){
-      jailBanner.classList.add('show');
-      jailRemainingMs = Math.max(0, new Date(myStats.jailUntil).getTime() - now);
-      document.getElementById('jail-timer').textContent = `Released in ${formatMs(jailRemainingMs)}`;
-    } else {
-      jailBanner.classList.remove('show');
-      jailRemainingMs = 0;
-    }
-
-    if(myStats.inHospital && myStats.hospitalUntil){
-      hospitalBanner.classList.add('show');
-      hospitalRemainingMs = Math.max(0, new Date(myStats.hospitalUntil).getTime() - now);
-      document.getElementById('hospital-timer').textContent = `Discharged in ${formatMs(hospitalRemainingMs)}`;
-    } else {
-      hospitalBanner.classList.remove('show');
-      hospitalRemainingMs = 0;
-    }
-
-    startStatusTick();
+    updateStatusBanners(
+      {
+        inJail: myStats.inJail, jailUntil: myStats.jailUntil,
+        inHospital: myStats.inHospital, hospitalUntil: myStats.hospitalUntil,
+      },
+      loadZonesAndStatus // re-fetch once a timer expires
+    );
   }
 
   async function loadZonesAndStatus(){

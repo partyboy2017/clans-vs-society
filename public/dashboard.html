@@ -530,7 +530,7 @@
       </div>
     </div>
 
-    <div class="grid-2">
+    <div class="grid-1">
 
       <!-- STATS -->
       <div class="panel">
@@ -584,19 +584,12 @@
         </div>
       </div>
 
-      <!-- QUICK ACTIONS -->
-      <div class="panel">
-        <div class="panel-title">Quick Actions</div>
-        <div class="action-list" id="action-list">
-          <div class="action-item" id="action-patrol" onclick="doAction('patrol')">
-            <div>
-              <div class="action-name">Patrol the Roads</div>
-              <div class="action-desc">Collect tolls from passing merchants</div>
-            </div>
-            <div class="action-cost">10 ENERGY</div>
-          </div>
+      <!-- ACTIONS -->
+      <div class="panel" style="margin-top:1rem;">
+        <div class="panel-title">Actions</div>
+        <div class="action-list">
           <div class="action-item" id="action-rest" onclick="doAction('rest')">
-            <div>
+            <div class="action-info">
               <div class="action-name">Rest at the Inn</div>
               <div class="action-desc">Restore health and recover energy</div>
             </div>
@@ -742,9 +735,6 @@
   }
 
   function updateActionStates(stats){
-    const patrolEl = document.getElementById('action-patrol');
-    if (patrolEl) patrolEl.classList.toggle('disabled', stats.energy < 10);
-
     const restEl = document.getElementById('action-rest');
     if (restEl) restEl.classList.toggle('disabled', stats.gold < 30);
   }
@@ -779,9 +769,7 @@
         return;
       }
 
-      if(action === 'patrol'){
-        addLog(`You patrol the king's road and collect tolls. A merchant grumbles but pays. <span class="gain">+${data.goldGain} gold</span> <span class="gain">+${data.xpGain} xp</span>`);
-      } else if(action === 'rest'){
+      if(action === 'rest'){
         addLog(`You rest at the inn. The straw mattress is rough but the fire is warm. <span class="gain">Health & Energy restored</span>`);
       }
 

@@ -6,29 +6,15 @@
 <title>Clans vs Society — Map of Karthûl</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/theme.css">
 <style>
-  :root{--bg:#1C1A17;--bg-panel:#25211C;--bg-panel-2:#2C2620;--parchment:#DCCEA6;--rust:#8B3A2A;--rust-bright:#B0492F;--brass:#B08D45;--brass-dim:#8A6F3A;--bone:#ECE4D2;--ash:#93897A;--green-bright:#5C9E70;--line:rgba(176,141,69,0.22);}
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg);color:var(--bone);font-family:'EB Garamond',serif;font-size:17px;line-height:1.5;min-height:100vh;}
-  .shell{display:grid;grid-template-columns:220px 1fr;grid-template-rows:54px 1fr;min-height:100vh;}
-  .topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 1.4rem;background:rgba(28,26,23,0.95);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10;}
-  .brand{display:flex;align-items:center;gap:0.6rem;font-family:'Cinzel',serif;font-size:0.9rem;letter-spacing:0.1em;text-transform:uppercase;}
-  .brand svg{width:24px;height:24px;}
-  .topbar-right{display:flex;align-items:center;gap:1.2rem;}
-  .player-name{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--brass);letter-spacing:0.08em;}
-  .logout{font-family:'JetBrains Mono',monospace;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ash);text-decoration:none;border:1px solid var(--line);padding:0.35rem 0.7rem;transition:color 0.2s,border-color 0.2s;}
-  .logout:hover{color:var(--bone);border-color:var(--brass-dim);}
-  .sidebar{background:var(--bg-panel);border-right:1px solid var(--line);padding:1.4rem 0;display:flex;flex-direction:column;gap:0.2rem;}
-  .nav-label{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ash);padding:0.8rem 1.2rem 0.4rem;}
-  .nav-item{display:flex;align-items:center;gap:0.7rem;padding:0.6rem 1.2rem;color:var(--ash);text-decoration:none;font-family:'EB Garamond',serif;font-size:1rem;transition:color 0.15s,background 0.15s;border-left:2px solid transparent;cursor:pointer;}
-  .nav-item:hover{color:var(--bone);background:rgba(176,141,69,0.06);}
-  .nav-item.active{color:var(--parchment);border-left-color:var(--rust-bright);background:rgba(139,58,42,0.12);}
-  .nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:0.7;}
-  .nav-item.active svg{opacity:1;}
-  .nav-divider{height:1px;background:var(--line);margin:0.6rem 1.2rem;}
-  .main{padding:1.8rem 2rem;overflow-y:auto;}
-  .page-title{font-family:'Cinzel',serif;font-size:1.3rem;font-weight:600;letter-spacing:0.06em;color:var(--parchment);margin-bottom:0.3rem;}
-  .page-sub{font-size:0.95rem;color:var(--ash);font-style:italic;margin-bottom:1.4rem;}
+  /* ── PAGE-SPECIFIC STYLES ONLY ──
+     Tokens, shell, sidebar, panel, toast, .modal-overlay/.modal shell,
+     .btn/.btn-primary, mobile nav all come from /theme.css. The map
+     image, POI pins, wagon workshop, and the POI detail content
+     (renamed to poi-* to avoid colliding with theme.css's centered
+     .modal-title/.modal-sub, since this modal's content is left-aligned
+     info-card style rather than the icon-centered result popups). */
 
   .map-panel{background:var(--bg-panel);border:1px solid var(--line);padding:0.8rem;margin-bottom:1.2rem;}
   .map-image-wrap{position:relative;width:100%;line-height:0;}
@@ -58,36 +44,24 @@
   .wagon-req-fill{height:100%;background:var(--brass);transition:width 0.4s;}
   .wagon-req-fill.complete{background:var(--green-bright);}
   .wagon-req-count{font-family:'JetBrains Mono',monospace;font-size:0.68rem;color:var(--ash);min-width:50px;text-align:right;}
-  .wagon-build-btn{width:100%;margin-top:1.2rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.9rem;border:none;cursor:pointer;background:var(--rust);color:var(--bone);transition:background 0.15s;}
-  .wagon-build-btn:hover:not(:disabled){background:var(--rust-bright);}
-  .wagon-build-btn:disabled{background:var(--bg-panel-2);color:var(--ash);border:1px solid var(--line);cursor:not-allowed;}
   .wagon-owned{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.3rem 0.7rem;border:1px solid var(--green-bright);color:var(--green-bright);}
 
-  .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--bg-panel-2);border:1px solid var(--brass-dim);padding:0.8rem 1.2rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;letter-spacing:0.06em;color:var(--bone);opacity:0;transform:translateY(8px);transition:opacity 0.2s,transform 0.2s;pointer-events:none;max-width:300px;z-index:100;}
-  .toast.show{opacity:1;transform:translateY(0);}
+  /* Reuse theme.css's .btn/.btn-primary look, only the sizing differs */
+  .btn{ width:100%; padding:0.9rem; font-size:0.75rem; }
 
-  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:200;padding:1.5rem;}
-  .modal-overlay.show{display:flex;}
-  .modal{background:var(--bg-panel);border:1px solid var(--line);padding:1.8rem 2rem;max-width:420px;width:100%;position:relative;}
-  .modal::before,.modal::after{content:"";position:absolute;left:0;right:0;height:4px;background:linear-gradient(90deg,transparent,var(--brass-dim),transparent);opacity:0.5;}
-  .modal::before{top:0;} .modal::after{bottom:0;}
-  .modal-region{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--brass);margin-bottom:0.5rem;}
-  .modal-title{font-family:'Cinzel',serif;font-size:1.3rem;color:var(--parchment);margin-bottom:0.6rem;}
-  .modal-desc{font-size:0.95rem;color:var(--bone);line-height:1.65;margin-bottom:1rem;}
-  .modal-status{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.25rem 0.6rem;border:1px solid var(--brass-dim);color:var(--brass);margin-bottom:1.2rem;}
-  .modal-status.live{color:var(--green-bright);border-color:var(--green-bright);}
-  .modal-travel{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--brass);margin-bottom:1rem;padding:0.6rem 0.8rem;background:var(--bg-panel-2);border:1px solid var(--line);}
-  .modal-close{width:100%;font-family:'JetBrains Mono',monospace;font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.8rem;border:none;cursor:pointer;background:var(--rust);color:var(--bone);transition:background 0.15s;}
-  .modal-close:hover{background:var(--rust-bright);}
+  /* ── POI DETAIL MODAL CONTENT ──
+     Uses theme.css's shared .modal-overlay/.modal shell + .modal-close
+     button, but the inner content is left-aligned "info card" style
+     rather than the centered icon/title/stats-list layout used by the
+     raid/monster result popups — hence the distinct poi-* class names. */
+  .poi-region{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--brass);margin-bottom:0.5rem;}
+  .poi-title{font-family:'Cinzel',serif;font-size:1.3rem;color:var(--parchment);margin-bottom:0.6rem;}
+  .poi-desc{font-size:0.95rem;color:var(--bone);line-height:1.65;margin-bottom:1rem;}
+  .poi-status{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.25rem 0.6rem;border:1px solid var(--brass-dim);color:var(--brass);margin-bottom:1.2rem;}
+  .poi-status.live{color:var(--green-bright);border-color:var(--green-bright);}
+  .poi-travel{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--brass);margin-bottom:1rem;padding:0.6rem 0.8rem;background:var(--bg-panel-2);border:1px solid var(--line);}
 
-  @media(max-width:800px){.shell{grid-template-columns:1fr;}.sidebar{display:none;}.poi-pin{width:16px;height:16px;} .poi-tooltip{display:none;}}
-  .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(28,26,23,0.97);border-top:1px solid var(--line);z-index:20;padding-bottom:env(safe-area-inset-bottom);}
-  .mobile-nav-inner{display:flex;justify-content:space-around;align-items:stretch;}
-  .mn-item{display:flex;flex-direction:column;align-items:center;gap:0.25rem;padding:0.6rem 0.3rem;color:var(--ash);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;flex:1;transition:color 0.15s;-webkit-tap-highlight-color:transparent;}
-  .mn-item.active{color:var(--parchment);}
-  .mn-item:hover{color:var(--bone);}
-  .mn-item svg{width:20px;height:20px;flex-shrink:0;}
-  @media(max-width:800px){.mobile-nav{display:block;}.main{padding:1.2rem 1rem 5rem !important;}}
+  @media(max-width:800px){.poi-pin{width:16px;height:16px;} .poi-tooltip{display:none;}}
 </style>
 </head>
 <body>
@@ -112,14 +86,6 @@
     <div class="page-title">Map of Karthûl</div>
     <div class="page-sub">A fallen kingdom's known lands. Click a point of interest to learn more.</div>
 
-    <div class="info-card" id="travel-status-banner" style="display:none; border-color: var(--brass-dim); flex-direction:row; align-items:center; justify-content:space-between; gap:1rem;">
-      <div>
-        <div class="info-title" style="margin-bottom:0.3rem;">You Are On the Road</div>
-        <div class="info-desc" id="travel-status-text" style="margin:0;">—</div>
-      </div>
-      <button class="wagon-build-btn" style="width:auto;margin-top:0;padding:0.7rem 1.2rem;white-space:nowrap;" onclick="if(currentTravel) window.location.href='/traveling?to='+currentTravel.cityId;">View Journey</button>
-    </div>
-
     <div class="map-panel">
       <div class="map-image-wrap" id="map-wrap">
         <img class="map-image" src="/assets/map/karthul-map.png" alt="Map of the Realm of Karthûl">
@@ -142,26 +108,33 @@
       <div class="info-title">Wagon Workshop</div>
       <div class="info-desc" id="wagon-sub">Loading...</div>
       <div id="wagon-progress" style="margin-top:1rem;"></div>
-      <button class="wagon-build-btn" id="wagon-build-btn" onclick="buildWagon()" style="display:none;">Build Basic Wagon</button>
+      <button class="btn btn-primary" id="wagon-build-btn" onclick="buildWagon()" style="display:none;">Build Basic Wagon</button>
     </div>
   </main>
 </div>
 
 <div class="modal-overlay" id="modal-overlay">
   <div class="modal">
-    <div class="modal-region" id="modal-region"></div>
-    <div class="modal-title" id="modal-title"></div>
-    <div class="modal-status" id="modal-status"></div>
-    <div class="modal-travel" id="modal-travel"></div>
-    <div class="modal-desc" id="modal-desc"></div>
-    <button class="wagon-build-btn" id="modal-travel-btn" style="margin-bottom:0.7rem;display:none;"></button>
+    <div class="poi-region" id="modal-region"></div>
+    <div class="poi-title" id="modal-title"></div>
+    <div class="poi-status" id="modal-status"></div>
+    <div class="poi-travel" id="modal-travel"></div>
+    <div class="poi-desc" id="modal-desc"></div>
+    <button class="btn btn-primary" id="modal-travel-btn" style="margin-bottom:0.7rem;display:none;"></button>
     <button class="modal-close" onclick="closeModal()">Close</button>
   </div>
 </div>
 
 <script src="/nav.js"></script>
+<script src="/ui.js"></script>
 <div class="toast" id="toast"></div>
 <script>
+  /* showToast and apiPost come from /ui.js now. closeModal() also comes
+     from /ui.js — this page still uses its own openPoi() to populate
+     the shared modal shell since the content shape here (left-aligned
+     region/title/status/travel/desc) differs from ui.js's showModal()
+     (centered icon/title/sub + stat rows). */
+
   // Coordinates are percentages of the image's width/height, so markers stay
   // pinned to the artwork regardless of how large the image renders.
   // Travel time is expressed in hours (not days) so a trip is a short-lived
@@ -184,7 +157,7 @@
       travelHours: 4, mode: 'road', cityId: 'tempest-haven' },
     { name: 'Drakenholm', region: 'Isle of Legends', x: 82.4, y: 27.0,
       desc: 'A floating isle wreathed in storm clouds, spoken of more in legend than in any confirmed sighting.',
-      travelHours: 3, mode: 'sea', cityId: 'drakenholm' },
+      travelHours: 3, mode: 'sea' },
     { name: 'Sunspear Oasis', region: 'Sandscarre — The Endless Dunes', x: 22.1, y: 74.7,
       desc: 'The only reliable water for a hundred miles in any direction — and fiercely contested for it.',
       travelHours: 5, mode: 'road', cityId: 'sunspear-oasis' },
@@ -235,44 +208,9 @@
 
   let hasWagon = false;
   let wagonTier = 0;
-  let currentTravel = null; // populated by loadTravelStatus(); { cityId, name, arrivesAt, remainingMs } or null
-
-  function formatDuration(ms){
-    if (ms <= 0) return '0s';
-    let totalSeconds = Math.ceil(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    totalSeconds -= hours * 3600;
-    const minutes = Math.floor(totalSeconds / 60);
-    if (hours > 0) return `${hours}h ${minutes}m`;
-    return `${minutes}m`;
-  }
-
-  async function loadTravelStatus(){
-    try {
-      const status = await fetch('/api/travel/status').then(r => r.json());
-      currentTravel = status.traveling ? status : null;
-      const banner = document.getElementById('travel-status-banner');
-      if (!banner) return;
-      if (currentTravel) {
-        banner.style.display = 'flex';
-        document.getElementById('travel-status-text').textContent =
-          `You set out for ${currentTravel.name} and have ${formatDuration(currentTravel.remainingMs)} left on the road.`;
-      } else {
-        banner.style.display = 'none';
-      }
-    } catch (e) {
-      console.error('loadTravelStatus error:', e);
-    }
-  }
 
   function openPoi(poi){
     if (poi.href) {
-      if (currentTravel) {
-        // Don't silently cancel an in-progress journey — send them to watch
-        // it instead of teleporting home.
-        window.location.href = `/traveling?to=${currentTravel.cityId}`;
-        return;
-      }
       fetch('/api/travel/home', { method: 'POST' }).catch(() => {}).finally(() => {
         window.location.href = poi.href;
       });
@@ -286,21 +224,10 @@
     const travelEl = document.getElementById('modal-travel');
     const travelBtn = document.getElementById('modal-travel-btn');
 
-    if (currentTravel) {
-      // Already on the road somewhere — no starting a second journey.
-      const toSameCity = poi.cityId && currentTravel.cityId === poi.cityId;
-      statusEl.textContent = toSameCity ? 'You are already headed here' : 'You are already traveling';
-      statusEl.className = 'modal-status';
-      travelEl.textContent = `${formatDuration(currentTravel.remainingMs)} remaining to ${currentTravel.name}.`;
-      travelEl.style.display = 'block';
-      travelBtn.style.display = 'block';
-      travelBtn.disabled = false;
-      travelBtn.textContent = 'View Journey';
-      travelBtn.onclick = () => { window.location.href = `/traveling?to=${currentTravel.cityId}`; };
-    } else if (!poi.cityId) {
+    if (!poi.cityId) {
       // No hub page built for this settlement yet.
       statusEl.textContent = 'Uncharted — coming soon';
-      statusEl.className = 'modal-status';
+      statusEl.className = 'poi-status';
       travelEl.textContent = hasWagon
         ? formatTravelTime(poi.travelHours, poi.mode)
         : '🔒 A wagon is required to travel this far. Build one below (Level 10+).';
@@ -308,38 +235,16 @@
       travelBtn.style.display = 'none';
     } else if (hasWagon) {
       statusEl.textContent = 'Charted — ready to visit';
-      statusEl.className = 'modal-status live';
+      statusEl.className = 'poi-status live';
       travelEl.textContent = formatTravelTime(poi.travelHours, poi.mode);
       travelEl.style.display = 'block';
       travelBtn.style.display = 'block';
       travelBtn.disabled = false;
       travelBtn.textContent = `Travel to ${poi.name}`;
-      travelBtn.onclick = async () => {
-        travelBtn.disabled = true;
-        travelBtn.textContent = 'Setting out...';
-        try {
-          const res = await fetch('/api/travel/start', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cityId: poi.cityId }),
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            showToast(data.error || 'Could not begin the journey.');
-            travelBtn.disabled = false;
-            travelBtn.textContent = `Travel to ${poi.name}`;
-            return;
-          }
-          window.location.href = `/traveling?to=${poi.cityId}`;
-        } catch (e) {
-          showToast('Something went wrong. Try again.');
-          travelBtn.disabled = false;
-          travelBtn.textContent = `Travel to ${poi.name}`;
-        }
-      };
+      travelBtn.onclick = () => { window.location.href = `/city/${poi.cityId}`; };
     } else {
       statusEl.textContent = 'Charted — wagon required';
-      statusEl.className = 'modal-status';
+      statusEl.className = 'poi-status';
       travelEl.textContent = '🔒 A wagon is required to travel this far. Build one below (Level 10+).';
       travelEl.style.display = 'block';
       travelBtn.style.display = 'block';
@@ -348,10 +253,6 @@
     }
 
     document.getElementById('modal-overlay').classList.add('show');
-  }
-
-  function closeModal(){
-    document.getElementById('modal-overlay').classList.remove('show');
   }
 
   async function loadWagonStatus(){
@@ -410,24 +311,17 @@
     }
   }
 
-  function showToast(msg){ const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800); }
-
   async function buildWagon(){
     const btn = document.getElementById('wagon-build-btn');
     btn.disabled = true;
     btn.textContent = 'Building...';
     try {
-      const res = await fetch('/api/wagon/build', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) {
-        showToast(data.error);
-        await loadWagonStatus();
-        return;
-      }
+      await apiPost('/api/wagon/build');
       showToast('Wagon upgraded! Travel times just got shorter.');
       await loadWagonStatus();
     } catch (e) {
-      console.error('buildWagon error:', e);
+      showToast(e.message);
+      await loadWagonStatus();
     }
   }
 
@@ -441,7 +335,6 @@
   buildMarkers();
   loadPlayer();
   loadWagonStatus();
-  loadTravelStatus();
 </script>
 <nav class="mobile-nav" id="mobile-nav"></nav>
 </body>

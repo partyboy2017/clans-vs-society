@@ -613,6 +613,7 @@ app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'em
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/' }),
   (req, res) => {
+    logActivity(req.user.id, 'account', 'Logged in with Google.');
     if (!req.user.characterName)  return res.redirect('/choose-name');
     if (!req.user.characterClass) return res.redirect('/choose-class');
     res.redirect('/dashboard');
@@ -789,6 +790,7 @@ app.post('/api/choose-name', validate(schemas.chooseName), async (req, res) => {
     const exists = await prisma.user.findFirst({ where: { characterName: clean } });
     if (exists) return res.status(409).json({ error: 'That name is already taken' });
     await prisma.user.update({ where: { id: req.user.id }, data: { characterName: clean } });
+    logActivity(req.user.id, 'account', `Chose character name "${clean}".`);
 
     // Refresh session so the new characterName is visible immediately.
     const updatedUser = await prisma.user.findUnique({
@@ -840,6 +842,8 @@ app.post('/api/choose-class', validate(schemas.chooseClass), async (req, res) =>
         create: { userId: req.user.id, ...startingStats },
       }),
     ]);
+
+    logActivity(req.user.id, 'account', `Chose the ${cls.label} class.`);
 
     // Refresh the session so req.user.characterClass is set before the
     // client redirects to /dashboard (which guards on it).
@@ -1382,6 +1386,9 @@ app.post('/api/market/buy', validate(schemas.marketBuy), async (req, res) => {
       return found;
     });
 
+    logActivity(req.user.id, 'market', `Bought ${listing.quantity}x ${listing.item.name} from the market for ${listing.price} gold.`);
+    logActivity(listing.sellerId, 'market', `Sold ${listing.quantity}x ${listing.item.name} on the market for ${listing.price} gold.`);
+
     res.json({ ok: true, item: listing.item.name });
   } catch (e) {
     if (e.code === 'NOT_FOUND')   return res.status(404).json({ error: 'Listing no longer available' });
@@ -1405,6 +1412,8 @@ app.post('/api/market/list', validate(schemas.marketList), async (req, res) => {
   } else {
     await prisma.inventory.update({ where: { id: inv.id }, data: { quantity: inv.quantity - quantity } });
   }
+  const listedItem = await prisma.item.findUnique({ where: { id: inv.itemId }, select: { name: true } });
+  logActivity(req.user.id, 'market', `Listed ${quantity}x ${listedItem?.name || 'item'} on the market for ${price} gold.`);
   res.json({ ok: true });
 });
 
@@ -2523,6 +2532,7 @@ app.get('/api/cities/:cityId', async (req, res) => {
     // it as their current location so other systems can key off it later.
     if (stats?.hasWagon && stats.currentCityId !== city.id) {
       await prisma.stats.update({ where: { userId: req.user.id }, data: { currentCityId: city.id } });
+      logActivity(req.user.id, 'travel', `Arrived in ${city.name}.`);
     }
 
     res.json({
@@ -2551,6 +2561,7 @@ app.post('/api/travel/home', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   try {
     await prisma.stats.update({ where: { userId: req.user.id }, data: { currentCityId: null } });
+    logActivity(req.user.id, 'travel', 'Returned home to Aurelia.');
     res.json({ ok: true, currentCityId: null });
   } catch (e) {
     logError('/api/travel/home error:', e);
@@ -2570,6 +2581,109 @@ app.get('/api/activity', async (req, res) => {
     res.json({ entries });
   } catch (e) {
     logError('/api/activity error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// ─── ADMIN PORTAL ─────────────────────────────────────────────────────────────
+// Admin access is controlled by User.isAdmin. There is deliberately no API for
+// granting it — set it directly in the database:
+//   UPDATE "User" SET "isAdmin" = true WHERE email = 'you@example.com';
+// The page lives outside /public so express.static can't serve it to non-admins.
+
+// req.user comes from deserializeUser, which re-reads the User row on every
+// request, so revoking isAdmin takes effect immediately.
+function requireAdmin(req, res, next) {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  if (!req.user.isAdmin)      return res.status(403).json({ error: 'Forbidden' });
+  next();
+}
+
+app.get('/admin', (req, res) => {
+  if (!req.isAuthenticated()) return res.redirect('/');
+  if (!req.user.isAdmin)      return res.status(403).send('Forbidden');
+  res.sendFile(path.join(__dirname, 'admin', 'admin.html'));
+});
+
+// Player list / search by character name, username or email.
+app.get('/api/admin/players', requireAdmin, async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 64);
+  try {
+    const players = await prisma.user.findMany({
+      where: q ? {
+        OR: [
+          { characterName: { contains: q, mode: 'insensitive' } },
+          { username:      { contains: q, mode: 'insensitive' } },
+          { email:         { contains: q, mode: 'insensitive' } },
+        ],
+      } : undefined,
+      select: {
+        id: true, username: true, characterName: true, characterClass: true,
+        email: true, lastLoginAt: true, createdAt: true,
+        stats: { select: { level: true } },
+      },
+      orderBy: { lastLoginAt: { sort: 'desc', nulls: 'last' } },
+      take: 50,
+    });
+    res.json({ players });
+  } catch (e) {
+    logError('/api/admin/players error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// Per-player audit log: category counts plus a page of entries, optionally
+// filtered to one category. Cursor pagination on id (newest first).
+app.get('/api/admin/players/:id/audit', requireAdmin, async (req, res) => {
+  const userId = parseInt(req.params.id, 10);
+  if (!Number.isInteger(userId)) return res.status(400).json({ error: 'Bad player id' });
+
+  const category = req.query.category ? String(req.query.category).slice(0, 32) : null;
+  const limit    = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+  const before   = parseInt(req.query.before, 10);
+
+  try {
+    const player = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true, username: true, characterName: true, characterClass: true,
+        email: true, lastLoginAt: true, createdAt: true,
+        stats: { select: { level: true, gold: true, inJail: true, inHospital: true } },
+      },
+    });
+    if (!player) return res.status(404).json({ error: 'Player not found' });
+
+    const [counts, rows] = await Promise.all([
+      prisma.activityLog.groupBy({
+        by: ['category'],
+        where: { userId },
+        _count: { _all: true },
+        _max: { createdAt: true },
+      }),
+      prisma.activityLog.findMany({
+        where: {
+          userId,
+          ...(category ? { category } : {}),
+          ...(Number.isInteger(before) ? { id: { lt: before } } : {}),
+        },
+        orderBy: { id: 'desc' },
+        take: limit + 1,
+      }),
+    ]);
+
+    const hasMore = rows.length > limit;
+    const entries = hasMore ? rows.slice(0, limit) : rows;
+
+    res.json({
+      player,
+      categories: counts
+        .map(c => ({ category: c.category, count: c._count._all, lastAt: c._max.createdAt }))
+        .sort((a, b) => b.count - a.count),
+      entries,
+      nextBefore: hasMore ? entries[entries.length - 1].id : null,
+    });
+  } catch (e) {
+    logError('/api/admin/players/:id/audit error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });

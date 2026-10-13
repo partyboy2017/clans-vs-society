@@ -22,6 +22,7 @@ model User {
   characterName  String?
   characterClass String?
   lastLoginAt    DateTime?
+  isAdmin        Boolean      @default(false)
   createdAt      DateTime     @default(now())
   stats          Stats?
   houseMember    HouseMember?
@@ -36,11 +37,12 @@ model ActivityLog {
   id        Int      @id @default(autoincrement())
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
-  category  String   // 'training' | 'raid' | 'monster' | 'inventory' | 'level' | 'status' | 'travel'
+  category  String   // 'training' | 'raid' | 'monster' | 'inventory' | 'level' | 'status' | 'travel' | 'market' | 'account' | 'feedback'
   message   String
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+  @@index([userId, category, createdAt])
 }
 
 model Stats {

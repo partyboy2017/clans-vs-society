@@ -167,6 +167,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="/nav.js"></script>
+<script src="/energy-timer.js"></script>
 <script src="/ui.js"></script>
 <script>
   /* showToast, addLog, updateResourceBars, updateStatusBanners,
@@ -367,6 +368,14 @@
   async function init(){
     await loadZonesAndStatus();
   }
+
+  // Energy regen tick landed (energy-timer.js) — refresh zone buttons.
+  document.addEventListener('energy:update', async (e) => {
+    if (myStats) myStats.energy = e.detail.energy;
+    if (currentSession || document.getElementById('zone-select').style.display === 'none') return;
+    const zonesData = await fetch('/api/monsters/zones').then(r => r.json()).catch(() => null);
+    if (zonesData) renderZones(zonesData.zones);
+  });
 
   init();
 </script>

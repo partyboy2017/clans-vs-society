@@ -733,21 +733,29 @@ app.post('/api/logout', (req, res) => {
 
 // ─── API: player data ─────────────────────────────────────────────────────────
 
-app.get('/api/me', (req, res) => {
+app.get('/api/me', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
-  const stats      = req.user.stats;
+
+  // Apply any pending passive regen so the numbers and timers are current.
+  let stats = req.user.stats;
+  if (stats) {
+    try {
+      await regenEnergy(req.user.id);
+      stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    } catch (err) {
+      logError('[api/me] energy regen failed', err);
+    }
+  }
+
   const now        = Date.now();
   const lastRestAt = stats?.lastRestAt;
-  const lastEnergyAt = stats?.lastEnergyAt;
 
   const restCooldownMs = lastRestAt
     ? Math.max(0, new Date(lastRestAt).getTime() + REST_COOLDOWN_MS - now)
     : 0;
 
-  // How many ms until the next energy tick (for UI countdown)
-  const nextEnergyTickMs = lastEnergyAt && stats.energy < stats.maxEnergy
-    ? Math.max(0, new Date(lastEnergyAt).getTime() + ENERGY_REGEN_INTERVAL_MS - now)
-    : null;
+  // How long until the next energy tick and until energy is full (for UI countdowns)
+  const { nextTickMs, fullMs } = energyTimers(stats, now);
 
   res.json({
     username:        req.user.characterName || req.user.username,
@@ -763,7 +771,8 @@ app.get('/api/me', (req, res) => {
     energyRegen: {
       amount:       ENERGY_REGEN_AMOUNT,
       intervalMs:   ENERGY_REGEN_INTERVAL_MS,
-      nextTickMs:   nextEnergyTickMs,
+      nextTickMs,
+      fullMs,
     },
   });
 });
@@ -875,6 +884,7 @@ async function energyCost(base, characterClass, userId) {
 app.post('/api/action/train', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { characterClass } = req.user;
+  await regenEnergy(req.user.id);
   const cost = await energyCost(20, characterClass, req.user.id);
 
   // Atomic energy deduct — rejects if energy is insufficient.
@@ -1089,6 +1099,7 @@ app.post('/api/action/skill', validate(schemas.skillKey), async (req, res) => {
 
   // Helper: atomically deduct energy, returns false if insufficient.
   async function deductEnergy(cost) {
+    await regenEnergy(req.user.id);
     const r = await prisma.stats.updateMany({
       where: { userId: req.user.id, energy: { gte: cost } },
       data:  { energy: { decrement: cost } },
@@ -1597,6 +1608,7 @@ const TRAINING_CONFIG = {
 
 app.get('/api/training/status', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  await regenEnergy(req.user.id);
   const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
   const now = Date.now();
   const cooldowns = {};
@@ -1615,6 +1627,7 @@ app.post('/api/training/train', validate(schemas.trainingTrain), async (req, res
   const cfg = TRAINING_CONFIG[stat];
   if (!cfg) return res.status(400).json({ error: 'Invalid stat' });
 
+  await regenEnergy(req.user.id);
   const now    = new Date();
   const cutoff = new Date(now.getTime() - TRAINING_COOLDOWN_MS);
 
@@ -1721,11 +1734,18 @@ async function regenEnergy(userId) {
     where:  { userId },
     select: { energy: true, maxEnergy: true, lastEnergyAt: true },
   });
+  if (!stats) return;
 
-  if (stats.energy >= stats.maxEnergy) return; // already full, nothing to do
+  const now = new Date();
 
-  const now       = new Date();
-  const lastAt    = stats.lastEnergyAt ?? now;
+  // While full (or never started), keep the clock pinned to "now" so the first
+  // regen tick lands a full interval after energy is spent — no free instant tick.
+  if (stats.energy >= stats.maxEnergy || !stats.lastEnergyAt) {
+    await prisma.stats.update({ where: { userId }, data: { lastEnergyAt: now } });
+    return;
+  }
+
+  const lastAt    = stats.lastEnergyAt;
   const elapsed   = now - lastAt;
   const intervals = Math.floor(elapsed / ENERGY_REGEN_INTERVAL_MS);
 
@@ -1734,12 +1754,27 @@ async function regenEnergy(userId) {
   const gained    = intervals * ENERGY_REGEN_AMOUNT;
   const newEnergy = Math.min(stats.energy + gained, stats.maxEnergy);
   // Advance lastEnergyAt by exactly the intervals consumed — preserves leftover time.
-  const newLastAt = new Date(lastAt.getTime() + intervals * ENERGY_REGEN_INTERVAL_MS);
+  // If this tick filled the bar, restart the clock from now instead.
+  const newLastAt = newEnergy >= stats.maxEnergy
+    ? now
+    : new Date(lastAt.getTime() + intervals * ENERGY_REGEN_INTERVAL_MS);
 
   await prisma.stats.update({
     where: { userId },
     data:  { energy: newEnergy, lastEnergyAt: newLastAt },
   });
+}
+
+// Countdown info for the UI: ms until the next +N tick and until the bar is full.
+function energyTimers(stats, now = Date.now()) {
+  if (!stats || stats.energy >= stats.maxEnergy) {
+    return { nextTickMs: null, fullMs: null };
+  }
+  const lastAt     = stats.lastEnergyAt ? new Date(stats.lastEnergyAt).getTime() : now;
+  const nextTickMs = Math.max(0, lastAt + ENERGY_REGEN_INTERVAL_MS - now);
+  const ticksLeft  = Math.ceil((stats.maxEnergy - stats.energy) / ENERGY_REGEN_AMOUNT);
+  const fullMs     = nextTickMs + (ticksLeft - 1) * ENERGY_REGEN_INTERVAL_MS;
+  return { nextTickMs, fullMs };
 }
 
 async function checkStatus(userId) {

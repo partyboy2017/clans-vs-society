@@ -831,9 +831,13 @@
 
   loadPlayer();
   loadActivityLog();
+
+  // Energy regen tick landed (energy-timer.js) — refresh stats.
+  document.addEventListener('energy:update', () => loadPlayer());
 </script>
 
 <script src="/nav.js"></script>
+<script src="/energy-timer.js"></script>
 <nav class="mobile-nav" id="mobile-nav"></nav>
 </body>
 </html>

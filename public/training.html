@@ -190,6 +190,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="/nav.js"></script>
+<script src="/energy-timer.js"></script>
 <script src="/ui.js"></script>
 <script>
   /* showToast, addLog, apiPost come from /ui.js now. This page's energy
@@ -318,6 +319,15 @@
     await loadStatus();
     startTick();
   }
+
+  // Energy regen tick landed (energy-timer.js) — refresh energy + buttons.
+  document.addEventListener('energy:update', (e) => {
+    if (!currentStats) return;
+    currentStats.energy = e.detail.energy;
+    currentStats.maxEnergy = e.detail.maxEnergy;
+    updateEnergy();
+    updateStations();
+  });
 
   init();
 </script>

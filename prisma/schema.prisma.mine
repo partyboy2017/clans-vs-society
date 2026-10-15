@@ -1,0 +1,177 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id             Int          @id @default(autoincrement())
+  username       String       @unique
+  password       String?
+  googleId       String?      @unique
+  email          String?      @unique
+  googleName     String?
+  avatar         String?
+  characterName  String?
+  characterClass String?
+  lastLoginAt    DateTime?
+  createdAt      DateTime     @default(now())
+  stats          Stats?
+  houseMember    HouseMember?
+  inventory      Inventory[]
+  listings       Listing[]
+  userSkills     UserSkill[]
+  combatSession  CombatSession?
+  activityLogs   ActivityLog[]
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  category  String   // 'training' | 'raid' | 'monster' | 'inventory' | 'level' | 'status' | 'travel'
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Stats {
+  id     Int @id @default(autoincrement())
+  userId Int @unique
+
+  user User @relation(fields: [userId], references: [id])
+
+  level      Int @default(1)
+  xp         Int @default(0)
+  statPoints Int @default(0)
+
+  strength     Int @default(0)
+  defense      Int @default(0)
+  speed        Int @default(0)
+  dexterity    Int @default(0)
+  intelligence Int @default(0)
+
+  health    Int @default(100)
+  maxHealth Int @default(100)
+  energy    Int @default(100)
+  maxEnergy Int @default(100)
+
+  gold Int @default(0)
+
+  hasWagon  Boolean @default(false)
+  wagonTier Int @default(0)
+  currentCityId String?
+
+  // NEW — travel in progress
+  travelDestinationId String?
+  travelArrivalAt     DateTime?
+
+  // Real, server-tracked travel — travelArrivesAt is the source of truth for
+  // when a journey actually completes. Client UI only ever displays what the
+  // server reports; it never decides arrival on its own.
+  travelDestination String?
+  travelStartedAt   DateTime?
+  travelArrivesAt   DateTime?
+
+  lastStrengthTrain DateTime?
+  lastDefenseTrain  DateTime?
+  lastSpeedTrain    DateTime?
+  lastDexTrain      DateTime?
+
+  inJail        Boolean   @default(false)
+  jailUntil     DateTime?
+  inHospital    Boolean   @default(false)
+  hospitalUntil DateTime?
+  lastEnergyAt  DateTime?
+
+  lastRaidVillageAt  DateTime?
+  lastRaidCaravanAt  DateTime?
+  lastRaidManorAt    DateTime?
+  lastRaidTreasuryAt DateTime?
+}
+
+model UserSkill {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  skillKey   String
+  unlockedAt DateTime @default(now())
+
+  @@unique([userId, skillKey])
+}
+
+model House {
+  id        Int           @id @default(autoincrement())
+  name      String        @unique
+  motto     String        @default("Strength through unity.")
+  gold      Int           @default(0)
+  leaderId  Int           @unique
+  createdAt DateTime      @default(now())
+  members   HouseMember[]
+}
+
+model HouseMember {
+  id      Int    @id @default(autoincrement())
+  userId  Int    @unique
+  houseId Int
+  rank    String @default("Bannerman")
+  user    User   @relation(fields: [userId], references: [id])
+  house   House  @relation(fields: [houseId], references: [id])
+}
+
+model Item {
+  id          Int         @id @default(autoincrement())
+  name        String
+  description String
+  type        String
+  effect      String
+  basePrice   Int
+  icon        String      @default("/assets/items/_fallback/default-item.png")
+  listings    Listing[]
+  inventory   Inventory[]
+}
+
+model Inventory {
+  id       Int  @id @default(autoincrement())
+  userId   Int
+  itemId   Int
+  quantity Int  @default(1)
+  user     User @relation(fields: [userId], references: [id])
+  item     Item @relation(fields: [itemId], references: [id])
+}
+
+model Listing {
+  id        Int      @id @default(autoincrement())
+  sellerId  Int
+  itemId    Int
+  price     Int
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  seller    User     @relation(fields: [sellerId], references: [id])
+  item      Item     @relation(fields: [itemId], references: [id])
+}
+
+model CombatSession {
+  id               Int      @id @default(autoincrement())
+  userId           Int      @unique
+  user             User     @relation(fields: [userId], references: [id])
+
+  zoneId           String
+  monsterName      String
+  monsterLevel     Int
+  monsterMaxHealth Int
+  monsterHealth    Int
+  monsterAttack    Int
+  monsterDefense   Int
+
+  turnCount        Int      @default(0)
+  createdAt        DateTime @default(now())
+}

@@ -1,0 +1,15 @@
+
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  userId       Int?     // actor (null for anonymous/system events)
+  targetUserId Int?     // other player affected (PvP, market)
+  action       String   // e.g. 'auth.login', 'market.buy', 'raid.player'
+  metadata     Json?    // event-specific details (amounts, item ids, outcome)
+  ip           String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([action, createdAt])
+}

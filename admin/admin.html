@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Clans vs Society — Realm Keepers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/theme.css">
+<style>
+  /* ── ADMIN PAGE STYLES ── tokens + shell come from /theme.css */
+  .mono{ font-family:'JetBrains Mono',monospace; }
+  .muted{ color:var(--ash); }
+  .small{ font-size:0.82rem; }
+
+  .tabs{ display:flex; gap:0.25rem; border-bottom:1px solid var(--line); margin-bottom:1.4rem; overflow-x:auto; scrollbar-width:thin; }
+  .tab{ font-family:'JetBrains Mono',monospace; font-size:0.68rem; letter-spacing:0.08em; text-transform:uppercase; padding:0.65rem 0.85rem; color:var(--ash); background:none; border:none; border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; display:flex; align-items:center; gap:0.4rem; }
+  .tab:hover{ color:var(--bone); }
+  .tab.active{ color:var(--parchment); border-bottom-color:var(--rust-bright); }
+  .tab .count{ background:var(--rust); color:var(--bone); font-size:0.58rem; padding:0.05rem 0.35rem; border-radius:2px; }
+
+  .tiles{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:0.8rem; margin-bottom:1.4rem; }
+  .tile{ background:var(--bg-panel); border:1px solid var(--line); padding:0.9rem 1rem; }
+  .tile-label{ font-family:'JetBrains Mono',monospace; font-size:0.6rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--ash); margin-bottom:0.35rem; }
+  .tile-value{ font-family:'Cinzel',serif; font-size:1.45rem; color:var(--parchment); font-variant-numeric:tabular-nums; }
+  .tile-sub{ font-size:0.8rem; color:var(--ash); font-style:italic; }
+  .tile.alert .tile-value{ color:var(--rust-bright); }
+  .tile.good .tile-value{ color:var(--green-bright); }
+  .tile.link{ cursor:pointer; }
+  .tile.link:hover{ border-color:var(--brass-dim); }
+
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem; }
+  @media(max-width:1000px){ .grid2{ grid-template-columns:1fr; } }
+  .panel + .panel{ margin-top:1rem; }
+  .grid2 > .panel + .panel{ margin-top:0; }
+
+  .toolbar{ display:flex; flex-wrap:wrap; gap:0.6rem; align-items:center; margin-bottom:1rem; }
+  .toolbar .grow{ flex:1; min-width:180px; }
+  input.in, select.in, textarea.in{ background:var(--bg-panel-2); border:1px solid var(--line); color:var(--bone); font-family:'EB Garamond',serif; font-size:0.95rem; padding:0.45rem 0.65rem; min-width:0; }
+  input.in:focus, select.in:focus, textarea.in:focus{ outline:none; border-color:var(--brass-dim); }
+  input.in[type=number]{ font-family:'JetBrains Mono',monospace; font-size:0.8rem; }
+  input.in[type=date]{ color-scheme:dark; font-family:'JetBrains Mono',monospace; font-size:0.75rem; }
+  textarea.in{ width:100%; resize:vertical; min-height:70px; }
+
+  .btn-a{ font-family:'JetBrains Mono',monospace; font-size:0.66rem; letter-spacing:0.08em; text-transform:uppercase; padding:0.5rem 0.8rem; border:1px solid var(--line); background:var(--bg-panel-2); color:var(--bone); cursor:pointer; white-space:nowrap; transition:border-color .15s,background .15s; }
+  .btn-a:hover:not(:disabled){ border-color:var(--brass-dim); }
+  .btn-a:disabled{ opacity:0.4; cursor:not-allowed; }
+  .btn-a.primary{ background:var(--rust); border-color:var(--rust); }
+  .btn-a.primary:hover:not(:disabled){ background:var(--rust-bright); }
+  .btn-a.danger{ color:var(--rust-bright); border-color:rgba(176,73,47,0.5); }
+  .btn-a.danger:hover:not(:disabled){ background:rgba(176,73,47,0.15); }
+  .btn-a.good{ color:var(--green-bright); border-color:rgba(92,158,112,0.5); }
+  .btn-a.sm{ padding:0.3rem 0.55rem; font-size:0.6rem; }
+
+  .table-wrap{ overflow-x:auto; border:1px solid var(--line); background:var(--bg-panel); }
+  table.t{ width:100%; border-collapse:collapse; font-size:0.92rem; }
+  table.t th{ font-family:'JetBrains Mono',monospace; font-size:0.6rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--ash); text-align:left; padding:0.6rem 0.75rem; border-bottom:1px solid var(--line); font-weight:400; white-space:nowrap; position:sticky; top:0; background:var(--bg-panel); }
+  table.t td{ padding:0.55rem 0.75rem; border-bottom:1px solid rgba(176,141,69,0.08); vertical-align:middle; }
+  table.t tr:last-child td{ border-bottom:none; }
+  table.t td.num, table.t th.num{ text-align:right; font-family:'JetBrains Mono',monospace; font-size:0.78rem; font-variant-numeric:tabular-nums; }
+  table.t td.mono.small{ white-space:nowrap; }
+  table.t tr.click{ cursor:pointer; }
+  table.t tr.click:hover td{ background:rgba(176,141,69,0.05); }
+  table.t tr.flag td{ background:rgba(176,73,47,0.08); }
+  .empty{ padding:1.4rem; text-align:center; color:var(--ash); font-style:italic; }
+
+  .chip{ display:inline-block; font-family:'JetBrains Mono',monospace; font-size:0.56rem; letter-spacing:0.08em; text-transform:uppercase; padding:0.12rem 0.4rem; border:1px solid var(--line); color:var(--ash); margin-right:0.25rem; white-space:nowrap; }
+  .chip.online{ color:var(--green-bright); border-color:rgba(92,158,112,0.5); }
+  .chip.banned, .chip.logout-k{ color:var(--rust-bright); border-color:rgba(176,73,47,0.5); }
+  .chip.admin{ color:var(--brass); border-color:var(--brass-dim); }
+  .chip.jail, .chip.hosp{ color:var(--parchment); border-color:var(--brass-dim); }
+  .chip.login{ color:var(--green-bright); border-color:rgba(92,158,112,0.4); }
+  .chip.logout{ color:var(--ash); }
+  .dot{ display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--green-bright); margin-right:0.4rem; box-shadow:0 0 6px rgba(92,158,112,0.7); }
+  a.plink{ color:var(--parchment); text-decoration:none; border-bottom:1px dotted var(--brass-dim); cursor:pointer; }
+  a.plink:hover{ color:var(--bone); }
+
+  .pager{ display:flex; gap:0.6rem; align-items:center; justify-content:flex-end; margin-top:0.8rem; font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--ash); }
+
+  /* bar lists (classes, logins/day) */
+  .bars{ display:flex; flex-direction:column; gap:0.45rem; }
+  .bar-row{ display:grid; grid-template-columns:110px 1fr 46px; gap:0.6rem; align-items:center; font-size:0.88rem; }
+  .bar-row .bt{ height:8px; background:rgba(255,255,255,0.06); }
+  .bar-row .bf{ height:100%; background:var(--brass); }
+  .bar-row .bv{ font-family:'JetBrains Mono',monospace; font-size:0.72rem; text-align:right; color:var(--bone); }
+  .cols{ display:flex; align-items:flex-end; gap:4px; height:120px; padding-top:0.4rem; }
+  .cols .c{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; min-width:0; }
+  .cols .cb{ width:100%; background:var(--brass); min-height:2px; position:relative; }
+  .cols .cb:hover{ background:var(--parchment); }
+  .cols .cl{ font-family:'JetBrains Mono',monospace; font-size:0.52rem; color:var(--ash); margin-top:0.3rem; white-space:nowrap; }
+  .chart-svg{ width:100%; height:180px; display:block; }
+
+  /* drawer */
+  .drawer-bg{ position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:40; display:none; }
+  .drawer-bg.show{ display:block; }
+  .drawer{ position:fixed; top:0; right:0; bottom:0; width:min(720px,100vw); background:var(--bg); border-left:1px solid var(--line); z-index:41; transform:translateX(100%); transition:transform .22s ease; display:flex; flex-direction:column; }
+  .drawer.show{ transform:none; }
+  .drawer-head{ padding:1rem 1.3rem; border-bottom:1px solid var(--line); display:flex; align-items:flex-start; gap:1rem; background:var(--bg-panel); }
+  .drawer-head img{ width:44px; height:44px; border:1px solid var(--line); object-fit:cover; }
+  .drawer-title{ font-family:'Cinzel',serif; font-size:1.15rem; color:var(--parchment); }
+  .drawer-close{ margin-left:auto; background:none; border:none; color:var(--ash); font-size:1.6rem; cursor:pointer; line-height:1; }
+  .drawer-close:hover{ color:var(--bone); }
+  .drawer-body{ overflow-y:auto; padding:1.2rem 1.3rem 3rem; flex:1; }
+  .dl{ display:grid; grid-template-columns:auto 1fr; gap:0.35rem 1rem; font-size:0.92rem; }
+  .dl dt{ font-family:'JetBrains Mono',monospace; font-size:0.62rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--ash); padding-top:0.2rem; }
+  .stat-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:0.6rem; }
+  .stat-grid label{ display:flex; flex-direction:column; gap:0.2rem; font-family:'JetBrains Mono',monospace; font-size:0.58rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--ash); }
+  .stat-grid input.changed{ border-color:var(--brass); }
+  .row{ display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; }
+  .row + .row{ margin-top:0.6rem; }
+  .sec-note{ font-size:0.85rem; color:var(--ash); font-style:italic; margin-bottom:0.7rem; }
+  .scroll-list{ max-height:260px; overflow-y:auto; }
+  pre.stack{ white-space:pre-wrap; word-break:break-word; font-family:'JetBrains Mono',monospace; font-size:0.68rem; color:var(--ash); background:var(--bg-panel-2); border:1px solid var(--line); padding:0.7rem; margin-top:0.5rem; max-height:240px; overflow:auto; }
+  details > summary{ cursor:pointer; }
+
+  .card-list{ display:flex; flex-direction:column; gap:0.7rem; }
+  .card{ background:var(--bg-panel); border:1px solid var(--line); padding:0.9rem 1.1rem; }
+  .card.resolved{ opacity:0.6; }
+  .card-head{ display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap; margin-bottom:0.45rem; }
+  .card-body{ white-space:pre-wrap; overflow-wrap:anywhere; font-size:0.95rem; }
+
+  .toast-a{ position:fixed; bottom:1.4rem; left:50%; transform:translateX(-50%) translateY(20px); background:var(--bg-panel); border:1px solid var(--brass-dim); color:var(--bone); padding:0.7rem 1.1rem; font-family:'JetBrains Mono',monospace; font-size:0.72rem; z-index:60; opacity:0; transition:opacity .2s, transform .2s; pointer-events:none; max-width:90vw; }
+  .toast-a.show{ opacity:1; transform:translateX(-50%); }
+  .toast-a.err{ border-color:var(--rust-bright); color:var(--rust-bright); }
+
+  .loading{ color:var(--ash); font-style:italic; padding:1rem 0; }
+  @media(max-width:800px){
+    .bar-row{ grid-template-columns:90px 1fr 40px; }
+    .hide-sm{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="18" stroke="var(--brass)" stroke-width="1.5"/>
+        <path d="M12 24 L14 14 L17 18 L20 12 L23 18 L26 14 L28 24 Z" stroke="var(--brass)" stroke-width="1.3" stroke-linejoin="round"/>
+      </svg>
+      Clans vs Society
+    </div>
+    <div class="topbar-right">
+      <span class="player-name" id="player-name">Admin</span>
+      <a class="logout" href="/logout">Leave Realm</a>
+    </div>
+  </header>
+
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <main class="main">
+    <div class="page-title">Realm Keepers</div>
+    <div class="page-sub">Admin tools. Every change made here is recorded in the audit log.</div>
+
+    <div class="tabs" id="tabs"></div>
+    <div id="view"><div class="loading">Loading…</div></div>
+  </main>
+
+  <nav class="mobile-nav" id="mobile-nav"></nav>
+</div>
+
+<div class="drawer-bg" id="drawer-bg"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-head" id="drawer-head"></div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+
+<div class="toast-a" id="toast"></div>
+
+<script src="/nav.js"></script>
+<script>
+(function(){
+  // ─── Utilities ─────────────────────────────────────────────────────────────
+  const $ = (sel, el = document) => el.querySelector(sel);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const num = n => (n == null ? '—' : Number(n).toLocaleString());
+  const name = u => u ? (u.characterName || u.username || ('#' + u.id)) : '—';
+
+  async function api(url, body){
+    const opts = body === undefined ? {} : { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) };
+    const res = await fetch(url, { credentials:'same-origin', ...opts });
+    let data = null;
+    try { data = await res.json(); } catch(e) {}
+    if(!res.ok) throw new Error((data && data.error) || ('Request failed (' + res.status + ')'));
+    return data;
+  }
+
+  let toastTimer;
+  function toast(msg, isErr){
+    const t = $('#toast');
+    t.textContent = msg;
+    t.className = 'toast-a show' + (isErr ? ' err' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.className = 'toast-a' + (isErr ? ' err' : ''); }, 3200);
+  }
+
+  function rel(d){
+    if(!d) return '—';
+    const ms = Date.now() - new Date(d).getTime();
+    const fut = ms < 0, a = Math.abs(ms);
+    const s = Math.round(a/1000), m = Math.round(s/60), h = Math.round(m/60), dd = Math.round(h/24);
+    const v = s < 60 ? 'just now' : m < 60 ? m + 'm' : h < 48 ? h + 'h' : dd + 'd';
+    if(v === 'just now') return v;
+    return fut ? 'in ' + v : v + ' ago';
+  }
+  function full(d){ return d ? new Date(d).toLocaleString() : '—'; }
+  function dur(sec){
+    if(sec == null) return '—';
+    if(sec < 60) return sec + 's';
+    const m = Math.floor(sec/60), h = Math.floor(m/60);
+    if(h < 1) return m + 'm';
+    if(h < 48) return h + 'h ' + (m % 60) + 'm';
+    return Math.floor(h/24) + 'd ' + (h % 24) + 'h';
+  }
+  function device(ua){
+    if(!ua) return '—';
+    const os = /iPhone|iPad/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : 'Other';
+    const br = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+    return br + ' · ' + os;
+  }
+  const ONLINE_MS = 5 * 60 * 1000;
+  const isOnline = u => u.lastSeenAt && (Date.now() - new Date(u.lastSeenAt).getTime() < ONLINE_MS);
+  const isBanned = u => u.bannedUntil && new Date(u.bannedUntil).getTime() > Date.now();
+  const permanent = d => d && new Date(d).getFullYear() >= 9000;
+
+  function statusChips(u){
+    let h = '';
+    if(isOnline(u)) h += '<span class="chip online">online</span>';
+    if(isBanned(u)) h += '<span class="chip banned">banned</span>';
+    if(u.isAdmin) h += '<span class="chip admin">admin</span>';
+    if(u.stats?.inJail) h += '<span class="chip jail">jail</span>';
+    if(u.stats?.inHospital) h += '<span class="chip hosp">hospital</span>';
+    return h;
+  }
+
+  function pager(p, onGo){
+    const pages = Math.max(1, Math.ceil(p.total / p.pageSize));
+    const wrap = document.createElement('div');
+    wrap.className = 'pager';
+    wrap.innerHTML = `<span>${num(p.total)} total · page ${p.page} of ${pages}</span>
+      <button class="btn-a sm" data-go="${p.page-1}" ${p.page<=1?'disabled':''}>Prev</button>
+      <button class="btn-a sm" data-go="${p.page+1}" ${p.page>=pages?'disabled':''}>Next</button>`;
+    wrap.addEventListener('click', e => { const b = e.target.closest('[data-go]'); if(b && !b.disabled) onGo(Number(b.dataset.go)); });
+    return wrap;
+  }
+
+  function debounce(fn, ms){ let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+  // ─── Tabs ──────────────────────────────────────────────────────────────────
+  const TABS = [
+    ['overview', 'Overview'], ['players', 'Players'], ['logins', 'Login Log'], ['economy', 'Economy'],
+    ['market', 'Market'], ['items', 'Items'], ['houses', 'Houses'], ['feedback', 'Feedback'],
+    ['errors', 'Errors'], ['announcements', 'Announcements'], ['audit', 'Audit Log'],
+  ];
+  const badges = {};
+  let current = null;
+
+  function renderTabs(){
+    $('#tabs').innerHTML = TABS.map(([k, label]) =>
+      `<button class="tab${k===current?' active':''}" data-tab="${k}">${label}${badges[k] ? `<span class="count">${badges[k]}</span>` : ''}</button>`).join('');
+  }
+  $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if(b) location.hash = b.dataset.tab; });
+
+  function route(){
+    const [tab, arg] = (location.hash.slice(1) || 'overview').split('/');
+    const k = TABS.some(t => t[0] === tab) ? tab : 'overview';
+    current = k;
+    renderTabs();
+    // Fresh container per render so event listeners never pile up between tabs.
+    const old = $('#view');
+    const view = old.cloneNode(false);
+    old.replaceWith(view);
+    view.innerHTML = '<div class="loading">Loading…</div>';
+    VIEWS[k](view, arg).catch(err => { view.innerHTML = `<div class="panel"><span class="muted">${esc(err.message)}</span></div>`; });
+  }
+  window.addEventListener('hashchange', route);
+
+  // ─── Overview ──────────────────────────────────────────────────────────────
+  async function viewOverview(view){
+    const [o, online] = await Promise.all([api('/api/admin/overview'), api('/api/admin/online')]);
+    badges.feedback = o.openFeedback || 0;
+    badges.errors = o.errors24h || 0;
+    renderTabs();
+
+    const tile = (label, value, sub, cls = '', go = '') =>
+      `<div class="tile ${cls}${go ? ' link' : ''}" ${go ? `data-go="${go}"` : ''}><div class="tile-label">${label}</div><div class="tile-value">${value}</div>${sub ? `<div class="tile-sub">${sub}</div>` : ''}</div>`;
+
+    const maxC = Math.max(1, ...o.classes.map(c => c.count));
+    const days = [];
+    for(let i = 13; i >= 0; i--){
+      const d = new Date(Date.now() - i * 864e5);
+      const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      const row = o.loginsByDay.find(r => r.day === key);
+      days.push({ key, label: (d.getMonth()+1) + '/' + d.getDate(), players: row ? row.players : 0, logins: row ? row.logins : 0 });
+    }
+    const maxD = Math.max(1, ...days.map(d => d.players));
+
+    view.innerHTML = `
+      <div class="tiles">
+        ${tile('Online now', num(o.onlineNow), 'seen in last 5 min', o.onlineNow ? 'good' : '')}
+        ${tile('Active today', num(o.active24h), num(o.active7d) + ' this week')}
+        ${tile('Players', num(o.totalPlayers), '+' + num(o.new24h) + ' today · +' + num(o.new7d) + ' this week', '', 'players')}
+        ${tile('Avg level', o.avgLevel, 'highest ' + o.maxLevel)}
+        ${tile('Gold held', num(o.playerGold), num(o.houseGold) + ' in house vaults', '', 'economy')}
+        ${tile('Open feedback', num(o.openFeedback), '', o.openFeedback ? 'alert' : '', 'feedback')}
+        ${tile('Errors (24h)', num(o.errors24h), '', o.errors24h ? 'alert' : '', 'errors')}
+        ${tile('Banned', num(o.bannedCount), '', '', 'players')}
+      </div>
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-title">Players logging in · last 14 days</div>
+          <div class="cols">${days.map(d => `<div class="c" title="${d.key}: ${d.players} players, ${d.logins} logins"><div class="cb" style="height:${(d.players/maxD*100).toFixed(1)}%"></div><div class="cl">${d.label}</div></div>`).join('')}</div>
+          <div class="sec-note" style="margin:0.6rem 0 0">Unique players who logged in each day. Hover a bar for total logins.</div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Class distribution</div>
+          <div class="bars">${o.classes.map(c => `<div class="bar-row"><span>${esc(c.label)}</span><div class="bt"><div class="bf" style="width:${(c.count/maxC*100).toFixed(1)}%"></div></div><span class="bv">${c.count}</span></div>`).join('') || '<div class="empty">No players yet</div>'}</div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Online now <span class="muted small mono">${online.length}</span></div>
+        ${online.length ? `<div class="table-wrap" style="border:none"><table class="t"><thead><tr><th>Player</th><th class="hide-sm">Class</th><th class="num">Level</th><th class="hide-sm">City</th><th>Logged in</th><th>Last seen</th></tr></thead><tbody>
+          ${online.map(u => `<tr class="click" data-player="${u.id}"><td><span class="dot"></span>${esc(name(u))}</td><td class="hide-sm">${esc(u.characterClass || '—')}</td><td class="num">${u.stats?.level ?? '—'}</td><td class="hide-sm">${esc(u.stats?.currentCityId || '—')}</td><td title="${esc(full(u.lastLoginAt))}">${rel(u.lastLoginAt)}</td><td title="${esc(full(u.lastSeenAt))}">${rel(u.lastSeenAt)}</td></tr>`).join('')}
+        </tbody></table></div>` : '<div class="empty">Nobody is online right now.</div>'}
+      </div>`;
+    view.addEventListener('click', e => { const t = e.target.closest('[data-go]'); if(t) location.hash = t.dataset.go; });
+  }
+
+  // ─── Players ───────────────────────────────────────────────────────────────
+  const pState = { q:'', filter:'all', sort:'lastSeen', page:1 };
+  async function viewPlayers(view){
+    view.innerHTML = `
+      <div class="toolbar">
+        <input class="in grow" id="p-q" placeholder="Search by character, Google name, email or #id" value="${esc(pState.q)}">
+        <select class="in" id="p-filter">
+          ${[['all','All players'],['online','Online now'],['banned','Banned'],['jailed','In jail / hospital'],['admins','Admins']].map(([v,l]) => `<option value="${v}" ${pState.filter===v?'selected':''}>${l}</option>`).join('')}
+        </select>
+        <select class="in" id="p-sort">
+          ${[['lastSeen','Last seen'],['level','Level'],['gold','Gold'],['newest','Newest']].map(([v,l]) => `<option value="${v}" ${pState.sort===v?'selected':''}>Sort: ${l}</option>`).join('')}
+        </select>
+      </div>
+      <div id="p-list"><div class="loading">Loading…</div></div>`;
+
+    async function load(){
+      const qs = new URLSearchParams({ q:pState.q, filter:pState.filter, sort:pState.sort, page:pState.page });
+      const d = await api('/api/admin/players?' + qs);
+      const list = $('#p-list');
+      if(!d.players.length){ list.innerHTML = '<div class="table-wrap"><div class="empty">No players match.</div></div>'; return; }
+      list.innerHTML = `<div class="table-wrap"><table class="t"><thead><tr>
+          <th>Player</th><th class="hide-sm">Class</th><th class="num">Lvl</th><th class="num">Gold</th><th class="hide-sm">House</th><th>Status</th><th>Last seen</th>
+        </tr></thead><tbody>
+        ${d.players.map(u => `<tr class="click" data-player="${u.id}">
+          <td>${esc(name(u))}<div class="muted small">${esc(u.email || u.username)} · #${u.id}</div></td>
+          <td class="hide-sm">${esc(u.characterClass || '—')}</td>
+          <td class="num">${u.stats?.level ?? '—'}</td>
+          <td class="num">${num(u.stats?.gold)}</td>
+          <td class="hide-sm">${esc(u.houseMember?.house?.name || '—')}</td>
+          <td>${statusChips(u) || '<span class="muted small">—</span>'}</td>
+          <td title="${esc(full(u.lastSeenAt))}">${rel(u.lastSeenAt)}</td>
+        </tr>`).join('')}
+        </tbody></table></div>`;
+      list.appendChild(pager(d, p => { pState.page = p; load(); }));
+    }
+    $('#p-q').addEventListener('input', debounce(e => { pState.q = e.target.value.trim(); pState.page = 1; load().catch(err => toast(err.message, true)); }, 300));
+    $('#p-filter').addEventListener('change', e => { pState.filter = e.target.value; pState.page = 1; load(); });
+    $('#p-sort').addEventListener('change', e => { pState.sort = e.target.value; pState.page = 1; load(); });
+    await load();
+  }
+
+  // ─── Login log ─────────────────────────────────────────────────────────────
+  const lState = { q:'', type:'', ip:'', from:'', to:'', userId:'', page:1 };
+  async function viewLogins(view){
+    view.innerHTML = `
+      <div class="sec-note">Every login, logout and admin kick. Most players just close the tab, so "session" is estimated from their last activity when there's no logout.</div>
+      <div class="toolbar">
+        <input class="in grow" id="l-q" placeholder="Player name" value="${esc(lState.q)}">
+        <select class="in" id="l-type">
+          ${[['','All events'],['login','Logins'],['logout','Logouts'],['kicked','Kicked / banned']].map(([v,l]) => `<option value="${v}" ${lState.type===v?'selected':''}>${l}</option>`).join('')}
+        </select>
+        <input class="in" id="l-ip" placeholder="IP address" value="${esc(lState.ip)}" style="width:150px">
+        <input class="in" type="date" id="l-from" value="${esc(lState.from)}" title="From">
+        <input class="in" type="date" id="l-to" value="${esc(lState.to)}" title="To">
+        <button class="btn-a" id="l-clear">Clear</button>
+      </div>
+      ${lState.userId ? `<div class="sec-note">Showing one player only. <a class="plink" id="l-all">Show everyone</a></div>` : ''}
+      <div id="l-list"><div class="loading">Loading…</div></div>`;
+
+    async function load(){
+      const qs = new URLSearchParams(Object.entries(lState).filter(([k, v]) => v !== ''));
+      const d = await api('/api/admin/logins?' + qs);
+      const list = $('#l-list');
+      if(!d.events.length){ list.innerHTML = '<div class="table-wrap"><div class="empty">No events match.</div></div>'; return; }
+      list.innerHTML = `<div class="table-wrap"><table class="t"><thead><tr>
+          <th>When</th><th>Player</th><th>Event</th><th>Session</th><th>IP</th><th class="hide-sm">Device</th>
+        </tr></thead><tbody>
+        ${d.events.map(e => {
+          let sess = '—';
+          if(e.type === 'login' && e.session){
+            sess = e.session.seconds == null ? '<span class="muted">—</span>'
+              : dur(e.session.seconds) + (e.session.ended ? '' : ' <span class="muted small">(est.)</span>');
+          }
+          const chip = e.type === 'login' ? 'login' : e.type === 'kicked' ? 'logout-k' : 'logout';
+          return `<tr>
+            <td title="${esc(full(e.createdAt))}" class="mono small">${new Date(e.createdAt).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</td>
+            <td><a class="plink" data-player="${e.user.id}">${esc(name(e.user))}</a></td>
+            <td><span class="chip ${chip}">${esc(e.type)}</span></td>
+            <td class="mono small">${sess}</td>
+            <td class="mono small">${e.ip ? `<a class="plink" data-ip="${esc(e.ip)}">${esc(e.ip)}</a>` : '—'}</td>
+            <td class="hide-sm small muted" title="${esc(e.userAgent || '')}">${esc(device(e.userAgent))}</td>
+          </tr>`;
+        }).join('')}
+        </tbody></table></div>`;
+      list.appendChild(pager(d, p => { lState.page = p; load(); }));
+      list.querySelectorAll('[data-ip]').forEach(a => a.addEventListener('click', ev => {
+        ev.stopPropagation(); lState.ip = a.dataset.ip; lState.page = 1; viewLogins(view);
+      }));
+    }
+    const set = (k, v) => { lState[k] = v; lState.page = 1; load().catch(err => toast(err.message, true)); };
+    $('#l-q').addEventListener('input', debounce(e => set('q', e.target.value.trim()), 300));
+    $('#l-type').addEventListener('change', e => set('type', e.target.value));
+    $('#l-ip').addEventListener('input', debounce(e => set('ip', e.target.value.trim()), 400));
+    $('#l-from').addEventListener('change', e => set('from', e.target.value));
+    $('#l-to').addEventListener('change', e => set('to', e.target.value));
+    $('#l-clear').addEventListener('click', () => { Object.assign(lState, { q:'', type:'', ip:'', from:'', to:'', userId:'', page:1 }); viewLogins(view); });
+    const all = $('#l-all'); if(all) all.addEventListener('click', () => { lState.userId = ''; viewLogins(view); });
+    await load();
+  }
+
+  // ─── Economy ───────────────────────────────────────────────────────────────
+  function lineChart(series){
+    if(series.length < 2) return '<div class="empty">Gold history builds up hourly — check back after the server has been running a few hours.</div>';
+    const W = 640, H = 180, P = { l:56, r:10, t:10, b:22 };
+    const xs = series.map(s => new Date(s.t).getTime()), ys = series.map(s => s.total);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    let y0 = Math.min(...ys), y1 = Math.max(...ys);
+    if(y0 === y1){ y0 = Math.max(0, y0 - 1); y1 = y1 + 1; }
+    const pad = (y1 - y0) * 0.1; y0 = Math.max(0, y0 - pad); y1 += pad;
+    const X = t => P.l + (t - x0) / (x1 - x0 || 1) * (W - P.l - P.r);
+    const Y = v => H - P.b - (v - y0) / (y1 - y0) * (H - P.t - P.b);
+    const pts = series.map(s => X(new Date(s.t).getTime()).toFixed(1) + ',' + Y(s.total).toFixed(1)).join(' ');
+    const ticks = [y0, (y0+y1)/2, y1];
+    const fmt = v => v >= 1e6 ? (v/1e6).toFixed(1) + 'M' : v >= 1e3 ? (v/1e3).toFixed(0) + 'k' : Math.round(v);
+    const dl = t => { const d = new Date(t); return (d.getMonth()+1) + '/' + d.getDate(); };
+    return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Total player gold over time">
+      ${ticks.map(v => `<line x1="${P.l}" x2="${W-P.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="rgba(176,141,69,0.15)"/><text x="${P.l-6}" y="${Y(v)+3}" fill="#93897A" font-size="10" text-anchor="end" font-family="JetBrains Mono">${fmt(v)}</text>`).join('')}
+      <polyline points="${pts}" fill="none" stroke="#B08D45" stroke-width="2" vector-effect="non-scaling-stroke"/>
+      <text x="${P.l}" y="${H-6}" fill="#93897A" font-size="10" font-family="JetBrains Mono">${dl(x0)}</text>
+      <text x="${W-P.r}" y="${H-6}" fill="#93897A" font-size="10" text-anchor="end" font-family="JetBrains Mono">${dl(x1)}</text>
+    </svg>`;
+  }
+
+  async function viewEconomy(view){
+    const d = await api('/api/admin/economy');
+    const latest = d.series.length ? d.series[d.series.length-1].total : null;
+    const dayAgo = d.series.filter(s => new Date(s.t).getTime() <= Date.now() - 864e5).pop();
+    const change = latest != null && dayAgo ? latest - dayAgo.total : null;
+    view.innerHTML = `
+      <div class="tiles">
+        <div class="tile"><div class="tile-label">Gold in circulation</div><div class="tile-value">${num(latest)}</div><div class="tile-sub">at last hourly snapshot</div></div>
+        <div class="tile ${change > 0 ? 'good' : change < 0 ? 'alert' : ''}"><div class="tile-label">Change, 24h</div><div class="tile-value">${change == null ? '—' : (change > 0 ? '+' : '') + num(change)}</div></div>
+        <div class="tile ${d.richest.some(r => r.flagged) ? 'alert' : ''}"><div class="tile-label">Flagged players</div><div class="tile-value">${d.richest.filter(r => r.flagged).length}</div><div class="tile-sub">5× the gold of their level</div></div>
+      </div>
+      <div class="panel"><div class="panel-title">Player gold over time · 14 days</div>${lineChart(d.series)}</div>
+      <div class="grid2" style="margin-top:1rem">
+        <div class="panel">
+          <div class="panel-title">Biggest gains · last 24h</div>
+          <div class="sec-note">Fast gold gains are the usual first sign of an exploit.</div>
+          ${d.gains.length ? `<table class="t"><thead><tr><th>Player</th><th class="num">Lvl</th><th class="num">Gain</th><th class="num">Now</th></tr></thead><tbody>
+            ${d.gains.map(g => `<tr class="click" data-player="${g.id}"><td>${esc(g.name)}</td><td class="num">${g.level}</td><td class="num" style="color:var(--green-bright)">+${num(g.gain)}</td><td class="num">${num(g.now)}</td></tr>`).join('')}
+          </tbody></table>` : '<div class="empty">No data yet — needs a snapshot at least 24h old.</div>'}
+        </div>
+        <div class="panel">
+          <div class="panel-title">Richest players</div>
+          <table class="t"><thead><tr><th>Player</th><th class="num">Lvl</th><th class="num">Gold</th><th class="num hide-sm">Lvl avg</th></tr></thead><tbody>
+            ${d.richest.map(r => `<tr class="click${r.flagged ? ' flag' : ''}" data-player="${r.id}" ${r.flagged ? 'title="Holds more than 5× the average gold for their level"' : ''}><td>${esc(r.name)} ${r.flagged ? '<span class="chip banned">check</span>' : ''}</td><td class="num">${r.level}</td><td class="num">${num(r.gold)}</td><td class="num hide-sm">${num(r.levelAvg)}</td></tr>`).join('') || '<tr><td colspan="4" class="empty">No players yet</td></tr>'}
+          </tbody></table>
+        </div>
+      </div>`;
+  }
+
+  // ─── Market ────────────────────────────────────────────────────────────────
+  async function viewMarket(view){
+    const listings = await api('/api/admin/market');
+    view.innerHTML = `
+      <div class="sec-note">Rows highlighted in red are listed at more than 3× the item's base price per unit.</div>
+      ${listings.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>Item</th><th>Seller</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Per unit</th><th class="num">× base</th><th class="hide-sm">Listed</th><th></th></tr></thead><tbody>
+        ${listings.map(l => `<tr class="${l.ratio > 3 ? 'flag' : ''}">
+          <td>${esc(l.item.name)}</td>
+          <td><a class="plink" data-player="${l.seller.id}">${esc(name(l.seller))}</a></td>
+          <td class="num">${l.quantity}</td><td class="num">${num(l.price)}</td><td class="num">${num(l.unitPrice)}</td>
+          <td class="num">${l.ratio == null ? '—' : l.ratio + '×'}</td>
+          <td class="hide-sm" title="${esc(full(l.createdAt))}">${rel(l.createdAt)}</td>
+          <td><button class="btn-a sm danger" data-remove="${l.id}">Remove</button></td>
+        </tr>`).join('')}
+      </tbody></table></div>` : '<div class="table-wrap"><div class="empty">No active listings.</div></div>'}`;
+    view.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', async () => {
+      if(!confirm('Remove this listing? The items will be returned to the seller\'s inventory.')) return;
+      try { await api(`/api/admin/market/${b.dataset.remove}/remove`, { returnToSeller: true }); toast('Listing removed, items returned'); viewMarket(view); }
+      catch(err){ toast(err.message, true); }
+    }));
+  }
+
+  // ─── Items ─────────────────────────────────────────────────────────────────
+  let itemCache = null;
+  async function loadItems(force){
+    if(!itemCache || force) itemCache = await api('/api/admin/items');
+    return itemCache;
+  }
+  function itemForm(it){
+    it = it || { name:'', description:'', type:'', effect:'', basePrice:0, icon:'' };
+    return `<div class="row"><input class="in grow" data-f="name" placeholder="Name" value="${esc(it.name)}">
+        <input class="in" data-f="type" placeholder="Type" value="${esc(it.type)}" style="width:140px">
+        <input class="in" type="number" min="0" data-f="basePrice" placeholder="Base price" value="${it.basePrice}" style="width:120px"></div>
+      <div class="row"><input class="in grow" data-f="effect" placeholder="Effect, e.g. health:30,energy:20" value="${esc(it.effect)}">
+        <input class="in grow" data-f="icon" placeholder="Icon path" value="${esc(it.icon)}"></div>
+      <div class="row"><textarea class="in" data-f="description" placeholder="Description">${esc(it.description)}</textarea></div>`;
+  }
+  function readForm(el){
+    const o = {};
+    el.querySelectorAll('[data-f]').forEach(i => { o[i.dataset.f] = i.type === 'number' ? Number(i.value) : i.value; });
+    return o;
+  }
+  async function viewItems(view){
+    const items = await loadItems(true);
+    const types = [...new Set(items.map(i => i.type))].sort();
+    view.innerHTML = `
+      <div class="toolbar">
+        <input class="in grow" id="i-q" placeholder="Filter items">
+        <select class="in" id="i-type"><option value="">All types</option>${types.map(t => `<option>${esc(t)}</option>`).join('')}</select>
+        <button class="btn-a primary" id="i-new">New item</button>
+      </div>
+      <div class="panel" id="i-new-form" style="display:none;margin-bottom:1rem">
+        <div class="panel-title">New item</div>
+        ${itemForm()}
+        <div class="row"><button class="btn-a primary" id="i-create">Create item</button><button class="btn-a" id="i-cancel">Cancel</button></div>
+      </div>
+      <div class="table-wrap"><table class="t"><thead><tr><th>Item</th><th>Type</th><th class="hide-sm">Effect</th><th class="num">Base price</th><th class="num hide-sm">Owned by</th><th></th></tr></thead><tbody id="i-body"></tbody></table></div>`;
+
+    const body = $('#i-body');
+    function draw(){
+      const q = $('#i-q').value.trim().toLowerCase(), t = $('#i-type').value;
+      const rows = items.filter(i => (!t || i.type === t) && (!q || i.name.toLowerCase().includes(q) || i.effect.toLowerCase().includes(q)));
+      body.innerHTML = rows.map(i => `<tr data-row="${i.id}">
+          <td>${esc(i.name)}</td><td class="small">${esc(i.type)}</td><td class="mono small hide-sm">${esc(i.effect || '—')}</td>
+          <td class="num">${num(i.basePrice)}</td><td class="num hide-sm">${i._count.inventory}</td>
+          <td><button class="btn-a sm" data-edit="${i.id}">Edit</button></td></tr>
+        <tr data-editor="${i.id}" style="display:none"><td colspan="6" style="background:var(--bg-panel-2)">${itemForm(i)}
+          <div class="row"><button class="btn-a primary" data-save="${i.id}">Save</button><button class="btn-a" data-close="${i.id}">Cancel</button></div></td></tr>`).join('')
+        || '<tr><td colspan="6" class="empty">No items match.</td></tr>';
+    }
+    draw();
+    $('#i-q').addEventListener('input', draw);
+    $('#i-type').addEventListener('change', draw);
+    $('#i-new').addEventListener('click', () => { $('#i-new-form').style.display = ''; });
+    $('#i-cancel').addEventListener('click', () => { $('#i-new-form').style.display = 'none'; });
+    $('#i-create').addEventListener('click', async () => {
+      try { await api('/api/admin/items', readForm($('#i-new-form'))); toast('Item created'); viewItems(view); }
+      catch(err){ toast(err.message, true); }
+    });
+    body.addEventListener('click', async e => {
+      const ed = e.target.closest('[data-edit]'), cl = e.target.closest('[data-close]'), sv = e.target.closest('[data-save]');
+      if(ed){ const r = body.querySelector(`[data-editor="${ed.dataset.edit}"]`); r.style.display = r.style.display ? '' : 'none'; }
+      if(cl){ body.querySelector(`[data-editor="${cl.dataset.close}"]`).style.display = 'none'; }
+      if(sv){
+        const id = sv.dataset.save;
+        try {
+          const { item } = await api('/api/admin/items/' + id, readForm(body.querySelector(`[data-editor="${id}"]`)));
+          Object.assign(items.find(i => i.id == id), item);
+          toast('Saved ' + item.name); draw();
+        } catch(err){ toast(err.message, true); }
+      }
+    });
+  }
+
+  // ─── Houses ────────────────────────────────────────────────────────────────
+  async function viewHouses(view){
+    const houses = await api('/api/admin/houses');
+    if(!houses.length){ view.innerHTML = '<div class="panel"><div class="empty">No houses have been founded yet.</div></div>'; return; }
+    view.innerHTML = `<div class="card-list" id="h-list">${houses.map(h => {
+      const leader = h.members.find(m => m.userId === h.leaderId);
+      const stale = !h.lastActive || (Date.now() - new Date(h.lastActive).getTime() > 30 * 864e5);
+      return `<div class="card" data-house="${h.id}">
+        <div class="card-head">
+          <span class="drawer-title" style="font-size:1rem">${esc(h.name)}</span>
+          <span class="chip">${h.members.length} member${h.members.length===1?'':'s'}</span>
+          <span class="chip">${num(h.gold)} gold</span>
+          ${stale ? '<span class="chip banned">inactive 30d+</span>' : ''}
+          <span class="muted small" style="margin-left:auto">Leader: ${leader ? `<a class="plink" data-player="${leader.user.id}">${esc(name(leader.user))}</a>` : '—'} · active ${rel(h.lastActive)}</span>
+        </div>
+        <div class="row">
+          <input class="in" data-f="name" value="${esc(h.name)}" style="width:200px" aria-label="House name">
+          <input class="in grow" data-f="motto" value="${esc(h.motto)}" aria-label="Motto">
+          <input class="in" type="number" min="0" data-f="gold" value="${h.gold}" style="width:120px" aria-label="Gold">
+          <button class="btn-a primary" data-hsave="${h.id}">Save</button>
+        </div>
+        <div class="row">
+          <select class="in" data-leader="${h.id}">${h.members.map(m => `<option value="${m.userId}" ${m.userId===h.leaderId?'selected':''}>${esc(name(m.user))} · Lv ${m.user.stats?.level ?? '?'} · ${esc(m.rank)}</option>`).join('')}</select>
+          <button class="btn-a" data-hlead="${h.id}">Make leader</button>
+          <button class="btn-a danger" data-hdisband="${h.id}" style="margin-left:auto">Disband</button>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+
+    $('#h-list').addEventListener('click', async e => {
+      const s = e.target.closest('[data-hsave]'), l = e.target.closest('[data-hlead]'), d = e.target.closest('[data-hdisband]');
+      try {
+        if(s){
+          const card = view.querySelector(`[data-house="${s.dataset.hsave}"]`);
+          await api('/api/admin/houses/' + s.dataset.hsave, readForm(card));
+          toast('House saved'); viewHouses(view);
+        }
+        if(l){
+          const uid = Number(view.querySelector(`[data-leader="${l.dataset.hlead}"]`).value);
+          await api(`/api/admin/houses/${l.dataset.hlead}/leader`, { userId: uid });
+          toast('Leadership transferred'); viewHouses(view);
+        }
+        if(d){
+          if(!confirm('Disband this house? All members are removed and the house vault gold is lost. This cannot be undone.')) return;
+          await api(`/api/admin/houses/${d.dataset.hdisband}/disband`, {});
+          toast('House disbanded'); viewHouses(view);
+        }
+      } catch(err){ toast(err.message, true); }
+    });
+  }
+
+  // ─── Feedback ──────────────────────────────────────────────────────────────
+  let fbStatus = 'open';
+  async function viewFeedback(view){
+    const list = await api('/api/admin/feedback?status=' + fbStatus);
+    if(fbStatus === 'open'){ badges.feedback = list.length; renderTabs(); }
+    view.innerHTML = `
+      <div class="toolbar">
+        <select class="in" id="fb-status">${[['open','Open'],['resolved','Resolved'],['all','All']].map(([v,l]) => `<option value="${v}" ${fbStatus===v?'selected':''}>${l}</option>`).join('')}</select>
+        <span class="muted small">Feedback saved from now on. Earlier submissions only went to email.</span>
+      </div>
+      <div class="card-list">${list.map(f => `<div class="card${f.resolved ? ' resolved' : ''}">
+        <div class="card-head"><span class="chip ${f.category === 'Bug Report' ? 'banned' : ''}">${esc(f.category)}</span>
+          <a class="plink" data-player="${f.user.id}">${esc(name(f.user))}</a>
+          <span class="muted small" title="${esc(full(f.createdAt))}">${rel(f.createdAt)}</span>
+          <span style="margin-left:auto">${f.user.email ? `<a class="btn-a sm" href="mailto:${esc(f.user.email)}?subject=${encodeURIComponent('Re: your ' + f.category.toLowerCase())}">Reply</a>` : ''}
+          <button class="btn-a sm ${f.resolved ? '' : 'good'}" data-fb="${f.id}" data-to="${!f.resolved}">${f.resolved ? 'Reopen' : 'Mark resolved'}</button></span>
+        </div>
+        <div class="card-body">${esc(f.message)}</div></div>`).join('') || '<div class="panel"><div class="empty">Nothing here.</div></div>'}</div>`;
+    $('#fb-status').addEventListener('change', e => { fbStatus = e.target.value; viewFeedback(view); });
+    view.querySelectorAll('[data-fb]').forEach(b => b.addEventListener('click', async () => {
+      try { await api('/api/admin/feedback/' + b.dataset.fb, { resolved: b.dataset.to === 'true' }); viewFeedback(view); }
+      catch(err){ toast(err.message, true); }
+    }));
+  }
+
+  // ─── Errors ────────────────────────────────────────────────────────────────
+  async function viewErrors(view, _, page = 1){
+    const d = await api('/api/admin/errors?page=' + page);
+    view.innerHTML = `
+      <div class="toolbar"><span class="muted small grow">Server errors from logError(). Kept for 30 days.</span>
+        ${d.total ? '<button class="btn-a danger" id="e-clear">Clear all</button>' : ''}</div>
+      <div class="card-list">${d.errors.map(e => `<div class="card">
+        <div class="card-head"><span class="mono small muted" title="${esc(full(e.createdAt))}">${new Date(e.createdAt).toLocaleString()}</span></div>
+        <div class="card-body mono small">${esc(e.message)}</div>
+        ${e.stack ? `<details><summary class="muted small">Stack trace</summary><pre class="stack">${esc(e.stack)}</pre></details>` : ''}
+      </div>`).join('') || '<div class="panel"><div class="empty">No errors logged. 🎉</div></div>'}</div>`;
+    if(d.total > d.pageSize) view.appendChild(pager(d, p => viewErrors(view, null, p)));
+    const c = $('#e-clear');
+    if(c) c.addEventListener('click', async () => {
+      if(!confirm('Delete all logged errors?')) return;
+      try { await api('/api/admin/errors/clear', {}); badges.errors = 0; toast('Errors cleared'); viewErrors(view); }
+      catch(err){ toast(err.message, true); }
+    });
+  }
+
+  // ─── Announcements ─────────────────────────────────────────────────────────
+  async function viewAnnouncements(view){
+    const list = await api('/api/admin/announcements');
+    const live = a => a.active && (!a.expiresAt || new Date(a.expiresAt).getTime() > Date.now());
+    view.innerHTML = `
+      <div class="panel" style="margin-bottom:1rem">
+        <div class="panel-title">New announcement</div>
+        <div class="sec-note">Shown as a banner at the top of every game page. Players can dismiss it for their session.</div>
+        <textarea class="in" id="a-msg" maxlength="500" placeholder="e.g. Server restart at 9pm ET for an update."></textarea>
+        <div class="row" style="margin-top:0.6rem">
+          <select class="in" id="a-hours">
+            <option value="0">Until I turn it off</option><option value="1">1 hour</option><option value="6">6 hours</option>
+            <option value="24" selected>24 hours</option><option value="72">3 days</option><option value="168">1 week</option>
+          </select>
+          <button class="btn-a primary" id="a-post">Post announcement</button>
+        </div>
+      </div>
+      <div class="card-list">${list.map(a => `<div class="card${live(a) ? '' : ' resolved'}">
+        <div class="card-head">
+          <span class="chip ${live(a) ? 'online' : ''}">${live(a) ? 'live' : a.active ? 'expired' : 'off'}</span>
+          <span class="muted small">by ${esc(a.createdBy)} · ${rel(a.createdAt)}${a.expiresAt ? ' · ends ' + rel(a.expiresAt) : ''}</span>
+          <span style="margin-left:auto">
+            <button class="btn-a sm" data-atoggle="${a.id}" data-to="${!a.active}">${a.active ? 'Turn off' : 'Turn on'}</button>
+            <button class="btn-a sm danger" data-adel="${a.id}">Delete</button>
+          </span>
+        </div>
+        <div class="card-body">${esc(a.message)}</div></div>`).join('') || '<div class="panel"><div class="empty">No announcements yet.</div></div>'}</div>`;
+    $('#a-post').addEventListener('click', async () => {
+      const message = $('#a-msg').value.trim();
+      if(!message) return toast('Write a message first', true);
+      try { await api('/api/admin/announcements', { message, hours: Number($('#a-hours').value) || null }); toast('Announcement posted'); viewAnnouncements(view); }
+      catch(err){ toast(err.message, true); }
+    });
+    view.querySelectorAll('[data-atoggle]').forEach(b => b.addEventListener('click', async () => {
+      try { await api('/api/admin/announcements/' + b.dataset.atoggle, { active: b.dataset.to === 'true' }); viewAnnouncements(view); }
+      catch(err){ toast(err.message, true); }
+    }));
+    view.querySelectorAll('[data-adel]').forEach(b => b.addEventListener('click', async () => {
+      if(!confirm('Delete this announcement?')) return;
+      try { await api(`/api/admin/announcements/${b.dataset.adel}/delete`, {}); viewAnnouncements(view); }
+      catch(err){ toast(err.message, true); }
+    }));
+  }
+
+  // ─── Audit ─────────────────────────────────────────────────────────────────
+  function auditDetails(json){
+    let d; try { d = JSON.parse(json); } catch(e){ return esc(json); }
+    const parts = [];
+    if(d.player) parts.push(`<b>${esc(d.player)}</b>`);
+    if(d.house) parts.push(`house <b>${esc(d.house)}</b>`);
+    if(d.item && typeof d.item === 'string') parts.push(`${d.quantity ? d.quantity + '× ' : ''}${esc(d.item)}`);
+    if(d.before && d.after){
+      parts.push(Object.keys(d.after).map(k => `${esc(k)}: ${esc(JSON.stringify(d.before[k]))} → ${esc(JSON.stringify(d.after[k]))}`).join(', '));
+    }
+    if(d.reason) parts.push('reason: ' + esc(d.reason));
+    if(d.days) parts.push('length: ' + esc(d.days) + (d.days === 'permanent' ? '' : ' days'));
+    if(d.message) parts.push('“' + esc(d.message) + '”');
+    if(d.count != null) parts.push(esc(d.count) + ' removed');
+    return parts.join(' · ') || `<span class="muted mono small">${esc(json)}</span>`;
+  }
+  async function viewAudit(view, _, page = 1){
+    const d = await api('/api/admin/audit?page=' + page);
+    view.innerHTML = d.entries.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Details</th></tr></thead><tbody>
+      ${d.entries.map(e => `<tr>
+        <td class="mono small" title="${esc(full(e.createdAt))}">${new Date(e.createdAt).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</td>
+        <td>${esc(e.adminName)}</td>
+        <td><span class="chip">${esc(e.action.replace(/_/g, ' '))}</span></td>
+        <td class="small">${e.targetUserId ? `<a class="plink" data-player="${e.targetUserId}">#${e.targetUserId}</a> ` : ''}${auditDetails(e.details)}</td>
+      </tr>`).join('')}</tbody></table></div>` : '<div class="panel"><div class="empty">No admin actions recorded yet.</div></div>';
+    if(d.total > d.pageSize) view.appendChild(pager(d, p => viewAudit(view, null, p)));
+  }
+
+  const VIEWS = {
+    overview: viewOverview, players: viewPlayers, logins: viewLogins, economy: viewEconomy,
+    market: viewMarket, items: viewItems, houses: viewHouses, feedback: viewFeedback,
+    errors: viewErrors, announcements: viewAnnouncements, audit: viewAudit,
+  };
+
+  // ─── Player drawer ─────────────────────────────────────────────────────────
+  const STAT_FIELDS = ['level','xp','statPoints','gold','health','maxHealth','energy','maxEnergy','strength','defense','speed','dexterity','intelligence'];
+  let openPlayerId = null;
+
+  function closeDrawer(){
+    openPlayerId = null;
+    $('#drawer').classList.remove('show'); $('#drawer-bg').classList.remove('show');
+    $('#drawer').setAttribute('aria-hidden', 'true');
+  }
+  $('#drawer-bg').addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', e => { if(e.key === 'Escape') closeDrawer(); });
+
+  // Any element with data-player opens that player's drawer.
+  document.addEventListener('click', e => {
+    const t = e.target.closest('[data-player]');
+    if(!t || e.target.closest('.drawer button')) return;
+    e.preventDefault();
+    openPlayer(Number(t.dataset.player));
+  });
+
+  async function openPlayer(id){
+    openPlayerId = id;
+    $('#drawer').classList.add('show'); $('#drawer-bg').classList.add('show');
+    $('#drawer').setAttribute('aria-hidden', 'false');
+    $('#drawer-head').innerHTML = '<div class="loading">Loading…</div><button class="drawer-close" aria-label="Close">&times;</button>';
+    $('#drawer-head .drawer-close').addEventListener('click', closeDrawer);
+    $('#drawer-body').innerHTML = '';
+    try {
+      const [d, items] = await Promise.all([api('/api/admin/players/' + id), loadItems()]);
+      if(openPlayerId !== id) return;
+      renderPlayer(d, items);
+    } catch(err){
+      $('#drawer-body').innerHTML = `<div class="muted">${esc(err.message)}</div>`;
+    }
+  }
+
+  function renderPlayer(d, items){
+    const u = d.user, s = u.stats;
+    const now = Date.now();
+    const travelling = s && (s.travelArrivesAt || s.travelDestination || s.travelDestinationId);
+
+    $('#drawer-head').innerHTML = `
+      ${u.avatar ? `<img src="${esc(u.avatar)}" alt="" referrerpolicy="no-referrer">` : ''}
+      <div>
+        <div class="drawer-title">${esc(name(u))}</div>
+        <div class="muted small">${esc(u.googleName || u.username)} · ${esc(u.email || 'no email')} · #${u.id}</div>
+        <div style="margin-top:0.35rem">${statusChips(u)}</div>
+      </div>
+      <button class="drawer-close" aria-label="Close">&times;</button>`;
+    $('#drawer-head .drawer-close').addEventListener('click', closeDrawer);
+
+    const banLine = isBanned(u)
+      ? `<div class="panel" style="border-color:var(--rust-bright);margin-bottom:1rem"><b style="color:var(--rust-bright)">Banned</b> ${permanent(u.bannedUntil) ? 'permanently' : 'until ' + esc(full(u.bannedUntil))}${u.banReason ? ' — ' + esc(u.banReason) : ''}
+          <div class="row" style="margin-top:0.6rem"><button class="btn-a good" data-act="unban">Lift ban</button></div></div>` : '';
+
+    $('#drawer-body').innerHTML = `
+      ${banLine}
+      <div class="panel">
+        <div class="panel-title">Summary</div>
+        <dl class="dl">
+          <dt>Class</dt><dd>${esc(u.characterClass || 'not chosen')}</dd>
+          <dt>Level</dt><dd>${s ? s.level + ' <span class="muted small">(' + num(s.xp) + ' XP)</span>' : '—'}</dd>
+          <dt>City</dt><dd>${esc(s?.currentCityId || '—')}${s?.hasWagon ? ' <span class="muted small">· wagon tier ' + s.wagonTier + '</span>' : ''}</dd>
+          <dt>House</dt><dd>${u.houseMember ? esc(u.houseMember.house.name) + ' <span class="muted small">· ' + esc(u.houseMember.rank) + '</span>' : '—'}</dd>
+          <dt>Joined</dt><dd title="${esc(full(u.createdAt))}">${rel(u.createdAt)}</dd>
+          <dt>Last login</dt><dd title="${esc(full(u.lastLoginAt))}">${rel(u.lastLoginAt)}</dd>
+          <dt>Last seen</dt><dd title="${esc(full(u.lastSeenAt))}">${isOnline(u) ? '<span class="dot"></span>' : ''}${rel(u.lastSeenAt)}</dd>
+        </dl>
+      </div>
+
+      ${s ? `<div class="panel">
+        <div class="panel-title">Status fixes</div>
+        <dl class="dl" style="margin-bottom:0.8rem">
+          <dt>Jail</dt><dd>${s.inJail ? 'in jail · free ' + rel(s.jailUntil) : 'no'}</dd>
+          <dt>Hospital</dt><dd>${s.inHospital ? 'in hospital · out ' + rel(s.hospitalUntil) : 'no'}</dd>
+          <dt>Travel</dt><dd>${travelling ? esc(s.travelDestination || s.travelDestinationId || '?') + ' · arrives ' + rel(s.travelArrivesAt || s.travelArrivalAt) : 'no'}</dd>
+          <dt>Fight</dt><dd>${u.combatSession ? esc(u.combatSession.monsterName) + ' (Lv ' + u.combatSession.monsterLevel + ') · turn ' + u.combatSession.turnCount : 'no'}</dd>
+        </dl>
+        <div class="row">
+          <button class="btn-a" data-act="release" data-what="jail" ${s.inJail ? '' : 'disabled'}>Free from jail</button>
+          <button class="btn-a" data-act="release" data-what="hospital" ${s.inHospital ? '' : 'disabled'}>Discharge</button>
+          <button class="btn-a" data-act="cancel-travel" ${travelling ? '' : 'disabled'}>Cancel travel</button>
+          <button class="btn-a" data-act="clear-combat" ${u.combatSession ? '' : 'disabled'}>End fight</button>
+          <button class="btn-a" data-act="reset-cooldowns">Reset cooldowns</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Stats <span class="muted small mono">changed fields are outlined</span></div>
+        <div class="stat-grid" id="stat-grid">
+          ${STAT_FIELDS.map(f => `<label>${f.replace(/([A-Z])/g, ' $1')}<input class="in" type="number" min="0" data-stat="${f}" data-orig="${s[f]}" value="${s[f]}"></label>`).join('')}
+        </div>
+        <div class="row" style="margin-top:0.8rem"><button class="btn-a primary" data-act="save-stats" disabled>Save stats</button><button class="btn-a" data-act="reset-stats">Undo changes</button></div>
+      </div>` : '<div class="panel"><span class="muted">This player hasn\'t created a character yet.</span></div>'}
+
+      <div class="panel">
+        <div class="panel-title">Inventory <span class="muted small mono">${u.inventory.length} stacks</span></div>
+        ${u.inventory.length ? `<div class="scroll-list"><table class="t"><tbody>
+          ${u.inventory.map(i => `<tr><td>${esc(i.item.name)} <span class="muted small">${esc(i.item.type)}</span></td><td class="num">×${i.quantity}</td>
+            <td style="width:1%;white-space:nowrap"><input class="in" type="number" min="1" max="${i.quantity}" value="1" data-rmqty="${i.id}" style="width:64px"> <button class="btn-a sm danger" data-act="remove-item" data-inv="${i.id}">Remove</button></td></tr>`).join('')}
+        </tbody></table></div>` : '<div class="muted small">Empty.</div>'}
+        <div class="row" style="margin-top:0.8rem">
+          <select class="in grow" id="give-item">${items.map(i => `<option value="${i.id}">${esc(i.name)} · ${esc(i.type)}</option>`).join('')}</select>
+          <input class="in" type="number" min="1" value="1" id="give-qty" style="width:70px">
+          <button class="btn-a" data-act="give-item">Give</button>
+        </div>
+        ${u.listings.length ? `<div class="sec-note" style="margin:0.8rem 0 0">${u.listings.length} item(s) listed on the market.</div>` : ''}
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Moderation</div>
+        <div class="row">
+          <button class="btn-a" data-act="kick">Force logout</button>
+          <button class="btn-a" data-act="logins">Full login history</button>
+          <button class="btn-a ${u.isAdmin ? 'danger' : ''}" data-act="toggle-admin">${u.isAdmin ? 'Remove admin' : 'Make admin'}</button>
+        </div>
+        ${isBanned(u) ? '' : `<div class="row" style="margin-top:0.9rem">
+          <select class="in" id="ban-days"><option value="1">1 day</option><option value="3">3 days</option><option value="7" selected>7 days</option><option value="30">30 days</option><option value="0">Permanent</option></select>
+          <input class="in grow" id="ban-reason" maxlength="300" placeholder="Reason (shown to other admins)">
+          <button class="btn-a danger" data-act="ban">Ban</button>
+        </div>`}
+        ${d.sharedIp.length ? `<div class="sec-note" style="margin:1rem 0 0.4rem">Other accounts seen on the same IP:</div>
+          <div>${d.sharedIp.map(x => `<a class="plink" data-player="${x.id}">${esc(x.name)}</a> <span class="muted mono small">${esc(x.ip)}</span>`).join('<br>')}</div>` : ''}
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Recent logins</div>
+        <div class="scroll-list">${d.logins.length ? `<table class="t"><tbody>${d.logins.map(e => `<tr>
+          <td class="mono small">${new Date(e.createdAt).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</td>
+          <td><span class="chip ${e.type === 'login' ? 'login' : e.type === 'kicked' ? 'logout-k' : 'logout'}">${esc(e.type)}</span></td>
+          <td class="mono small">${esc(e.ip || '—')}</td><td class="small muted hide-sm">${esc(device(e.userAgent))}</td></tr>`).join('')}</tbody></table>` : '<div class="muted small">No logins recorded yet (tracking starts with this update).</div>'}</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Activity</div>
+        <div class="log-list" style="max-height:300px">${d.activity.map(a => `<div class="log-entry"><span class="log-time" title="${esc(full(a.createdAt))}">${rel(a.createdAt)}</span><span><span class="chip">${esc(a.category)}</span> ${esc(a.message)}</span></div>`).join('') || '<div class="muted small">No activity.</div>'}</div>
+      </div>
+
+      ${d.feedback.length ? `<div class="panel"><div class="panel-title">Feedback from this player</div>
+        ${d.feedback.map(f => `<div class="log-entry"><span class="log-time">${rel(f.createdAt)}</span><span><span class="chip">${esc(f.category)}</span> ${esc(f.message.slice(0, 200))}${f.message.length > 200 ? '…' : ''}</span></div>`).join('')}</div>` : ''}
+
+      <div class="panel">
+        <div class="panel-title">Admin history</div>
+        ${d.audits.map(e => `<div class="log-entry"><span class="log-time">${rel(e.createdAt)}</span><span><span class="chip">${esc(e.action.replace(/_/g,' '))}</span> by ${esc(e.adminName)} · ${auditDetails(e.details)}</span></div>`).join('') || '<div class="muted small">No admin actions on this player.</div>'}
+      </div>`;
+
+    const body = $('#drawer-body');
+    const grid = $('#stat-grid', body);
+    const saveBtn = body.querySelector('[data-act="save-stats"]');
+    if(grid){
+      grid.addEventListener('input', () => {
+        let any = false;
+        grid.querySelectorAll('[data-stat]').forEach(i => { const c = i.value !== i.dataset.orig; i.classList.toggle('changed', c); any = any || c; });
+        saveBtn.disabled = !any;
+      });
+    }
+
+    body.querySelectorAll('[data-act]').forEach(btn => btn.addEventListener('click', async () => {
+      const act = btn.dataset.act, base = '/api/admin/players/' + u.id;
+      try {
+        switch(act){
+          case 'release':
+            await api(base + '/release', { what: btn.dataset.what }); toast('Released'); break;
+          case 'cancel-travel':
+            if(!confirm('Cancel this journey? The player stays where they are.')) return;
+            await api(base + '/cancel-travel', {}); toast('Travel cancelled'); break;
+          case 'clear-combat':
+            await api(base + '/clear-combat', {}); toast('Fight cleared'); break;
+          case 'reset-cooldowns':
+            await api(base + '/reset-cooldowns', {}); toast('Training and raid cooldowns reset'); break;
+          case 'reset-stats':
+            grid.querySelectorAll('[data-stat]').forEach(i => { i.value = i.dataset.orig; i.classList.remove('changed'); });
+            saveBtn.disabled = true; return;
+          case 'save-stats': {
+            const changes = {};
+            grid.querySelectorAll('[data-stat]').forEach(i => { if(i.value !== i.dataset.orig) changes[i.dataset.stat] = Number(i.value); });
+            if(!Object.keys(changes).length) return;
+            await api(base + '/stats', changes); toast('Stats saved'); break;
+          }
+          case 'give-item': {
+            const qty = Number($('#give-qty', body).value) || 1;
+            await api(base + '/give-item', { itemId: Number($('#give-item', body).value), quantity: qty }); toast('Item given'); break;
+          }
+          case 'remove-item': {
+            const qty = Number(body.querySelector(`[data-rmqty="${btn.dataset.inv}"]`).value) || 1;
+            await api(base + '/remove-item', { inventoryId: Number(btn.dataset.inv), quantity: qty }); toast('Item removed'); break;
+          }
+          case 'kick': {
+            const r = await api(base + '/kick', {}); toast(`Logged out (${r.sessionsEnded} session${r.sessionsEnded === 1 ? '' : 's'} ended)`); break;
+          }
+          case 'ban': {
+            const days = Number($('#ban-days', body).value);
+            if(!confirm(`Ban ${name(u)} ${days ? 'for ' + days + ' day' + (days === 1 ? '' : 's') : 'permanently'}? They'll be logged out immediately.`)) return;
+            await api(base + '/ban', { days: days || null, reason: $('#ban-reason', body).value.trim() || undefined }); toast('Player banned'); break;
+          }
+          case 'unban':
+            await api(base + '/unban', {}); toast('Ban lifted'); break;
+          case 'toggle-admin':
+            if(!confirm(u.isAdmin ? `Remove admin access from ${name(u)}?` : `Give ${name(u)} full admin access?`)) return;
+            await api(base + '/admin', { isAdmin: !u.isAdmin }); toast(u.isAdmin ? 'Admin removed' : 'Admin granted'); break;
+          case 'logins':
+            Object.assign(lState, { q:'', type:'', ip:'', from:'', to:'', userId: String(u.id), page: 1 });
+            closeDrawer();
+            if(location.hash === '#logins') route(); else location.hash = 'logins';
+            return;
+        }
+        openPlayer(u.id);
+        if(['players','overview','economy'].includes(current)) route();
+      } catch(err){ toast(err.message, true); }
+    }));
+  }
+
+  // ─── Boot ──────────────────────────────────────────────────────────────────
+  api('/api/me').then(me => { $('#player-name').textContent = (me.username || 'Admin') + ' · admin'; }).catch(() => {});
+  route();
+})();
+</script>
+</body>
+</html>

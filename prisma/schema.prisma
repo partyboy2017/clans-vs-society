@@ -22,6 +22,10 @@ model User {
   characterName  String?
   characterClass String?
   lastLoginAt    DateTime?
+  lastSeenAt     DateTime?
+  isAdmin        Boolean      @default(false)
+  bannedUntil    DateTime?
+  banReason      String?
   createdAt      DateTime     @default(now())
   stats          Stats?
   houseMember    HouseMember?
@@ -30,6 +34,67 @@ model User {
   userSkills     UserSkill[]
   combatSession  CombatSession?
   activityLogs   ActivityLog[]
+  loginEvents    LoginEvent[]
+  feedback       Feedback[]
+}
+
+// ─── Admin / moderation ───────────────────────────────────────────────────────
+
+model LoginEvent {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  type      String   // 'login' | 'logout' | 'kicked'
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@index([ip])
+}
+
+model AdminAuditLog {
+  id           Int      @id @default(autoincrement())
+  adminId      Int
+  adminName    String
+  action       String
+  targetUserId Int?
+  details      String   // JSON: { before, after, ... }
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([targetUserId])
+}
+
+model ErrorLog {
+  id        Int      @id @default(autoincrement())
+  message   String
+  stack     String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Feedback {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  category  String
+  message   String
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([resolved, createdAt])
+}
+
+model Announcement {
+  id        Int       @id @default(autoincrement())
+  message   String
+  active    Boolean   @default(true)
+  expiresAt DateTime?
+  createdBy String
+  createdAt DateTime  @default(now())
 }
 
 model ActivityLog {
@@ -174,4 +239,16 @@ model CombatSession {
 
   turnCount        Int      @default(0)
   createdAt        DateTime @default(now())
+}
+
+// Hourly per-player gold snapshots (pruned after 14 days). Powers the admin
+// economy view: gold in circulation over time and biggest recent gold gains.
+model GoldSnapshot {
+  id      Int      @id @default(autoincrement())
+  userId  Int
+  gold    Int
+  takenAt DateTime
+
+  @@index([takenAt])
+  @@index([userId, takenAt])
 }

@@ -351,5 +351,16 @@
 
 
 
+<script>
+  // Shown when a banned player is turned away at login (server redirects to /?banned=1).
+  (function(){
+    if (new URLSearchParams(location.search).get('banned') !== '1') return;
+    var n = document.createElement('div');
+    n.setAttribute('role', 'alert');
+    n.style.cssText = 'position:fixed;top:1rem;left:50%;transform:translateX(-50%);z-index:100;max-width:min(92vw,520px);padding:0.9rem 1.1rem;background:#25211C;border:1px solid #B0492F;color:#ECE4D2;font-family:"EB Garamond",serif;font-size:1rem;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,0.4);';
+    n.textContent = 'Your account has been banned from the realm. If you think this is a mistake, contact clansvssociety@gmail.com.';
+    document.body.appendChild(n);
+  })();
+</script>
 </body>
 </html>

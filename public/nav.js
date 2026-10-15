@@ -148,7 +148,7 @@
       .then(r => r.ok ? r.json() : null)
       .then(info => {
         if(!info) return;
-        if(info.isAdmin) addAdminLink();
+        if(info.isStaff) addAdminLink();
         if(Array.isArray(info.announcements)) showAnnouncements(info.announcements);
       })
       .catch(() => {});

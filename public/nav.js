@@ -97,9 +97,67 @@
     mobileNav.innerHTML = `<div class="mobile-nav-inner">${items}</div>`;
   }
 
+  // ── Announcements banner + admin link ──
+  function esc(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function dismissed(){
+    try { return JSON.parse(sessionStorage.getItem('cvs-dismissed-ann') || '[]'); } catch(e){ return []; }
+  }
+
+  function showAnnouncements(list){
+    const hidden = dismissed();
+    const visible = list.filter(a => !hidden.includes(a.id));
+    if(!visible.length) return;
+    const main = document.querySelector('.main');
+    if(!main) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'announce-wrap';
+    wrap.innerHTML = visible.map(a => `
+      <div class="announce" data-id="${a.id}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z" stroke-linejoin="round"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" stroke-linecap="round"/></svg>
+        <span class="announce-text">${esc(a.message)}</span>
+        <button class="announce-close" aria-label="Dismiss">&times;</button>
+      </div>`).join('');
+    wrap.addEventListener('click', e => {
+      const btn = e.target.closest('.announce-close');
+      if(!btn) return;
+      const box = btn.closest('.announce');
+      const ids = dismissed();
+      ids.push(Number(box.dataset.id));
+      try { sessionStorage.setItem('cvs-dismissed-ann', JSON.stringify(ids)); } catch(err){}
+      box.remove();
+    });
+    main.prepend(wrap);
+  }
+
+  function addAdminLink(){
+    links.push({
+      section: 'Keepers',
+      items: [
+        { href: '/admin', label: 'Admin', icon: '<path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5z" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/>' },
+      ]
+    });
+    buildNav();
+    buildMobileNav();
+  }
+
+  function loadNavInfo(){
+    fetch('/api/announcements', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null)
+      .then(info => {
+        if(!info) return;
+        if(info.isAdmin) addAdminLink();
+        if(Array.isArray(info.announcements)) showAnnouncements(info.announcements);
+      })
+      .catch(() => {});
+  }
+
   function init(){
     buildNav();
     buildMobileNav();
+    loadNavInfo();
   }
 
   if(document.readyState === 'loading'){

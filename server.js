@@ -6,14 +6,20 @@ const pgSession = require('connect-pg-simple')(session);
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const { PrismaClient } = require('@prisma/client');
+const admin = require('./admin');
 
 const app = express();
 const prisma = new PrismaClient();
 
+// Behind Railway's proxy — needed so req.ip is the player's real IP (login log).
+app.set('trust proxy', 1);
+
 // Thin wrapper kept around console.error so error-logging call sites don't
 // need to change again once Sentry (or similar) gets added back later.
+// Errors are also stored in ErrorLog so they show up on the admin page.
 function logError(...args) {
   console.error(...args);
+  admin.persistError(prisma, args);
 }
 
 // ─── Class definitions ────────────────────────────────────────────────────────
@@ -415,6 +421,8 @@ app.use(session({
 }));
 app.use(passport.initialize());
 app.use(passport.session());
+// Kicks out banned players and keeps User.lastSeenAt fresh ("online now").
+admin.installPresence(app, { prisma });
 
 // ─── Email ────────────────────────────────────────────────────────────────────
 
@@ -561,15 +569,27 @@ passport.use(new GoogleStrategy({
     const existing = await prisma.user.findUnique({ where: { googleId: profile.id } });
     const isNewUser = !existing;
 
+    // Banned players can't log back in until the ban expires.
+    if (existing && admin.isBanned(existing)) return done(null, false);
+
+    // ADMIN_EMAILS (comma-separated) bootstraps admin access on login.
+    const email   = profile.emails?.[0]?.value || null;
+    const grantAdmin = admin.isAdminEmail(email) ? { isAdmin: true } : {};
+
     const user = await prisma.user.upsert({
       where:  { googleId: profile.id },
       update: {
+        ...grantAdmin,
         lastLoginAt: new Date(),
+        lastSeenAt:  new Date(),
         avatar:      profile.photos?.[0]?.value || null,
         googleName:  profile.displayName         || null,
         email:       profile.emails?.[0]?.value  || null,
       },
       create: {
+        ...grantAdmin,
+        lastLoginAt: new Date(),
+        lastSeenAt:  new Date(),
         googleId:   profile.id,
         username:   profile.displayName,
         googleName: profile.displayName         || null,
@@ -611,8 +631,9 @@ passport.deserializeUser(async (id, done) => {
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/' }),
+  passport.authenticate('google', { failureRedirect: '/?banned=1' }),
   (req, res) => {
+    admin.recordLoginEvent(prisma, req, req.user.id, 'login');
     if (!req.user.characterName)  return res.redirect('/choose-name');
     if (!req.user.characterClass) return res.redirect('/choose-class');
     res.redirect('/dashboard');
@@ -722,6 +743,7 @@ app.get('/city/:cityId', (req, res) => {
 // ─── API: auth ────────────────────────────────────────────────────────────────
 
 app.post('/api/logout', (req, res) => {
+  if (req.user) admin.recordLoginEvent(prisma, req, req.user.id, 'logout');
   req.logout((err) => {
     if (err) return res.status(500).json({ error: 'Logout failed' });
     req.session.destroy(() => {
@@ -766,6 +788,7 @@ app.get('/api/me', async (req, res) => {
     classLabel:      req.user.characterClass ? CLASSES[req.user.characterClass].label : null,
     lastLoginAt:     req.user.lastLoginAt,
     createdAt:       req.user.createdAt,
+    isAdmin:         !!req.user.isAdmin,
     stats,
     restCooldownMs,
     energyRegen: {
@@ -2388,6 +2411,16 @@ app.post('/api/feedback', validate(schemas.feedback), async (req, res) => {
     return res.status(429).json({ error: 'Please wait a moment before sending more feedback.' });
   }
 
+  // Save to the admin feedback inbox first, then email as before. As long as
+  // one of the two works, the player's feedback isn't lost.
+  let saved = false;
+  try {
+    await prisma.feedback.create({ data: { userId: req.user.id, category, message } });
+    saved = true;
+  } catch (err) {
+    logError('Feedback save error:', err);
+  }
+
   const result = await sendFeedbackEmail({
     category,
     message,
@@ -2395,7 +2428,7 @@ app.post('/api/feedback', validate(schemas.feedback), async (req, res) => {
     email: req.user.email,
   });
 
-  if (!result.ok) {
+  if (!result.ok && !saved) {
     return res.status(500).json({ error: 'Could not send your feedback right now. Please try again later.' });
   }
 
@@ -2855,6 +2888,12 @@ app.post('/api/monsters/turn', validate(schemas.monstersTurn), async (req, res) 
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
+
+// ─── Admin panel ──────────────────────────────────────────────────────────────
+
+admin.registerAnnouncementRoute(app, { prisma, logError });
+admin.registerAdminRoutes(app, { prisma, logError, validate, CLASSES });
+admin.startBackgroundJobs({ prisma, logError });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {

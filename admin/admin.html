@@ -151,7 +151,7 @@
 
   <main class="main">
     <div class="page-title">Realm Keepers</div>
-    <div class="page-sub">Admin tools. Every change made here is recorded in the audit log.</div>
+    <div class="page-sub">Staff tools. Every change made here is recorded in the audit log.</div>
 
     <div class="tabs" id="tabs"></div>
     <div id="view"><div class="loading">Loading…</div></div>
@@ -219,6 +219,11 @@
     const br = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
     return br + ' · ' + os;
   }
+  // Filled from /api/admin/me before the first render. The server enforces
+  // every permission; this only hides buttons a role can't use.
+  let ME = { role: 'player', permissions: [] };
+  const canDo = p => ME.permissions.includes(p);
+
   const ONLINE_MS = 5 * 60 * 1000;
   const isOnline = u => u.lastSeenAt && (Date.now() - new Date(u.lastSeenAt).getTime() < ONLINE_MS);
   const isBanned = u => u.bannedUntil && new Date(u.bannedUntil).getTime() > Date.now();
@@ -228,7 +233,8 @@
     let h = '';
     if(isOnline(u)) h += '<span class="chip online">online</span>';
     if(isBanned(u)) h += '<span class="chip banned">banned</span>';
-    if(u.isAdmin) h += '<span class="chip admin">admin</span>';
+    if(u.role === 'admin') h += '<span class="chip admin">admin</span>';
+    if(u.role === 'moderator') h += '<span class="chip admin">mod</span>';
     if(u.stats?.inJail) h += '<span class="chip jail">jail</span>';
     if(u.stats?.inHospital) h += '<span class="chip hosp">hospital</span>';
     return h;
@@ -248,11 +254,14 @@
   function debounce(fn, ms){ let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
   // ─── Tabs ──────────────────────────────────────────────────────────────────
-  const TABS = [
-    ['overview', 'Overview'], ['players', 'Players'], ['logins', 'Login Log'], ['economy', 'Economy'],
-    ['market', 'Market'], ['items', 'Items'], ['houses', 'Houses'], ['feedback', 'Feedback'],
-    ['errors', 'Errors'], ['announcements', 'Announcements'], ['audit', 'Audit Log'],
+  const ALL_TABS = [
+    ['overview', 'Overview', 'portal.view'], ['players', 'Players', 'players.view'], ['logins', 'Login Log', 'logins.view'],
+    ['economy', 'Economy', 'economy.view'], ['market', 'Market', 'market.view'], ['items', 'Items', 'items.view'],
+    ['houses', 'Houses', 'houses.view'], ['feedback', 'Feedback', 'feedback.view'], ['errors', 'Errors', 'errors.view'],
+    ['announcements', 'Announcements', 'announcements.manage'], ['activity', 'Activity', 'activity.view'],
+    ['audit', 'Audit Log', 'audit.view'],
   ];
+  let TABS = [];
   const badges = {};
   let current = null;
 
@@ -278,9 +287,10 @@
 
   // ─── Overview ──────────────────────────────────────────────────────────────
   async function viewOverview(view){
-    const [o, online] = await Promise.all([api('/api/admin/overview'), api('/api/admin/online')]);
+    const [o, online] = await Promise.all([api('/api/admin/overview'), canDo('players.view') ? api('/api/admin/online') : []]);
     badges.feedback = o.openFeedback || 0;
     badges.errors = o.errors24h || 0;
+    if(!canDo('players.view')) online.length = 0;
     renderTabs();
 
     const tile = (label, value, sub, cls = '', go = '') =>
@@ -304,7 +314,8 @@
         ${tile('Avg level', o.avgLevel, 'highest ' + o.maxLevel)}
         ${tile('Gold held', num(o.playerGold), num(o.houseGold) + ' in house vaults', '', 'economy')}
         ${tile('Open feedback', num(o.openFeedback), '', o.openFeedback ? 'alert' : '', 'feedback')}
-        ${tile('Errors (24h)', num(o.errors24h), '', o.errors24h ? 'alert' : '', 'errors')}
+        ${o.errors24h === null ? '' : tile('Errors (24h)', num(o.errors24h), '', o.errors24h ? 'alert' : '', 'errors')}
+        ${tile('Fights running', num(o.activeFights), 'monster fights in progress')}
         ${tile('Banned', num(o.bannedCount), '', '', 'players')}
       </div>
       <div class="grid2">
@@ -334,7 +345,7 @@
       <div class="toolbar">
         <input class="in grow" id="p-q" placeholder="Search by character, Google name, email or #id" value="${esc(pState.q)}">
         <select class="in" id="p-filter">
-          ${[['all','All players'],['online','Online now'],['banned','Banned'],['jailed','In jail / hospital'],['admins','Admins']].map(([v,l]) => `<option value="${v}" ${pState.filter===v?'selected':''}>${l}</option>`).join('')}
+          ${[['all','All players'],['online','Online now'],['banned','Banned'],['jailed','In jail / hospital'],['staff','Staff']].map(([v,l]) => `<option value="${v}" ${pState.filter===v?'selected':''}>${l}</option>`).join('')}
         </select>
         <select class="in" id="p-sort">
           ${[['lastSeen','Last seen'],['level','Level'],['gold','Gold'],['newest','Newest']].map(([v,l]) => `<option value="${v}" ${pState.sort===v?'selected':''}>Sort: ${l}</option>`).join('')}
@@ -376,7 +387,7 @@
       <div class="toolbar">
         <input class="in grow" id="l-q" placeholder="Player name" value="${esc(lState.q)}">
         <select class="in" id="l-type">
-          ${[['','All events'],['login','Logins'],['logout','Logouts'],['kicked','Kicked / banned']].map(([v,l]) => `<option value="${v}" ${lState.type===v?'selected':''}>${l}</option>`).join('')}
+          ${[['','All events'],['login','Logins'],['logout','Logouts'],['kicked','Kicked'],['banned','Banned']].map(([v,l]) => `<option value="${v}" ${lState.type===v?'selected':''}>${l}</option>`).join('')}
         </select>
         <input class="in" id="l-ip" placeholder="IP address" value="${esc(lState.ip)}" style="width:150px">
         <input class="in" type="date" id="l-from" value="${esc(lState.from)}" title="From">
@@ -396,16 +407,17 @@
         </tr></thead><tbody>
         ${d.events.map(e => {
           let sess = '—';
+          if(e.by) sess = `<span class="muted small">by</span> <a class="plink" data-player="${e.by.id}">${esc(name(e.by))}</a>`;
           if(e.type === 'login' && e.session){
             sess = e.session.seconds == null ? '<span class="muted">—</span>'
               : dur(e.session.seconds) + (e.session.ended ? '' : ' <span class="muted small">(est.)</span>');
           }
-          const chip = e.type === 'login' ? 'login' : e.type === 'kicked' ? 'logout-k' : 'logout';
+          const chip = e.type === 'login' ? 'login' : e.type === 'logout' ? 'logout' : 'logout-k';
           return `<tr>
             <td title="${esc(full(e.createdAt))}" class="mono small">${new Date(e.createdAt).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</td>
             <td><a class="plink" data-player="${e.user.id}">${esc(name(e.user))}</a></td>
             <td><span class="chip ${chip}">${esc(e.type)}</span></td>
-            <td class="mono small">${sess}</td>
+            <td class="${e.by ? 'small' : 'mono small'}">${sess}</td>
             <td class="mono small">${e.ip ? `<a class="plink" data-ip="${esc(e.ip)}">${esc(e.ip)}</a>` : '—'}</td>
             <td class="hide-sm small muted" title="${esc(e.userAgent || '')}">${esc(device(e.userAgent))}</td>
           </tr>`;
@@ -491,7 +503,7 @@
           <td class="num">${l.quantity}</td><td class="num">${num(l.price)}</td><td class="num">${num(l.unitPrice)}</td>
           <td class="num">${l.ratio == null ? '—' : l.ratio + '×'}</td>
           <td class="hide-sm" title="${esc(full(l.createdAt))}">${rel(l.createdAt)}</td>
-          <td><button class="btn-a sm danger" data-remove="${l.id}">Remove</button></td>
+          <td>${canDo('market.moderate') ? `<button class="btn-a sm danger" data-remove="${l.id}">Remove</button>` : ''}</td>
         </tr>`).join('')}
       </tbody></table></div>` : '<div class="table-wrap"><div class="empty">No active listings.</div></div>'}`;
     view.querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', async () => {
@@ -518,7 +530,7 @@
   }
   function readForm(el){
     const o = {};
-    el.querySelectorAll('[data-f]').forEach(i => { o[i.dataset.f] = i.type === 'number' ? Number(i.value) : i.value; });
+    el.querySelectorAll('[data-f]').forEach(i => { if(!i.disabled) o[i.dataset.f] = i.type === 'number' ? Number(i.value) : i.value; });
     return o;
   }
   async function viewItems(view){
@@ -528,7 +540,7 @@
       <div class="toolbar">
         <input class="in grow" id="i-q" placeholder="Filter items">
         <select class="in" id="i-type"><option value="">All types</option>${types.map(t => `<option>${esc(t)}</option>`).join('')}</select>
-        <button class="btn-a primary" id="i-new">New item</button>
+        ${canDo('items.manage') ? '<button class="btn-a primary" id="i-new">New item</button>' : ''}
       </div>
       <div class="panel" id="i-new-form" style="display:none;margin-bottom:1rem">
         <div class="panel-title">New item</div>
@@ -544,7 +556,7 @@
       body.innerHTML = rows.map(i => `<tr data-row="${i.id}">
           <td>${esc(i.name)}</td><td class="small">${esc(i.type)}</td><td class="mono small hide-sm">${esc(i.effect || '—')}</td>
           <td class="num">${num(i.basePrice)}</td><td class="num hide-sm">${i._count.inventory}</td>
-          <td><button class="btn-a sm" data-edit="${i.id}">Edit</button></td></tr>
+          <td>${canDo('items.manage') ? `<button class="btn-a sm" data-edit="${i.id}">Edit</button>` : ''}</td></tr>
         <tr data-editor="${i.id}" style="display:none"><td colspan="6" style="background:var(--bg-panel-2)">${itemForm(i)}
           <div class="row"><button class="btn-a primary" data-save="${i.id}">Save</button><button class="btn-a" data-close="${i.id}">Cancel</button></div></td></tr>`).join('')
         || '<tr><td colspan="6" class="empty">No items match.</td></tr>';
@@ -552,7 +564,7 @@
     draw();
     $('#i-q').addEventListener('input', draw);
     $('#i-type').addEventListener('change', draw);
-    $('#i-new').addEventListener('click', () => { $('#i-new-form').style.display = ''; });
+    if($('#i-new')) $('#i-new').addEventListener('click', () => { $('#i-new-form').style.display = ''; });
     $('#i-cancel').addEventListener('click', () => { $('#i-new-form').style.display = 'none'; });
     $('#i-create').addEventListener('click', async () => {
       try { await api('/api/admin/items', readForm($('#i-new-form'))); toast('Item created'); viewItems(view); }
@@ -591,14 +603,14 @@
         <div class="row">
           <input class="in" data-f="name" value="${esc(h.name)}" style="width:200px" aria-label="House name">
           <input class="in grow" data-f="motto" value="${esc(h.motto)}" aria-label="Motto">
-          <input class="in" type="number" min="0" data-f="gold" value="${h.gold}" style="width:120px" aria-label="Gold">
+          <input class="in" type="number" min="0" data-f="gold" value="${h.gold}" style="width:120px" aria-label="Gold" ${canDo('houses.manage') ? '' : 'disabled title="Only admins can change house gold"'}>
           <button class="btn-a primary" data-hsave="${h.id}">Save</button>
         </div>
-        <div class="row">
+        ${canDo('houses.manage') ? `<div class="row">
           <select class="in" data-leader="${h.id}">${h.members.map(m => `<option value="${m.userId}" ${m.userId===h.leaderId?'selected':''}>${esc(name(m.user))} · Lv ${m.user.stats?.level ?? '?'} · ${esc(m.rank)}</option>`).join('')}</select>
           <button class="btn-a" data-hlead="${h.id}">Make leader</button>
           <button class="btn-a danger" data-hdisband="${h.id}" style="margin-left:auto">Disband</button>
-        </div>
+        </div>` : ''}
       </div>`;
     }).join('')}</div>`;
 
@@ -639,7 +651,7 @@
           <a class="plink" data-player="${f.user.id}">${esc(name(f.user))}</a>
           <span class="muted small" title="${esc(full(f.createdAt))}">${rel(f.createdAt)}</span>
           <span style="margin-left:auto">${f.user.email ? `<a class="btn-a sm" href="mailto:${esc(f.user.email)}?subject=${encodeURIComponent('Re: your ' + f.category.toLowerCase())}">Reply</a>` : ''}
-          <button class="btn-a sm ${f.resolved ? '' : 'good'}" data-fb="${f.id}" data-to="${!f.resolved}">${f.resolved ? 'Reopen' : 'Mark resolved'}</button></span>
+          ${canDo('feedback.manage') ? `<button class="btn-a sm ${f.resolved ? '' : 'good'}" data-fb="${f.id}" data-to="${!f.resolved}">${f.resolved ? 'Reopen' : 'Mark resolved'}</button>` : ''}</span>
         </div>
         <div class="card-body">${esc(f.message)}</div></div>`).join('') || '<div class="panel"><div class="empty">Nothing here.</div></div>'}</div>`;
     $('#fb-status').addEventListener('change', e => { fbStatus = e.target.value; viewFeedback(view); });
@@ -654,7 +666,7 @@
     const d = await api('/api/admin/errors?page=' + page);
     view.innerHTML = `
       <div class="toolbar"><span class="muted small grow">Server errors from logError(). Kept for 30 days.</span>
-        ${d.total ? '<button class="btn-a danger" id="e-clear">Clear all</button>' : ''}</div>
+        ${d.total && canDo('errors.manage') ? '<button class="btn-a danger" id="e-clear">Clear all</button>' : ''}</div>
       <div class="card-list">${d.errors.map(e => `<div class="card">
         <div class="card-head"><span class="mono small muted" title="${esc(full(e.createdAt))}">${new Date(e.createdAt).toLocaleString()}</span></div>
         <div class="card-body mono small">${esc(e.message)}</div>
@@ -714,37 +726,89 @@
   }
 
   // ─── Audit ─────────────────────────────────────────────────────────────────
-  function auditDetails(json){
-    let d; try { d = JSON.parse(json); } catch(e){ return esc(json); }
-    const parts = [];
-    if(d.player) parts.push(`<b>${esc(d.player)}</b>`);
-    if(d.house) parts.push(`house <b>${esc(d.house)}</b>`);
-    if(d.item && typeof d.item === 'string') parts.push(`${d.quantity ? d.quantity + '× ' : ''}${esc(d.item)}`);
-    if(d.before && d.after){
-      parts.push(Object.keys(d.after).map(k => `${esc(k)}: ${esc(JSON.stringify(d.before[k]))} → ${esc(JSON.stringify(d.after[k]))}`).join(', '));
-    }
-    if(d.reason) parts.push('reason: ' + esc(d.reason));
-    if(d.days) parts.push('length: ' + esc(d.days) + (d.days === 'permanent' ? '' : ' days'));
-    if(d.message) parts.push('“' + esc(d.message) + '”');
-    if(d.count != null) parts.push(esc(d.count) + ' removed');
-    return parts.join(' · ') || `<span class="muted mono small">${esc(json)}</span>`;
+  // AuditLog rows: auth.* (logins), admin.* (staff actions) and game events
+  // (market.*, raid.*, house.*, shop.*, skill.*, ...). metadata is JSON.
+  const HIDE_META = ['player'];
+  function fmtVal(v){
+    if(v === null || v === undefined) return '—';
+    if(typeof v === 'object') return esc(JSON.stringify(v));
+    return esc(String(v));
   }
-  async function viewAudit(view, _, page = 1){
-    const d = await api('/api/admin/audit?page=' + page);
-    view.innerHTML = d.entries.length ? `<div class="table-wrap"><table class="t"><thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Details</th></tr></thead><tbody>
-      ${d.entries.map(e => `<tr>
-        <td class="mono small" title="${esc(full(e.createdAt))}">${new Date(e.createdAt).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</td>
-        <td>${esc(e.adminName)}</td>
-        <td><span class="chip">${esc(e.action.replace(/_/g, ' '))}</span></td>
-        <td class="small">${e.targetUserId ? `<a class="plink" data-player="${e.targetUserId}">#${e.targetUserId}</a> ` : ''}${auditDetails(e.details)}</td>
-      </tr>`).join('')}</tbody></table></div>` : '<div class="panel"><div class="empty">No admin actions recorded yet.</div></div>';
-    if(d.total > d.pageSize) view.appendChild(pager(d, p => viewAudit(view, null, p)));
+  function auditDetails(e){
+    const m = e.metadata || {};
+    const parts = [];
+    if(m.changes && typeof m.changes === 'object'){
+      parts.push(Object.entries(m.changes).map(([k, c]) => `${esc(k)}: ${fmtVal(c.from)} → ${fmtVal(c.to)}`).join(', '));
+    }
+    if(m.from !== undefined && m.to !== undefined && !m.changes) parts.push(`${fmtVal(m.from)} → ${fmtVal(m.to)}`);
+    if(m.message) parts.push('“' + esc(m.message) + '”');
+    for(const [k, v] of Object.entries(m)){
+      if(['changes', 'from', 'to', 'message', ...HIDE_META].includes(k)) continue;
+      parts.push(`<span class="muted">${esc(k)}</span> ${fmtVal(v)}`);
+    }
+    return parts.join(' · ');
+  }
+  const AUDIT_FILTERS = [['', 'Everything'], ['admin.', 'Staff actions'], ['auth.', 'Logins & logouts'], ['market.', 'Market'],
+    ['raid.', 'Raids'], ['shop.', 'Shop'], ['house.', 'Houses'], ['skill.', 'Skills'], ['stat.', 'Stat points'],
+    ['character.', 'Character setup'], ['wagon.', 'Wagons'], ['feedback.', 'Feedback']];
+  const aState = { action: '', userId: '', page: 1 };
+  async function viewAudit(view){
+    view.innerHTML = `
+      <div class="toolbar">
+        <select class="in" id="a-filter">${AUDIT_FILTERS.map(([v, l]) => `<option value="${v}" ${aState.action === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <span class="muted small grow">Kept for 90 days. Click a player to see their full history.</span>
+      </div>
+      ${aState.userId ? `<div class="sec-note">Showing one player only. <a class="plink" id="a-all">Show everyone</a></div>` : ''}
+      <div id="a-list"><div class="loading">Loading…</div></div>`;
+    async function load(){
+      const qs = new URLSearchParams(Object.entries(aState).filter(([k, v]) => v !== ''));
+      const d = await api('/api/admin/audit?' + qs);
+      const list = $('#a-list');
+      if(!d.entries.length){ list.innerHTML = '<div class="table-wrap"><div class="empty">Nothing recorded yet.</div></div>'; return; }
+      list.innerHTML = `<div class="table-wrap"><table class="t"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Details</th><th class="hide-sm">IP</th></tr></thead><tbody>
+        ${d.entries.map(e => `<tr>
+          <td class="mono small" title="${esc(full(e.createdAt))}">${new Date(e.createdAt).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</td>
+          <td>${e.userId ? `<a class="plink" data-player="${e.userId}">${esc(e.userName)}</a>` : '<span class="muted">system</span>'}</td>
+          <td><span class="chip ${e.action.startsWith('admin.') ? 'admin' : e.action.startsWith('auth.') ? 'login' : ''}">${esc(e.action)}</span></td>
+          <td>${e.targetUserId ? `<a class="plink" data-player="${e.targetUserId}">${esc(e.targetName)}</a>` : ''}</td>
+          <td class="small">${auditDetails(e)}</td>
+          <td class="mono small hide-sm">${esc(e.ip || '')}</td>
+        </tr>`).join('')}</tbody></table></div>`;
+      list.appendChild(pager(d, p => { aState.page = p; load(); }));
+    }
+    $('#a-filter').addEventListener('change', e => { aState.action = e.target.value; aState.page = 1; load().catch(err => toast(err.message, true)); });
+    const all = $('#a-all'); if(all) all.addEventListener('click', () => { aState.userId = ''; aState.page = 1; viewAudit(view); });
+    await load();
+  }
+
+  // ─── Activity ──────────────────────────────────────────────────────────────
+  const actState = { category: '', page: 1 };
+  async function viewActivity(view){
+    view.innerHTML = `
+      <div class="toolbar">
+        <select class="in" id="act-cat">${[['', 'All activity'], ['training', 'Training'], ['raid', 'Raids'], ['monster', 'Monsters'], ['inventory', 'Inventory'], ['level', 'Levels & skills'], ['travel', 'Travel'], ['feedback', 'Feedback']]
+          .map(([v, l]) => `<option value="${v}" ${actState.category === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <span class="muted small grow">The same messages players see in their own activity log.</span>
+      </div>
+      <div id="act-list"><div class="loading">Loading…</div></div>`;
+    async function load(){
+      const qs = new URLSearchParams(Object.entries(actState).filter(([k, v]) => v !== ''));
+      const d = await api('/api/admin/activity?' + qs);
+      const list = $('#act-list');
+      list.innerHTML = d.entries.length ? `<div class="panel"><div class="log-list" style="max-height:none">${d.entries.map(a => `<div class="log-entry">
+          <span class="log-time" title="${esc(full(a.createdAt))}">${rel(a.createdAt)}</span>
+          <span><a class="plink" data-player="${a.user.id}">${esc(name(a.user))}</a> <span class="chip">${esc(a.category)}</span> ${esc(a.message)}</span></div>`).join('')}</div></div>`
+        : '<div class="panel"><div class="empty">No activity yet.</div></div>';
+      list.appendChild(pager(d, p => { actState.page = p; load(); }));
+    }
+    $('#act-cat').addEventListener('change', e => { actState.category = e.target.value; actState.page = 1; load(); });
+    await load();
   }
 
   const VIEWS = {
     overview: viewOverview, players: viewPlayers, logins: viewLogins, economy: viewEconomy,
     market: viewMarket, items: viewItems, houses: viewHouses, feedback: viewFeedback,
-    errors: viewErrors, announcements: viewAnnouncements, audit: viewAudit,
+    errors: viewErrors, announcements: viewAnnouncements, activity: viewActivity, audit: viewAudit,
   };
 
   // ─── Player drawer ─────────────────────────────────────────────────────────
@@ -787,6 +851,7 @@
     const u = d.user, s = u.stats;
     const now = Date.now();
     const travelling = s && (s.travelArrivesAt || s.travelDestination || s.travelDestinationId);
+    const self = u.id === ME.id;
 
     $('#drawer-head').innerHTML = `
       ${u.avatar ? `<img src="${esc(u.avatar)}" alt="" referrerpolicy="no-referrer">` : ''}
@@ -800,13 +865,14 @@
 
     const banLine = isBanned(u)
       ? `<div class="panel" style="border-color:var(--rust-bright);margin-bottom:1rem"><b style="color:var(--rust-bright)">Banned</b> ${permanent(u.bannedUntil) ? 'permanently' : 'until ' + esc(full(u.bannedUntil))}${u.banReason ? ' — ' + esc(u.banReason) : ''}
-          <div class="row" style="margin-top:0.6rem"><button class="btn-a good" data-act="unban">Lift ban</button></div></div>` : '';
+          ${canDo('players.ban') ? '<div class="row" style="margin-top:0.6rem"><button class="btn-a good" data-act="unban">Lift ban</button></div>' : ''}</div>` : '';
 
     $('#drawer-body').innerHTML = `
       ${banLine}
       <div class="panel">
         <div class="panel-title">Summary</div>
         <dl class="dl">
+          <dt>Role</dt><dd>${esc(u.role)}${u.bootstrapAdmin ? ' <span class="muted small">(set by ADMIN_EMAILS)</span>' : ''}</dd>
           <dt>Class</dt><dd>${esc(u.characterClass || 'not chosen')}</dd>
           <dt>Level</dt><dd>${s ? s.level + ' <span class="muted small">(' + num(s.xp) + ' XP)</span>' : '—'}</dd>
           <dt>City</dt><dd>${esc(s?.currentCityId || '—')}${s?.hasWagon ? ' <span class="muted small">· wagon tier ' + s.wagonTier + '</span>' : ''}</dd>
@@ -817,7 +883,7 @@
         </dl>
       </div>
 
-      ${s ? `<div class="panel">
+      ${s && canDo('players.release') ? `<div class="panel">
         <div class="panel-title">Status fixes</div>
         <dl class="dl" style="margin-bottom:0.8rem">
           <dt>Jail</dt><dd>${s.inJail ? 'in jail · free ' + rel(s.jailUntil) : 'no'}</dd>
@@ -832,38 +898,43 @@
           <button class="btn-a" data-act="clear-combat" ${u.combatSession ? '' : 'disabled'}>End fight</button>
           <button class="btn-a" data-act="reset-cooldowns">Reset cooldowns</button>
         </div>
-      </div>
+      </div>` : ''}
 
-      <div class="panel">
-        <div class="panel-title">Stats <span class="muted small mono">changed fields are outlined</span></div>
+      ${s ? `<div class="panel">
+        <div class="panel-title">Stats ${canDo('players.edit_stats') ? '<span class="muted small mono">changed fields are outlined</span>' : '<span class="muted small mono">view only</span>'}</div>
         <div class="stat-grid" id="stat-grid">
-          ${STAT_FIELDS.map(f => `<label>${f.replace(/([A-Z])/g, ' $1')}<input class="in" type="number" min="0" data-stat="${f}" data-orig="${s[f]}" value="${s[f]}"></label>`).join('')}
+          ${STAT_FIELDS.map(f => `<label>${f.replace(/([A-Z])/g, ' $1')}<input class="in" type="number" min="0" data-stat="${f}" data-orig="${s[f]}" value="${s[f]}" ${canDo('players.edit_stats') ? '' : 'disabled'}></label>`).join('')}
         </div>
-        <div class="row" style="margin-top:0.8rem"><button class="btn-a primary" data-act="save-stats" disabled>Save stats</button><button class="btn-a" data-act="reset-stats">Undo changes</button></div>
+        ${canDo('players.edit_stats') ? '<div class="row" style="margin-top:0.8rem"><button class="btn-a primary" data-act="save-stats" disabled>Save stats</button><button class="btn-a" data-act="reset-stats">Undo changes</button></div>' : ''}
       </div>` : '<div class="panel"><span class="muted">This player hasn\'t created a character yet.</span></div>'}
 
       <div class="panel">
         <div class="panel-title">Inventory <span class="muted small mono">${u.inventory.length} stacks</span></div>
         ${u.inventory.length ? `<div class="scroll-list"><table class="t"><tbody>
           ${u.inventory.map(i => `<tr><td>${esc(i.item.name)} <span class="muted small">${esc(i.item.type)}</span></td><td class="num">×${i.quantity}</td>
-            <td style="width:1%;white-space:nowrap"><input class="in" type="number" min="1" max="${i.quantity}" value="1" data-rmqty="${i.id}" style="width:64px"> <button class="btn-a sm danger" data-act="remove-item" data-inv="${i.id}">Remove</button></td></tr>`).join('')}
+            <td style="width:1%;white-space:nowrap">${canDo('players.grant_item') ? `<input class="in" type="number" min="1" max="${i.quantity}" value="1" data-rmqty="${i.id}" style="width:64px"> <button class="btn-a sm danger" data-act="remove-item" data-inv="${i.id}">Remove</button>` : ''}</td></tr>`).join('')}
         </tbody></table></div>` : '<div class="muted small">Empty.</div>'}
-        <div class="row" style="margin-top:0.8rem">
+        ${canDo('players.grant_item') ? `<div class="row" style="margin-top:0.8rem">
           <select class="in grow" id="give-item">${items.map(i => `<option value="${i.id}">${esc(i.name)} · ${esc(i.type)}</option>`).join('')}</select>
           <input class="in" type="number" min="1" value="1" id="give-qty" style="width:70px">
           <button class="btn-a" data-act="give-item">Give</button>
-        </div>
+        </div>` : ''}
         ${u.listings.length ? `<div class="sec-note" style="margin:0.8rem 0 0">${u.listings.length} item(s) listed on the market.</div>` : ''}
       </div>
 
       <div class="panel">
         <div class="panel-title">Moderation</div>
         <div class="row">
-          <button class="btn-a" data-act="kick">Force logout</button>
-          <button class="btn-a" data-act="logins">Full login history</button>
-          <button class="btn-a ${u.isAdmin ? 'danger' : ''}" data-act="toggle-admin">${u.isAdmin ? 'Remove admin' : 'Make admin'}</button>
+          ${canDo('players.kick') && !self ? '<button class="btn-a" data-act="kick">Force logout</button>' : ''}
+          ${canDo('logins.view') ? '<button class="btn-a" data-act="logins">Login history</button>' : ''}
+          ${canDo('audit.view') ? '<button class="btn-a" data-act="audit">Audit trail</button>' : ''}
         </div>
-        ${isBanned(u) ? '' : `<div class="row" style="margin-top:0.9rem">
+        ${canDo('roles.manage') && !self && !u.bootstrapAdmin ? `<div class="row" style="margin-top:0.9rem">
+          <span class="muted small">Role</span>
+          <select class="in" id="role-sel">${['player','moderator','admin'].map(r => `<option ${u.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
+          <button class="btn-a" data-act="set-role">Change role</button>
+        </div>` : ''}
+        ${isBanned(u) || !canDo('players.ban') || self ? '' : `<div class="row" style="margin-top:0.9rem">
           <select class="in" id="ban-days"><option value="1">1 day</option><option value="3">3 days</option><option value="7" selected>7 days</option><option value="30">30 days</option><option value="0">Permanent</option></select>
           <input class="in grow" id="ban-reason" maxlength="300" placeholder="Reason (shown to other admins)">
           <button class="btn-a danger" data-act="ban">Ban</button>
@@ -876,7 +947,7 @@
         <div class="panel-title">Recent logins</div>
         <div class="scroll-list">${d.logins.length ? `<table class="t"><tbody>${d.logins.map(e => `<tr>
           <td class="mono small">${new Date(e.createdAt).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })}</td>
-          <td><span class="chip ${e.type === 'login' ? 'login' : e.type === 'kicked' ? 'logout-k' : 'logout'}">${esc(e.type)}</span></td>
+          <td><span class="chip ${e.action === 'auth.login' ? 'login' : 'logout'}">${esc(e.action.replace('auth.', ''))}</span></td>
           <td class="mono small">${esc(e.ip || '—')}</td><td class="small muted hide-sm">${esc(device(e.userAgent))}</td></tr>`).join('')}</tbody></table>` : '<div class="muted small">No logins recorded yet (tracking starts with this update).</div>'}</div>
       </div>
 
@@ -888,9 +959,15 @@
       ${d.feedback.length ? `<div class="panel"><div class="panel-title">Feedback from this player</div>
         ${d.feedback.map(f => `<div class="log-entry"><span class="log-time">${rel(f.createdAt)}</span><span><span class="chip">${esc(f.category)}</span> ${esc(f.message.slice(0, 200))}${f.message.length > 200 ? '…' : ''}</span></div>`).join('')}</div>` : ''}
 
+      ${d.events.length ? `<div class="panel">
+        <div class="panel-title">Game events</div>
+        <div class="log-list" style="max-height:300px">${d.events.map(e => `<div class="log-entry"><span class="log-time" title="${esc(full(e.createdAt))}">${rel(e.createdAt)}</span><span><span class="chip">${esc(e.action)}</span>
+          ${e.userId && e.userId !== u.id ? 'by <a class="plink" data-player="' + e.userId + '">' + esc(e.userName) + '</a> · ' : ''}${e.targetUserId && e.targetUserId !== u.id ? 'vs <a class="plink" data-player="' + e.targetUserId + '">' + esc(e.targetName) + '</a> · ' : ''}${auditDetails(e)}</span></div>`).join('')}</div>
+      </div>` : ''}
+
       <div class="panel">
-        <div class="panel-title">Admin history</div>
-        ${d.audits.map(e => `<div class="log-entry"><span class="log-time">${rel(e.createdAt)}</span><span><span class="chip">${esc(e.action.replace(/_/g,' '))}</span> by ${esc(e.adminName)} · ${auditDetails(e.details)}</span></div>`).join('') || '<div class="muted small">No admin actions on this player.</div>'}
+        <div class="panel-title">Staff actions on this player</div>
+        ${d.adminHistory.map(e => `<div class="log-entry"><span class="log-time" title="${esc(full(e.createdAt))}">${rel(e.createdAt)}</span><span><span class="chip admin">${esc(e.action.replace('admin.', '').replace(/_/g,' '))}</span> by ${esc(e.userName || 'system')}${(d => d ? ' · ' + d : '')(auditDetails(e))}</span></div>`).join('') || '<div class="muted small">No staff actions on this player.</div>'}
       </div>`;
 
     const body = $('#drawer-body');
@@ -944,9 +1021,17 @@
           }
           case 'unban':
             await api(base + '/unban', {}); toast('Ban lifted'); break;
-          case 'toggle-admin':
-            if(!confirm(u.isAdmin ? `Remove admin access from ${name(u)}?` : `Give ${name(u)} full admin access?`)) return;
-            await api(base + '/admin', { isAdmin: !u.isAdmin }); toast(u.isAdmin ? 'Admin removed' : 'Admin granted'); break;
+          case 'set-role': {
+            const role = $('#role-sel', body).value;
+            if(role === u.role) return;
+            if(!confirm(`Change ${name(u)} from ${u.role} to ${role}?`)) return;
+            await api(base + '/role', { role }); toast('Role changed to ' + role); break;
+          }
+          case 'audit':
+            Object.assign(aState, { action: '', userId: String(u.id), page: 1 });
+            closeDrawer();
+            if(location.hash === '#audit') route(); else location.hash = 'audit';
+            return;
           case 'logins':
             Object.assign(lState, { q:'', type:'', ip:'', from:'', to:'', userId: String(u.id), page: 1 });
             closeDrawer();
@@ -960,8 +1045,16 @@
   }
 
   // ─── Boot ──────────────────────────────────────────────────────────────────
-  api('/api/me').then(me => { $('#player-name').textContent = (me.username || 'Admin') + ' · admin'; }).catch(() => {});
-  route();
+  api('/api/admin/me').then(me => {
+    ME = me;
+    TABS = ALL_TABS.filter(t => canDo(t[2])).map(t => [t[0], t[1]]);
+    $('#player-name').textContent = me.name + ' · ' + (me.role === 'moderator' ? 'mod' : me.role);
+    route();
+  }).catch(err => {
+    // Not staff (or logged out): the server refuses everything anyway.
+    $('#view').innerHTML = `<div class="panel"><span class="muted">${esc(err.message)}</span></div>`;
+    setTimeout(() => { location.href = '/'; }, 1500);
+  });
 })();
 </script>
 </body>

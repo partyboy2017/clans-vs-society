@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon server.js",
-    "build": "npx prisma generate && npx prisma migrate deploy",
+    "build": "npx prisma generate && node scripts/baseline-migrations.js && npx prisma migrate deploy",
     "start": "node server.js"
   },
   "keywords": [],

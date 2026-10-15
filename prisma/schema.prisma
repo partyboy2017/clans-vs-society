@@ -21,9 +21,9 @@ model User {
   avatar         String?
   characterName  String?
   characterClass String?
+  role           String       @default("player") // 'player' | 'moderator' | 'admin'
   lastLoginAt    DateTime?
   lastSeenAt     DateTime?
-  isAdmin        Boolean      @default(false)
   bannedUntil    DateTime?
   banReason      String?
   createdAt      DateTime     @default(now())
@@ -34,38 +34,10 @@ model User {
   userSkills     UserSkill[]
   combatSession  CombatSession?
   activityLogs   ActivityLog[]
-  loginEvents    LoginEvent[]
   feedback       Feedback[]
 }
 
 // ─── Admin / moderation ───────────────────────────────────────────────────────
-
-model LoginEvent {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
-  type      String   // 'login' | 'logout' | 'kicked'
-  ip        String?
-  userAgent String?
-  createdAt DateTime @default(now())
-
-  @@index([userId, createdAt])
-  @@index([createdAt])
-  @@index([ip])
-}
-
-model AdminAuditLog {
-  id           Int      @id @default(autoincrement())
-  adminId      Int
-  adminName    String
-  action       String
-  targetUserId Int?
-  details      String   // JSON: { before, after, ... }
-  createdAt    DateTime @default(now())
-
-  @@index([createdAt])
-  @@index([targetUserId])
-}
 
 model ErrorLog {
   id        Int      @id @default(autoincrement())
@@ -108,6 +80,22 @@ model ActivityLog {
   @@index([userId, createdAt])
 }
 
+// Admin-only audit trail. Deliberately no foreign keys so rows survive user deletion.
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  userId       Int?     // actor (null for anonymous/system events)
+  targetUserId Int?     // other player affected (PvP, market)
+  action       String   // e.g. 'auth.login', 'market.buy', 'raid.player'
+  metadata     Json?    // event-specific details (amounts, item ids, outcome)
+  ip           String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([action, createdAt])
+}
+
 model Stats {
   id     Int @id @default(autoincrement())
   userId Int @unique
@@ -131,7 +119,7 @@ model Stats {
 
   gold Int @default(0)
 
-  hasWagon  Boolean @default(false)
+  hasWagon Boolean @default(false)
   wagonTier Int @default(0)
   currentCityId String?
 
@@ -140,8 +128,7 @@ model Stats {
   travelArrivalAt     DateTime?
 
   // Real, server-tracked travel — travelArrivesAt is the source of truth for
-  // when a journey actually completes. Client UI only ever displays what the
-  // server reports; it never decides arrival on its own.
+  // when the trip ends.
   travelDestination String?
   travelStartedAt   DateTime?
   travelArrivesAt   DateTime?
@@ -251,4 +238,15 @@ model GoldSnapshot {
 
   @@index([takenAt])
   @@index([userId, takenAt])
+}
+
+// Login sessions. Created and managed by connect-pg-simple (see server.js), not by game code.
+// Declared here only so Prisma knows the table exists and doesn't treat it as drift.
+model Session {
+  sid    String   @id @db.VarChar
+  sess   Json     @db.Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire], map: "IDX_session_expire")
+  @@map("session")
 }

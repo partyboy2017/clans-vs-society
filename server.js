@@ -11,8 +11,6 @@ const admin = require('./admin');
 const app = express();
 const prisma = new PrismaClient();
 
-// Behind Railway's proxy — needed so req.ip is the player's real IP (login log).
-app.set('trust proxy', 1);
 
 // Thin wrapper kept around console.error so error-logging call sites don't
 // need to change again once Sentry (or similar) gets added back later.
@@ -404,6 +402,8 @@ async function hasSkill(userId, skillKey) {
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
+// Railway sits behind a proxy; without this req.ip is the proxy's address.
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
@@ -572,14 +572,9 @@ passport.use(new GoogleStrategy({
     // Banned players can't log back in until the ban expires.
     if (existing && admin.isBanned(existing)) return done(null, false);
 
-    // ADMIN_EMAILS (comma-separated) bootstraps admin access on login.
-    const email   = profile.emails?.[0]?.value || null;
-    const grantAdmin = admin.isAdminEmail(email) ? { isAdmin: true } : {};
-
     const user = await prisma.user.upsert({
       where:  { googleId: profile.id },
       update: {
-        ...grantAdmin,
         lastLoginAt: new Date(),
         lastSeenAt:  new Date(),
         avatar:      profile.photos?.[0]?.value || null,
@@ -587,7 +582,6 @@ passport.use(new GoogleStrategy({
         email:       profile.emails?.[0]?.value  || null,
       },
       create: {
-        ...grantAdmin,
         lastLoginAt: new Date(),
         lastSeenAt:  new Date(),
         googleId:   profile.id,
@@ -633,7 +627,7 @@ app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'em
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/?banned=1' }),
   (req, res) => {
-    admin.recordLoginEvent(prisma, req, req.user.id, 'login');
+    audit(req, 'auth.login');
     if (!req.user.characterName)  return res.redirect('/choose-name');
     if (!req.user.characterClass) return res.redirect('/choose-class');
     res.redirect('/dashboard');
@@ -743,7 +737,7 @@ app.get('/city/:cityId', (req, res) => {
 // ─── API: auth ────────────────────────────────────────────────────────────────
 
 app.post('/api/logout', (req, res) => {
-  if (req.user) admin.recordLoginEvent(prisma, req, req.user.id, 'logout');
+  audit(req, 'auth.logout'); // before req.logout clears req.user
   req.logout((err) => {
     if (err) return res.status(500).json({ error: 'Logout failed' });
     req.session.destroy(() => {
@@ -788,7 +782,8 @@ app.get('/api/me', async (req, res) => {
     classLabel:      req.user.characterClass ? CLASSES[req.user.characterClass].label : null,
     lastLoginAt:     req.user.lastLoginAt,
     createdAt:       req.user.createdAt,
-    isAdmin:         !!req.user.isAdmin,
+    role:            admin.roleOf(req.user),
+    isStaff:         admin.can(req.user, 'portal.view'),
     stats,
     restCooldownMs,
     energyRegen: {
@@ -821,6 +816,7 @@ app.post('/api/choose-name', validate(schemas.chooseName), async (req, res) => {
     const exists = await prisma.user.findFirst({ where: { characterName: clean } });
     if (exists) return res.status(409).json({ error: 'That name is already taken' });
     await prisma.user.update({ where: { id: req.user.id }, data: { characterName: clean } });
+    audit(req, 'character.name_chosen', { metadata: { characterName: clean } });
 
     // Refresh session so the new characterName is visible immediately.
     const updatedUser = await prisma.user.findUnique({
@@ -872,6 +868,8 @@ app.post('/api/choose-class', validate(schemas.chooseClass), async (req, res) =>
         create: { userId: req.user.id, ...startingStats },
       }),
     ]);
+
+    audit(req, 'character.class_chosen', { metadata: { characterClass } });
 
     // Refresh the session so req.user.characterClass is set before the
     // client redirects to /dashboard (which guards on it).
@@ -1048,7 +1046,10 @@ app.post('/api/skills/unlock', validate(schemas.skillKey), async (req, res) => {
   // Must belong to the user's class
   const classTree = SKILL_TREES[req.user.characterClass] || [];
   if (!classTree.find(s => s.key === skillKey))
+  {
+    audit(req, 'skill.unlock_denied', { metadata: { skillKey, reason: 'wrong_class' } });
     return res.status(403).json({ error: 'That skill does not belong to your class' });
+  }
 
   const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
   if (!stats) return res.status(500).json({ error: 'No stats found' });
@@ -1096,6 +1097,7 @@ app.post('/api/skills/unlock', validate(schemas.skillKey), async (req, res) => {
     });
 
     logActivity(req.user.id, 'level', `Unlocked skill: ${skill.name} (-${skill.cost} stat points).`);
+    audit(req, 'skill.unlock', { metadata: { skillKey, cost: skill.cost } });
     res.json({ ok: true, skill: skill.name, statPointsRemaining: updatedStats.statPoints });
   } catch (e) {
     if (e.code === 'NOT_ENOUGH_POINTS') return res.status(400).json({ error: 'Not enough stat points' });
@@ -1199,6 +1201,25 @@ function logActivity(userId, category, message) {
     .catch(err => logError('logActivity error:', err));
 }
 
+// Fire-and-forget audit write. Like logActivity, a logging failure must never
+// break gameplay. Unlike logActivity this is for admins, not players, so it
+// records IP/user-agent and structured metadata. Never put secrets or free-text
+// user content (passwords, feedback bodies) in metadata.
+function audit(req, action, { targetUserId = null, metadata = null, userId } = {}) {
+  try {
+    prisma.auditLog.create({
+      data: {
+        userId:       userId ?? req?.user?.id ?? null,
+        targetUserId,
+        action,
+        metadata,
+        ip:           req?.ip ? req.ip.replace(/^::ffff:/, '') : null, // IPv4 behind an IPv6 socket
+        userAgent:    (req?.get?.('user-agent') || '').slice(0, 255) || null,
+      },
+    }).catch(err => logError('audit error:', err));
+  } catch (err) { logError('audit error:', err); }
+}
+
 async function checkLevelUp(userId) {
   const user  = await prisma.user.findUnique({ where: { id: userId } });
   const stats = await prisma.stats.findUnique({ where: { userId } });
@@ -1253,6 +1274,7 @@ app.post('/api/spend-stat', validate(schemas.spendStat), async (req, res) => {
   if (result.count === 0) return res.status(400).json({ error: 'No stat points available' });
 
   const updated = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+  audit(req, 'stat.spend', { metadata: { stat } });
   res.json({ ok: true, stat, newValue: updated[stat] });
 });
 
@@ -1324,6 +1346,7 @@ app.post('/api/house/create', validate(schemas.houseCreate), async (req, res) =>
         },
       });
     });
+    audit(req, 'house.create', { metadata: { houseId: house.id, name: house.name } });
     res.json({ ok: true, house });
   } catch (e) {
     if (e.code === 'NO_GOLD') return res.status(400).json({ error: 'Founding a house costs 500 gold' });
@@ -1341,6 +1364,7 @@ app.post('/api/house/join', validate(schemas.houseJoin), async (req, res) => {
   const house = await prisma.house.findUnique({ where: { id: houseId } });
   if (!house) return res.status(404).json({ error: 'House not found' });
   await prisma.houseMember.create({ data: { userId: req.user.id, houseId, rank: 'Bannerman' } });
+  audit(req, 'house.join', { metadata: { houseId } });
   res.json({ ok: true });
 });
 
@@ -1351,6 +1375,7 @@ app.post('/api/house/leave', async (req, res) => {
   const house = await prisma.house.findUnique({ where: { id: member.houseId } });
   if (house.leaderId === req.user.id) return res.status(400).json({ error: 'Lords cannot abandon their house. Disband it instead.' });
   await prisma.houseMember.delete({ where: { userId: req.user.id } });
+  audit(req, 'house.leave', { metadata: { houseId: member.houseId } });
   res.json({ ok: true });
 });
 
@@ -1416,10 +1441,17 @@ app.post('/api/market/buy', validate(schemas.marketBuy), async (req, res) => {
       return found;
     });
 
+    audit(req, 'market.buy', {
+      targetUserId: listing.sellerId,
+      metadata: { listingId, itemId: listing.itemId, qty: listing.quantity, price: listing.price },
+    });
     res.json({ ok: true, item: listing.item.name });
   } catch (e) {
     if (e.code === 'NOT_FOUND')   return res.status(404).json({ error: 'Listing no longer available' });
-    if (e.code === 'OWN_LISTING') return res.status(400).json({ error: 'You cannot buy your own listing' });
+    if (e.code === 'OWN_LISTING') {
+      audit(req, 'market.buy_denied', { metadata: { listingId, reason: 'own_listing' } });
+      return res.status(400).json({ error: 'You cannot buy your own listing' });
+    }
     if (e.code === 'NO_GOLD')     return res.status(400).json({ error: 'Not enough gold' });
     if (e.code === 'P2025')       return res.status(404).json({ error: 'Listing no longer available' });
     logError(e);
@@ -1434,6 +1466,7 @@ app.post('/api/market/list', validate(schemas.marketList), async (req, res) => {
   if (!inv) return res.status(404).json({ error: 'Item not found in your inventory' });
   if (inv.quantity < quantity) return res.status(400).json({ error: 'Not enough of that item' });
   await prisma.listing.create({ data: { sellerId: req.user.id, itemId: inv.itemId, price, quantity } });
+  audit(req, 'market.list', { metadata: { itemId: inv.itemId, price, quantity } });
   if (inv.quantity - quantity <= 0) {
     await prisma.inventory.delete({ where: { id: inv.id } });
   } else {
@@ -1572,6 +1605,7 @@ app.post('/api/shop/buy', validate(schemas.shopBuy), async (req, res) => {
     });
 
     logActivity(req.user.id, 'inventory', `Bought ${qty}x ${item.name} for ${cost} gold.`);
+    audit(req, 'shop.buy', { metadata: { itemId: item.id, qty, cost } });
     res.json({ ok: true, itemName: item.name, quantity: qty, cost });
   } catch (e) {
     if (e && e.code === 'NO_GOLD') return res.status(400).json({ error: 'Not enough gold' });
@@ -1611,6 +1645,7 @@ app.post('/api/inventory/sell', validate(schemas.inventorySell), async (req, res
     });
 
     logActivity(req.user.id, 'inventory', `Sold ${result.qty}x ${result.itemName} for ${result.totalValue} gold.`);
+    audit(req, 'shop.sell', { metadata: { inventoryId, qty: result.qty, gold: result.totalValue } });
     res.json({ ok: true, ...result });
   } catch (e) {
     if (e && e.code === 'NOT_FOUND')   return res.status(404).json({ error: 'Item not found in your inventory' });
@@ -1915,6 +1950,10 @@ app.post('/api/raid/npc', validate(schemas.raidNpc), async (req, res) => {
       logActivity(req.user.id, 'raid', `Lost the raid at ${location.name}.`);
     }
 
+    audit(req, 'raid.npc', {
+      metadata: { locationId, won: result.won, goldGain: result.goldGain, jailMins: result.jailMins },
+    });
+
     res.json({ ...result, location: location.name, ...levelUp });
 
   } catch (e) {
@@ -2010,6 +2049,11 @@ app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
       logActivity(req.user.id, 'raid', `Attacked ${target.characterName} and lost, +${result.xpGain} XP.`);
       logActivity(targetId, 'raid', `Successfully defended against an attack from ${req.user.characterName}.`);
     }
+
+    audit(req, 'raid.player', {
+      targetUserId: targetId,
+      metadata: { won: result.won, goldStolen: result.goldStolen, defenderHospitalized: result.defenderHospitalized },
+    });
 
     res.json({
       ...result,
@@ -2434,6 +2478,7 @@ app.post('/api/feedback', validate(schemas.feedback), async (req, res) => {
 
   feedbackCooldowns.set(req.user.id, Date.now());
   logActivity(req.user.id, 'feedback', `Submitted ${category.toLowerCase()}.`);
+  audit(req, 'feedback.submit', { metadata: { category } }); // never log the message body
   res.json({ ok: true });
 });
 
@@ -2535,6 +2580,7 @@ app.post('/api/wagon/build', async (req, res) => {
       req._builtTierName = nextTier.name;
     });
 
+    audit(req, 'wagon.build', { metadata: { tier: req._builtTierName } });
     logActivity(req.user.id, 'level', `Acquired the ${req._builtTierName}! Travel across Karthûl just got faster.`);
     res.json({ ok: true });
 
@@ -2890,12 +2936,25 @@ app.post('/api/monsters/turn', validate(schemas.monstersTurn), async (req, res) 
 });
 
 // ─── Admin panel ──────────────────────────────────────────────────────────────
+// Roles, permissions and all /api/admin routes live in admin.js.
 
 admin.registerAnnouncementRoute(app, { prisma, logError });
-admin.registerAdminRoutes(app, { prisma, logError, validate, CLASSES });
+admin.registerAdminRoutes(app, { prisma, logError, validate, CLASSES, audit });
 admin.startBackgroundJobs({ prisma, logError });
+
+// Retention: keep 90 days of audit history.
+const AUDIT_RETENTION_DAYS = 90;
+async function pruneAudit() {
+  try {
+    const cutoff = new Date(Date.now() - AUDIT_RETENTION_DAYS * 86400000);
+    await prisma.auditLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  } catch (err) { logError('pruneAudit error:', err); }
+}
+pruneAudit();
+setInterval(pruneAudit, 24 * 60 * 60 * 1000);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Clans vs Society is running on port ${PORT}`);
 });
+

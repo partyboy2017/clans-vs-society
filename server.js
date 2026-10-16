@@ -405,6 +405,17 @@ async function hasSkill(userId, skillKey) {
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
 app.use(express.json());
+
+// Every game page is served by a guarded route below (/training, /raids, …)
+// that checks sign-in and character creation. express.static would also serve
+// the same files as /training.html etc., skipping those checks, so send any
+// raw page URL to its clean route instead (keeping the query string).
+app.get(/^\/([a-z-]+)\.html$/, (req, res) => {
+  const page = req.params[0];
+  const query = req.originalUrl.slice(req.path.length);
+  const target = page === 'index' ? '/' : page === 'city' ? '/realm-map' : `/${page}`;
+  res.redirect(target + query);
+});
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   store: new pgSession({
@@ -423,6 +434,20 @@ app.use(passport.initialize());
 app.use(passport.session());
 // Kicks out banned players and keeps User.lastSeenAt fresh ("online now").
 admin.installPresence(app, { prisma });
+
+// A Google sign-in creates the User right away, but Stats (gold, health,
+// energy…) only exist once a class is chosen. Until then, game APIs answer
+// with a clear 400 instead of crashing on the missing Stats row. Signed-out
+// requests fall through to each route's own 401.
+const PRE_CHARACTER_API = new Set([
+  '/me', '/classes', '/choose-name', '/choose-class', '/logout', '/announcements',
+]);
+app.use('/api', (req, res, next) => {
+  if (!req.isAuthenticated()) return next();
+  if (PRE_CHARACTER_API.has(req.path) || req.path.startsWith('/admin')) return next();
+  if (req.user.characterName && req.user.characterClass && req.user.stats) return next();
+  res.status(400).json({ error: 'Finish creating your character first.', needsCharacter: true });
+});
 
 // ─── Email ────────────────────────────────────────────────────────────────────
 
@@ -680,9 +705,21 @@ app.get('/skills', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'skills.html'));
 });
 app.get('/raids', (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect('/');
+  if (!req.isAuthenticated())   return res.redirect('/');
+  if (!req.user.characterName)  return res.redirect('/choose-name');
+  if (!req.user.characterClass) return res.redirect('/choose-class');
   res.sendFile(path.join(__dirname, 'public', 'raids.html'));
 });
+
+// These two pages used to be reachable only as raw .html files.
+for (const page of ['traveling', 'achievements']) {
+  app.get(`/${page}`, (req, res) => {
+    if (!req.isAuthenticated())   return res.redirect('/');
+    if (!req.user.characterName)  return res.redirect('/choose-name');
+    if (!req.user.characterClass) return res.redirect('/choose-class');
+    res.sendFile(path.join(__dirname, 'public', `${page}.html`));
+  });
+}
 
 app.get('/monsters', (req, res) => {
   if (!req.isAuthenticated())   return res.redirect('/');

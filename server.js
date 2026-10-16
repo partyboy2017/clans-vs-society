@@ -115,8 +115,11 @@ const schemas = {
     stat: z.enum(['strength', 'defense', 'speed', 'dexterity', 'intelligence'], { message: 'Invalid stat' }),
   }),
   houseCreate: z.object({
-    name:  z.string().trim().min(2, 'House name must be at least 2 characters').max(30, 'House name must be 30 characters or fewer'),
-    motto: z.string().trim().max(100, 'Motto must be 100 characters or fewer').optional(),
+    name:  z.string().trim().transform(v => v.replace(/\s+/g, ' ')).pipe(z.string()
+      .min(2, 'House name must be at least 2 characters').max(30, 'House name must be 30 characters or fewer')
+      .regex(/^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u, 'House names can use letters, numbers, spaces, and - _ .')),
+    motto: z.string().trim().max(100, 'Motto must be 100 characters or fewer')
+      .regex(/^[^<>]*$/, 'Mottos cannot contain < or >').optional(),
   }),
   houseJoin: z.object({
     houseId: id(),
@@ -1275,6 +1278,15 @@ app.get('/api/players', async (req, res) => {
 });
 
 // ─── HOUSE ────────────────────────────────────────────────────────────────────
+// Joining a house is a request the Lord approves or denies. A Lord can't leave
+// (someone has to hold the banner) but can disband the house; any gold in the
+// house vault goes back to the Lord. Housemates can't raid each other (see
+// /api/raid/player).
+
+async function houseOf(userId) {
+  return prisma.houseMember.findUnique({ where: { userId }, include: { house: true } });
+}
+
 app.get('/api/house', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const member = await prisma.houseMember.findUnique({
@@ -1289,6 +1301,14 @@ app.get('/api/house', async (req, res) => {
       }
     }
   });
+  // The Lord also sees who is asking to join.
+  if (member && member.house.leaderId === req.user.id) {
+    member.joinRequests = await prisma.houseJoinRequest.findMany({
+      where: { houseId: member.houseId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, createdAt: true, user: { select: { characterName: true, characterClass: true, stats: { select: { level: true } } } } },
+    });
+  }
   res.json(member || null);
 });
 
@@ -1301,11 +1321,23 @@ app.get('/api/houses', async (req, res) => {
   res.json(houses);
 });
 
+// The player's own open join request, if any.
+app.get('/api/house/request', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const request = await prisma.houseJoinRequest.findUnique({
+    where: { userId: req.user.id },
+    select: { id: true, houseId: true, createdAt: true, house: { select: { name: true } } },
+  });
+  res.json({ request });
+});
+
 app.post('/api/house/create', validate(schemas.houseCreate), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { name, motto } = req.body;
   const existing = await prisma.houseMember.findUnique({ where: { userId: req.user.id } });
   if (existing) return res.status(400).json({ error: 'You already belong to a house' });
+  const clash = await prisma.house.findFirst({ where: { name: { equals: name, mode: 'insensitive' } }, select: { id: true } });
+  if (clash) return res.status(409).json({ error: 'That house name is already taken' });
   try {
     const house = await prisma.$transaction(async (tx) => {
       // Atomically deduct 500 gold — rolls back house creation if insufficient.
@@ -1315,10 +1347,13 @@ app.post('/api/house/create', validate(schemas.houseCreate), async (req, res) =>
       });
       if (deducted.count === 0) throw Object.assign(new Error('Not enough gold'), { code: 'NO_GOLD' });
 
+      // Founding a house withdraws any request to join another one.
+      await tx.houseJoinRequest.deleteMany({ where: { userId: req.user.id } });
+
       return tx.house.create({
         data: {
-          name:    name.trim(),
-          motto:   motto?.trim() || 'Strength through unity.',
+          name,
+          motto:   motto || 'Strength through unity.',
           leaderId: req.user.id,
           members: { create: { userId: req.user.id, rank: 'Lord' } },
         },
@@ -1333,6 +1368,7 @@ app.post('/api/house/create', validate(schemas.houseCreate), async (req, res) =>
   }
 });
 
+// Ask to join a house. Asking a different house replaces the earlier request.
 app.post('/api/house/join', validate(schemas.houseJoin), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { houseId } = req.body;
@@ -1340,8 +1376,55 @@ app.post('/api/house/join', validate(schemas.houseJoin), async (req, res) => {
   if (existing) return res.status(400).json({ error: 'You already belong to a house' });
   const house = await prisma.house.findUnique({ where: { id: houseId } });
   if (!house) return res.status(404).json({ error: 'House not found' });
-  await prisma.houseMember.create({ data: { userId: req.user.id, houseId, rank: 'Bannerman' } });
+  await prisma.houseJoinRequest.upsert({
+    where:  { userId: req.user.id },
+    update: { houseId, createdAt: new Date() },
+    create: { userId: req.user.id, houseId },
+  });
+  logActivity(req.user.id, 'house', `Asked to join House ${house.name}.`);
+  res.json({ ok: true, requested: true, houseName: house.name });
+});
+
+app.post('/api/house/request/cancel', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const { count } = await prisma.houseJoinRequest.deleteMany({ where: { userId: req.user.id } });
+  if (count === 0) return res.status(404).json({ error: 'You have no open request' });
   res.json({ ok: true });
+});
+
+// Lord only: approve or deny a request to join their house.
+app.post('/api/house/requests/:requestId/:decision', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const { decision } = req.params;
+  const requestId = parseInt(req.params.requestId, 10);
+  if (!['approve', 'deny'].includes(decision) || !Number.isInteger(requestId)) return res.status(404).json({ error: 'Not found' });
+
+  const mine = await houseOf(req.user.id);
+  if (!mine || mine.house.leaderId !== req.user.id) return res.status(403).json({ error: 'Only the Lord of a house can answer requests' });
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const request = await tx.houseJoinRequest.findUnique({
+        where: { id: requestId },
+        include: { user: { select: { characterName: true } } },
+      });
+      if (!request || request.houseId !== mine.houseId) throw { code: 'NO_REQUEST' };
+      await tx.houseJoinRequest.delete({ where: { id: requestId } });
+      if (decision === 'deny') return { name: request.user.characterName, userId: request.userId };
+      // userId is unique on HouseMember, so a player can never end up in two houses.
+      await tx.houseMember.create({ data: { userId: request.userId, houseId: mine.houseId, rank: 'Bannerman' } });
+      return { name: request.user.characterName, userId: request.userId };
+    });
+    logActivity(result.userId, 'house', decision === 'approve'
+      ? `Your request to join House ${mine.house.name} was accepted.`
+      : `Your request to join House ${mine.house.name} was declined.`);
+    res.json({ ok: true, decision, name: result.name });
+  } catch (e) {
+    if (e && e.code === 'NO_REQUEST') return res.status(404).json({ error: 'That request is no longer open' });
+    if (e && e.code === 'P2002')      return res.status(409).json({ error: 'That player already belongs to a house' });
+    logError('/api/house/requests error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
 });
 
 app.post('/api/house/leave', async (req, res) => {
@@ -1352,6 +1435,28 @@ app.post('/api/house/leave', async (req, res) => {
   if (house.leaderId === req.user.id) return res.status(400).json({ error: 'Lords cannot abandon their house. Disband it instead.' });
   await prisma.houseMember.delete({ where: { userId: req.user.id } });
   res.json({ ok: true });
+});
+
+// Lord only: disband the house. Members are released, open requests are
+// dropped, and any vault gold goes back to the Lord.
+app.post('/api/house/disband', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const mine = await houseOf(req.user.id);
+  if (!mine) return res.status(400).json({ error: 'You are not in a house' });
+  if (mine.house.leaderId !== req.user.id) return res.status(403).json({ error: 'Only the Lord can disband the house' });
+  const house = mine.house;
+  const members = await prisma.houseMember.findMany({ where: { houseId: house.id }, select: { userId: true } });
+  await prisma.$transaction([
+    prisma.houseMember.deleteMany({ where: { houseId: house.id } }),
+    prisma.house.delete({ where: { id: house.id } }),   // join requests cascade
+    ...(house.gold > 0 ? [prisma.stats.update({ where: { userId: req.user.id }, data: { gold: { increment: house.gold } } })] : []),
+  ]);
+  for (const m of members) {
+    logActivity(m.userId, 'house', m.userId === req.user.id
+      ? `You disbanded House ${house.name}.${house.gold > 0 ? ` ${house.gold} gold returned from the vault.` : ''}`
+      : `House ${house.name} was disbanded by its Lord.`);
+  }
+  res.json({ ok: true, goldReturned: house.gold });
 });
 
 // ─── MARKET ───────────────────────────────────────────────────────────────────
@@ -1930,6 +2035,15 @@ app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { targetId } = req.body;
   if (targetId === req.user.id) return res.status(400).json({ error: 'You cannot attack yourself' });
+
+  // Housemates can't raid each other.
+  const [myHouse, theirHouse] = await Promise.all([
+    prisma.houseMember.findUnique({ where: { userId: req.user.id }, select: { houseId: true } }),
+    prisma.houseMember.findUnique({ where: { userId: targetId },   select: { houseId: true } }),
+  ]);
+  if (myHouse && theirHouse && myHouse.houseId === theirHouse.houseId) {
+    return res.status(400).json({ error: 'You cannot attack a member of your own house' });
+  }
 
   // Clear expired status flags (idempotent, benign if racy).
   await checkStatus(req.user.id);

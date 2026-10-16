@@ -29,6 +29,7 @@
   .reward-pill.energy{color:var(--brass);border-color:var(--brass-dim);}
   .zone-btn{width:100%;font-family:'JetBrains Mono',monospace;font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;padding:0.8rem;border:none;cursor:pointer;background:var(--rust);color:var(--bone);transition:background 0.15s,transform 0.1s;}
   .zone-btn:hover:not(:disabled){background:var(--rust-bright);transform:translateY(-1px);}
+  .zone-card.locked{opacity:0.6;}
   .zone-btn:disabled{background:var(--bg-panel-2);color:var(--ash);border:1px solid var(--line);cursor:not-allowed;transform:none;}
 
   /* COMBAT VS PANEL — bespoke: two live gauges for one fight, distinct
@@ -181,18 +182,22 @@
   function renderZones(zones){
     const grid = document.getElementById('zones-grid');
     grid.innerHTML = zones.map(z => {
-      const disabled = isRestricted || (myStats && myStats.energy < z.energyCost);
+      const disabled = isRestricted || z.locked || (myStats && myStats.energy < z.energyCost);
+      const label = isRestricted ? 'Unavailable'
+        : z.locked ? `Requires Level ${z.levelMin}`
+        : disabled ? 'Not enough energy' : 'Venture Forth';
+      const foes = z.locked ? '' : ` · FOES LEVEL ${z.foeLevelMin}–${z.foeLevelMax}`;
       return `
-        <div class="zone-card">
+        <div class="zone-card${z.locked ? ' locked' : ''}">
           <div class="zone-tier ${z.tier.toLowerCase().replace(' ','-')}">${z.tier}</div>
-          <div class="zone-levels">LEVEL ${z.levelMin}–${z.levelMax}</div>
+          <div class="zone-levels">LEVEL ${z.levelMin}–${z.levelMax}${foes}</div>
           <div class="zone-name">${z.name}</div>
           <div class="zone-desc">${z.desc}</div>
           <div class="zone-rewards">
             <span class="reward-pill energy">${z.energyCost} ENERGY</span>
           </div>
           <button class="zone-btn" ${disabled?'disabled':''} data-zone-id="${z.id}" data-zone-name="${z.name.replace(/"/g,'&quot;')}">
-            ${isRestricted ? 'Unavailable' : disabled ? 'Not enough energy' : 'Venture Forth'}
+            ${label}
           </button>
         </div>`;
     }).join('');

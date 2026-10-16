@@ -2386,6 +2386,16 @@ const MONSTER_ZONES = [
 // Threshold below which a losing fighter is considered defeated (mirrors raid hospital logic).
 const COMBAT_DEFEAT_HEALTH = 10;
 
+// Zone gating: a player must reach a zone's levelMin to hunt there, and
+// monsters spawn at most this many levels above the player (still within the
+// zone's own range), so a new lord isn't thrown at a level-10 wolf.
+const MONSTER_LEVEL_LEAD = 3;
+
+function monsterLevelRange(zone, playerLevel) {
+  const max = Math.min(zone.levelMax, Math.max(zone.levelMin, playerLevel + MONSTER_LEVEL_LEAD));
+  return { min: zone.levelMin, max };
+}
+
 function scaleMonster(template, level) {
   return {
     name:      template.name,
@@ -2692,12 +2702,19 @@ app.get('/api/wiki', async (req, res) => {
   }
 });
 
-app.get('/api/monsters/zones', (req, res) => {
+app.get('/api/monsters/zones', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
-  res.json({ zones: MONSTER_ZONES.map(z => ({
-    id: z.id, name: z.name, tier: z.tier, desc: z.desc,
-    levelMin: z.levelMin, levelMax: z.levelMax, energyCost: z.energyCost,
-  })) });
+  const stats = await prisma.stats.findUnique({ where: { userId: req.user.id }, select: { level: true } });
+  const playerLevel = stats?.level ?? 1;
+  res.json({ zones: MONSTER_ZONES.map(z => {
+    const range = monsterLevelRange(z, playerLevel);
+    return {
+      id: z.id, name: z.name, tier: z.tier, desc: z.desc,
+      levelMin: z.levelMin, levelMax: z.levelMax, energyCost: z.energyCost,
+      locked: playerLevel < z.levelMin,       // can't hunt here yet
+      foeLevelMin: range.min, foeLevelMax: range.max, // what this player will actually meet
+    };
+  }) });
 });
 
 app.get('/api/monsters/session', async (req, res) => {
@@ -2726,6 +2743,7 @@ app.post('/api/monsters/start', validate(schemas.monstersStart), async (req, res
       if (!stats) throw { code: 'NO_STATS' };
       if (stats.inJail)     throw { code: 'JAILED' };
       if (stats.inHospital) throw { code: 'HOSPITAL' };
+      if (stats.level < zone.levelMin) throw { code: 'LEVEL_TOO_LOW', minLevel: zone.levelMin };
       if (stats.energy < zone.energyCost) throw { code: 'NO_ENERGY' };
 
       await tx.stats.update({
@@ -2734,7 +2752,8 @@ app.post('/api/monsters/start', validate(schemas.monstersStart), async (req, res
       });
 
       const template = zone.monsters[Math.floor(Math.random() * zone.monsters.length)];
-      const level = zone.levelMin + Math.floor(Math.random() * (zone.levelMax - zone.levelMin + 1));
+      const range = monsterLevelRange(zone, stats.level);
+      const level = range.min + Math.floor(Math.random() * (range.max - range.min + 1));
       const monster = scaleMonster(template, level);
 
       return tx.combatSession.create({
@@ -2755,6 +2774,7 @@ app.post('/api/monsters/start', validate(schemas.monstersStart), async (req, res
   } catch (e) {
     if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
     if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
+    if (e && e.code === 'LEVEL_TOO_LOW') return res.status(400).json({ error: `You must be at least Level ${e.minLevel} to hunt in ${zone.name}` });
     if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy' });
     logError('/api/monsters/start error:', e);
     res.status(500).json({ error: 'Something went wrong' });

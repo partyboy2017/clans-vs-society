@@ -904,7 +904,7 @@ async function energyCost(base, characterClass, userId) {
   return base;
 }
 
-app.post('/api/action/train', async (req, res) => {
+app.post('/api/action/train', blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { characterClass } = req.user;
   await regenEnergy(req.user.id);
@@ -975,7 +975,7 @@ app.post('/api/action/train', async (req, res) => {
   res.json({ strGain, defGain, intGain, dexGain, xpGain, ...levelResult });
 });
 
-app.post('/api/action/rest', async (req, res) => {
+app.post('/api/action/rest', blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { characterClass } = req.user;
 
@@ -1106,7 +1106,7 @@ app.post('/api/skills/unlock', validate(schemas.skillKey), async (req, res) => {
 });
 
 // POST /api/action/skill — fire an active skill
-app.post('/api/action/skill', validate(schemas.skillKey), async (req, res) => {
+app.post('/api/action/skill', validate(schemas.skillKey), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
 
   const { skillKey } = req.body;
@@ -1301,7 +1301,7 @@ app.get('/api/houses', async (req, res) => {
   res.json(houses);
 });
 
-app.post('/api/house/create', validate(schemas.houseCreate), async (req, res) => {
+app.post('/api/house/create', validate(schemas.houseCreate), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { name, motto } = req.body;
   const existing = await prisma.houseMember.findUnique({ where: { userId: req.user.id } });
@@ -1333,7 +1333,7 @@ app.post('/api/house/create', validate(schemas.houseCreate), async (req, res) =>
   }
 });
 
-app.post('/api/house/join', validate(schemas.houseJoin), async (req, res) => {
+app.post('/api/house/join', validate(schemas.houseJoin), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { houseId } = req.body;
   const existing = await prisma.houseMember.findUnique({ where: { userId: req.user.id } });
@@ -1344,7 +1344,7 @@ app.post('/api/house/join', validate(schemas.houseJoin), async (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/house/leave', async (req, res) => {
+app.post('/api/house/leave', blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const member = await prisma.houseMember.findUnique({ where: { userId: req.user.id } });
   if (!member) return res.status(400).json({ error: 'You are not in a house' });
@@ -1376,7 +1376,7 @@ app.get('/api/market/inventory', async (req, res) => {
   res.json(inventory);
 });
 
-app.post('/api/market/buy', validate(schemas.marketBuy), async (req, res) => {
+app.post('/api/market/buy', validate(schemas.marketBuy), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { listingId } = req.body;
 
@@ -1427,7 +1427,7 @@ app.post('/api/market/buy', validate(schemas.marketBuy), async (req, res) => {
   }
 });
 
-app.post('/api/market/list', validate(schemas.marketList), async (req, res) => {
+app.post('/api/market/list', validate(schemas.marketList), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { inventoryId, price, quantity } = req.body;
   const inv = await prisma.inventory.findFirst({ where: { id: inventoryId, userId: req.user.id } });
@@ -1466,7 +1466,7 @@ app.get('/api/inventory', async (req, res) => {
   res.json({ inventory });
 });
 
-app.post('/api/inventory/use', validate(schemas.inventoryId), async (req, res) => {
+app.post('/api/inventory/use', validate(schemas.inventoryId), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { inventoryId } = req.body;
 
@@ -1545,7 +1545,7 @@ app.get('/api/shop/items', async (req, res) => {
   res.json({ items });
 });
 
-app.post('/api/shop/buy', validate(schemas.shopBuy), async (req, res) => {
+app.post('/api/shop/buy', validate(schemas.shopBuy), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { itemId, quantity } = req.body;
   const qty = quantity;
@@ -1580,7 +1580,7 @@ app.post('/api/shop/buy', validate(schemas.shopBuy), async (req, res) => {
   }
 });
 
-app.post('/api/inventory/sell', validate(schemas.inventorySell), async (req, res) => {
+app.post('/api/inventory/sell', validate(schemas.inventorySell), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { inventoryId, quantity } = req.body;
   const qty = quantity;
@@ -1644,7 +1644,7 @@ app.get('/api/training/status', async (req, res) => {
   res.json({ stats, cooldowns });
 });
 
-app.post('/api/training/train', validate(schemas.trainingTrain), async (req, res) => {
+app.post('/api/training/train', validate(schemas.trainingTrain), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { stat } = req.body;
   const cfg = TRAINING_CONFIG[stat];
@@ -1820,6 +1820,45 @@ async function checkStatus(userId) {
     return await prisma.stats.update({ where: { userId }, data: updates });
   }
   return stats;
+}
+
+// ─── Jail / hospital lockout ──────────────────────────────────────────────────
+// A jailed or hospitalized player can still look around (every GET), manage
+// their character (stat points, skill unlocks) and send feedback, but can't do
+// anything that changes the world: train, rest, use skills or items, shop,
+// trade, join/leave houses, build wagons or travel. Raids and hunting already
+// check these flags inside their own transactions.
+
+function formatWait(ms) {
+  const totalSec = Math.max(1, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSec / 60), s = totalSec % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+// Returns an error message if the player is currently locked up, else null.
+// Also clears any jail/hospital timer that has already run out.
+async function detainedMessage(userId) {
+  const stats = await checkStatus(userId);
+  const now = Date.now();
+  if (stats.inJail) {
+    const left = stats.jailUntil ? new Date(stats.jailUntil).getTime() - now : 0;
+    return `You are in jail — released in ${formatWait(left)}.`;
+  }
+  if (stats.inHospital) {
+    const left = stats.hospitalUntil ? new Date(stats.hospitalUntil).getTime() - now : 0;
+    return `You are in hospital — discharged in ${formatWait(left)}.`;
+  }
+  return null;
+}
+
+// Route middleware: rejects the request while the player is in jail or hospital.
+async function blockIfDetained(req, res, next) {
+  if (!req.isAuthenticated()) return next(); // the handler returns the 401
+  const hasStats = await prisma.stats.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+  if (!hasStats) return next(); // no character yet, nothing to lock
+  const msg = await detainedMessage(req.user.id);
+  if (msg) return res.status(400).json({ error: msg, detained: true });
+  next();
 }
 
 app.get('/api/raid/status', async (req, res) => {
@@ -2488,7 +2527,7 @@ app.get('/api/wagon/status', async (req, res) => {
 
 // Builds the Basic Wagon (tier 1) or upgrades to the next tier — same flow,
 // since each tier is just "the next thing you don't have yet".
-app.post('/api/wagon/build', async (req, res) => {
+app.post('/api/wagon/build', blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
 
   try {
@@ -2589,7 +2628,9 @@ app.get('/api/cities/:cityId', async (req, res) => {
 
     // Visiting an unlocked city page means the player is now there — record
     // it as their current location so other systems can key off it later.
-    if (stats?.hasWagon && stats.currentCityId !== city.id) {
+    // Locked-up players can still read about a city, but don't travel there.
+    const detained = stats ? await detainedMessage(req.user.id) : null;
+    if (stats?.hasWagon && !detained && stats.currentCityId !== city.id) {
       await prisma.stats.update({ where: { userId: req.user.id }, data: { currentCityId: city.id } });
     }
 
@@ -2603,7 +2644,7 @@ app.get('/api/cities/:cityId', async (req, res) => {
       mode: city.mode,
       hasWagon: !!stats?.hasWagon,
       wagonTier,
-      currentCityId: stats?.hasWagon ? city.id : (stats?.currentCityId ?? null),
+      currentCityId: stats?.hasWagon && !detained ? city.id : (stats?.currentCityId ?? null),
       shopItems,
       nearbyZones,
       nearbyRaids,
@@ -2615,7 +2656,7 @@ app.get('/api/cities/:cityId', async (req, res) => {
 });
 
 // Returning to the capital — clears currentCityId (null means Aurelia).
-app.post('/api/travel/home', async (req, res) => {
+app.post('/api/travel/home', blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   try {
     await prisma.stats.update({ where: { userId: req.user.id }, data: { currentCityId: null } });

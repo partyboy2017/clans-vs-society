@@ -240,7 +240,7 @@
       spellcheck="false"
       placeholder="Enter your name..."
     >
-    <div class="hint" id="hint">Between 2 and 24 characters. Letters, numbers, spaces allowed.</div>
+    <div class="hint" id="hint">Between 2 and 24 characters. Letters, numbers, spaces, and - _ . allowed.</div>
   </div>
 
   <div class="rules">
@@ -261,13 +261,14 @@
   const preview = document.getElementById('preview');
   const previewName = document.getElementById('preview-name');
 
-  const forbidden = /[<>"'%;()&+]/;
+  // Same rule as the server (CHARACTER_NAME_RE in server.js).
+  const allowed = /^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u;
 
   function validate(val){
     const trimmed = val.trim();
-    if(trimmed.length === 0) return { ok: false, msg: 'Between 2 and 24 characters. Letters, numbers, spaces allowed.' };
+    if(trimmed.length === 0) return { ok: false, msg: 'Between 2 and 24 characters. Letters, numbers, spaces, and - _ . allowed.' };
     if(trimmed.length < 2) return { ok: false, msg: 'Too short — at least 2 characters required.' };
-    if(forbidden.test(trimmed)) return { ok: false, msg: 'Name contains invalid characters.' };
+    if(!allowed.test(trimmed)) return { ok: false, msg: 'Names can use letters, numbers, spaces, and - _ .' };
     return { ok: true, msg: `"${trimmed}" looks worthy of the realm.` };
   }
 
@@ -280,7 +281,7 @@
     input.className = '';
 
     if(val.length === 0){
-      hint.textContent = 'Between 2 and 24 characters. Letters, numbers, spaces allowed.';
+      hint.textContent = 'Between 2 and 24 characters. Letters, numbers, spaces, and - _ . allowed.';
       preview.classList.remove('visible');
       btn.disabled = true;
       return;

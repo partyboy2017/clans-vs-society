@@ -220,8 +220,11 @@ model Listing {
   price     Int
   quantity  Int      @default(1)
   createdAt DateTime @default(now())
+  expiresAt DateTime // after this the listing comes down and the items go back to the seller
   seller    User     @relation(fields: [sellerId], references: [id])
   item      Item     @relation(fields: [itemId], references: [id])
+
+  @@index([expiresAt])
 }
 
 model CombatSession {

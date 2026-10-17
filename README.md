@@ -16,7 +16,7 @@ Once you're an admin, you can grant or remove admin access for other players fro
 **What's in it**
 
 - **Overview** – who's online now, daily/weekly activity, signups, class mix, gold in circulation, open feedback and recent errors.
-- **Players** – search, filter and sort. Each player page shows stats, inventory, skills, activity, logins and admin history, with tools to edit stats, give/remove items, free from jail or hospital, cancel travel, end a stuck fight, reset cooldowns, force logout, ban/unban and grant admin. It also lists other accounts seen on the same IP.
+- **Players** – search, filter and sort. Each player page shows stats, inventory, skills, activity, logins and admin history, with tools to edit stats, give/remove items, free from jail or the Infirmary, cancel travel, end a stuck fight, reset cooldowns, force logout, ban/unban and grant admin. It also lists other accounts seen on the same IP.
 - **Login log** – every login, logout and kick with IP and device, filterable by player, IP, type and date. Session length is estimated from last activity when a player just closes the tab.
 - **Economy** – gold over time (hourly snapshots, 14 days), biggest 24-hour gains, richest players, and anyone holding 5× the gold of their level.
 - **Market** – all listings with price vs. base price; remove a listing and return the items to the seller.

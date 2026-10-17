@@ -105,9 +105,9 @@
 
     <!-- HOSPITAL BANNER -->
     <div class="status-banner hospital" id="hospital-banner">
-      <div class="status-icon">🏥</div>
+      <div class="status-icon">⚕</div>
       <div>
-        <div class="status-title">You are recovering in hospital</div>
+        <div class="status-title">You are recovering in the Infirmary</div>
         <div class="status-timer" id="hospital-timer">Discharged in —</div>
       </div>
     </div>
@@ -276,8 +276,8 @@
       ]);
     } else {
       addLog(`You raided <span class="loss">${locationName}</span> and were repelled. You escaped but were injured.`);
-      showModal('🏥', 'Repelled!', `You attacked ${locationName} but were driven back and injured.`, [
-        { label: 'RESULT',    value: 'Sent to hospital', cls: 'neg' },
+      showModal('⚕', 'Repelled!', `You attacked ${locationName} but were driven back and injured.`, [
+        { label: 'RESULT',    value: 'Sent to the Infirmary', cls: 'neg' },
         { label: 'XP GAINED', value: `+${data.xpGain}`,  cls: 'pos' },
       ]);
     }
@@ -301,12 +301,12 @@
       showModal('⚔', 'Victory!', `You defeated ${targetName} in combat.`, [
         { label: 'GOLD STOLEN', value: `+${data.goldStolen} g`, cls: 'pos' },
         { label: 'XP GAINED',   value: `+${data.xpGain}`,      cls: 'pos' },
-        { label: 'TARGET',      value: data.defenderHospitalized ? 'Sent to hospital' : 'Injured', cls: 'neg' },
+        { label: 'TARGET',      value: data.defenderHospitalized ? 'Sent to the Infirmary' : 'Injured', cls: 'neg' },
       ]);
     } else {
-      addLog(`You attacked <span class="loss">${targetName}</span> and lost. You were sent to hospital.`);
-      showModal('🏥', 'Defeated!', `${targetName} repelled your attack and you were badly wounded.`, [
-        { label: 'RESULT',    value: 'Sent to hospital', cls: 'neg' },
+      addLog(`You attacked <span class="loss">${targetName}</span> and lost. You were sent to the Infirmary.`);
+      showModal('⚕', 'Defeated!', `${targetName} repelled your attack and you were badly wounded.`, [
+        { label: 'RESULT',    value: 'Sent to the Infirmary', cls: 'neg' },
         { label: 'XP GAINED', value: `+${data.xpGain}`,  cls: 'pos' },
       ]);
     }

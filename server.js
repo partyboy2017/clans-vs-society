@@ -2107,7 +2107,7 @@ async function detainedMessage(userId) {
   }
   if (stats.inHospital) {
     const left = stats.hospitalUntil ? new Date(stats.hospitalUntil).getTime() - now : 0;
-    return `You are in hospital — discharged in ${formatWait(left)}.`;
+    return `You are in the Infirmary — released in ${formatWait(left)}.`;
   }
   return null;
 }
@@ -2211,7 +2211,7 @@ app.post('/api/raid/npc', validate(schemas.raidNpc), async (req, res) => {
     } else if (result.jailMins > 0) {
       logActivity(req.user.id, 'raid', `Caught raiding ${location.name} — thrown in jail for ${result.jailMins}m.`);
     } else if (result.hospitalMins > 0) {
-      logActivity(req.user.id, 'raid', `Lost the raid at ${location.name} — hospitalized for ${result.hospitalMins}m.`);
+      logActivity(req.user.id, 'raid', `Lost the raid at ${location.name} — sent to the Infirmary for ${result.hospitalMins}m.`);
     } else {
       logActivity(req.user.id, 'raid', `Lost the raid at ${location.name}.`);
     }
@@ -2220,7 +2220,7 @@ app.post('/api/raid/npc', validate(schemas.raidNpc), async (req, res) => {
 
   } catch (e) {
     if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
-    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
+    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in the Infirmary' });
     if (e && e.code === 'TRAVELING') return res.status(400).json({ error: 'You are on the road. Finish or turn back from your journey first.' });
     if (e && e.code === 'TARGET_TRAVELING') return res.status(400).json({ error: 'That lord is on the road and out of reach' });
     if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy' });
@@ -2319,7 +2319,7 @@ app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
 
     if (result.won) {
       logActivity(req.user.id, 'raid', `Attacked ${target.characterName} and won — stole ${result.goldStolen} gold, +${result.xpGain} XP.`);
-      logActivity(targetId, 'raid', `Was attacked by ${req.user.characterName} and lost ${result.goldStolen} gold.${result.defenderHospitalized ? ' Hospitalized.' : ''}`);
+      logActivity(targetId, 'raid', `Was attacked by ${req.user.characterName} and lost ${result.goldStolen} gold.${result.defenderHospitalized ? ' Sent to the Infirmary.' : ''}`);
     } else {
       logActivity(req.user.id, 'raid', `Attacked ${target.characterName} and lost, +${result.xpGain} XP.`);
       logActivity(targetId, 'raid', `Successfully defended against an attack from ${req.user.characterName}.`);
@@ -2333,7 +2333,7 @@ app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
 
   } catch (e) {
     if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
-    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
+    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in the Infirmary' });
     if (e && e.code === 'TRAVELING') return res.status(400).json({ error: 'You are on the road. Finish or turn back from your journey first.' });
     if (e && e.code === 'TARGET_TRAVELING') return res.status(400).json({ error: 'That lord is on the road and out of reach' });
     if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy — attacks cost 20 energy' });
@@ -3035,7 +3035,7 @@ app.post('/api/travel/start', validate(schemas.travelStart), async (req, res) =>
     const here = stats.currentCityId || HOME_ID;
     if (here === dest.id) return res.status(400).json({ error: `You are already in ${dest.name}`, alreadyThere: true, cityId: dest.id });
     if (stats.inJail)     return res.status(400).json({ error: 'You are in jail' });
-    if (stats.inHospital) return res.status(400).json({ error: 'You are in hospital' });
+    if (stats.inHospital) return res.status(400).json({ error: 'You are in the Infirmary' });
     if (dest.id !== HOME_ID && !stats.hasWagon) return res.status(400).json({ error: 'You need a wagon to travel that far. Build one on the Realm Map.' });
     const fight = await prisma.combatSession.findUnique({ where: { userId: req.user.id }, select: { id: true } });
     if (fight) return res.status(400).json({ error: 'Finish or flee your fight before setting out' });
@@ -3221,7 +3221,7 @@ app.post('/api/monsters/start', validate(schemas.monstersStart), async (req, res
     res.json({ session });
   } catch (e) {
     if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
-    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
+    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in the Infirmary' });
     if (e && e.code === 'LEVEL_TOO_LOW') return res.status(400).json({ error: `You must be at least Level ${e.minLevel} to hunt in ${zone.name}` });
     if (e && e.code === 'TRAVELING') return res.status(400).json({ error: 'You are on the road. Finish or turn back from your journey first.' });
     if (e && e.code === 'TARGET_TRAVELING') return res.status(400).json({ error: 'That lord is on the road and out of reach' });
@@ -3345,7 +3345,7 @@ app.post('/api/monsters/turn', validate(schemas.monstersTurn), async (req, res) 
       return res.json({ ...result, ...levelUp });
     }
     if (result.lost) {
-      logActivity(req.user.id, 'monster', `Defeated by ${result.monsterName} — hospitalized for ${result.hospitalMins}m.`);
+      logActivity(req.user.id, 'monster', `Defeated by ${result.monsterName} — sent to the Infirmary for ${result.hospitalMins}m.`);
     }
     if (result.fled) {
       logActivity(req.user.id, 'monster', `Fled from a fight.`);

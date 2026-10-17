@@ -97,13 +97,21 @@ function validate(schema) {
   };
 }
 
+// Letters (any language, so accented names work), digits, spaces and - _ .
+// Anything else, notably < > " ' &, is rejected: names are shown all over the
+// UI, and an apostrophe would also break the Raids page's onclick handlers.
+const CHARACTER_NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u;
+
 const id = () => z.coerce.number().int().positive('Must be a positive number');
 
 const schemas = {
   chooseName: z.object({
     characterName: z.string().trim()
-      .min(2, 'Name must be at least 2 characters')
-      .max(24, 'Name must be 24 characters or fewer'),
+      .transform(s => s.replace(/\s+/g, ' '))   // collapse runs of spaces
+      .pipe(z.string()
+        .min(2, 'Name must be at least 2 characters')
+        .max(24, 'Name must be 24 characters or fewer')
+        .regex(CHARACTER_NAME_RE, 'Names can use letters, numbers, spaces, and - _ .')),
   }),
   chooseClass: z.object({
     characterClass: z.enum(VALID_CLASSES, { message: 'Invalid class' }),
@@ -852,12 +860,28 @@ app.get('/api/classes', (req, res) => {
 
 app.post('/api/choose-name', validate(schemas.chooseName), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
-  const { characterName } = req.body;
-  const clean = characterName;
+  // A name is chosen once, at character creation. There is no rename yet.
+  if (req.user.characterName) return res.status(409).json({ error: 'Your name is already set' });
+  const clean = req.body.characterName;
   try {
-    const exists = await prisma.user.findFirst({ where: { characterName: clean } });
-    if (exists) return res.status(409).json({ error: 'That name is already taken' });
-    await prisma.user.update({ where: { id: req.user.id }, data: { characterName: clean } });
+    // Names are unique regardless of case ("Bob" blocks "bob"). The advisory
+    // lock serializes concurrent claims of the same name, so two sign-ups
+    // can't both pass the check and save the same name.
+    const taken = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(lower(${clean})))`;
+      const exists = await tx.user.findFirst({
+        where: { characterName: { equals: clean, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (exists) return true;
+      const updated = await tx.user.updateMany({
+        where: { id: req.user.id, characterName: null },
+        data:  { characterName: clean },
+      });
+      if (updated.count === 0) throw Object.assign(new Error('already named'), { code: 'ALREADY_NAMED' });
+      return false;
+    });
+    if (taken) return res.status(409).json({ error: 'That name is already taken' });
 
     // Refresh session so the new characterName is visible immediately.
     const updatedUser = await prisma.user.findUnique({
@@ -866,9 +890,11 @@ app.post('/api/choose-name', validate(schemas.chooseName), async (req, res) => {
     });
     req.login(updatedUser, (err) => {
       if (err) return res.status(500).json({ error: 'Session refresh failed' });
-      res.json({ ok: true });
+      res.json({ ok: true, characterName: clean });
     });
   } catch (e) {
+    if (e.code === 'ALREADY_NAMED') return res.status(409).json({ error: 'Your name is already set' });
+    logError('/api/choose-name error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });

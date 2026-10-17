@@ -48,6 +48,21 @@
   .store-purse a{font-family:'JetBrains Mono',monospace;font-size:0.66rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--bone);border:1px solid var(--line);padding:0.5rem 0.9rem;text-decoration:none;}
   .store-purse a:hover{border-color:var(--brass-dim);}
   .item-owned{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.06em;color:var(--ash);margin-bottom:0.5rem;}
+  /* Quantity picker — same brass-and-parchment look as the rest of the store */
+  .qty-row{display:flex;align-items:center;justify-content:space-between;gap:0.6rem;margin:0.2rem 0 0.7rem;}
+  .qty-stepper{display:inline-flex;align-items:stretch;border:1px solid var(--line);background:var(--bg);}
+  .qty-btn{font-family:'JetBrains Mono',monospace;font-size:0.8rem;width:1.9rem;background:transparent;border:none;color:var(--brass);cursor:pointer;transition:background 0.15s,color 0.15s;}
+  .qty-btn:hover:not(:disabled){background:rgba(176,141,69,0.12);color:var(--parchment);}
+  .qty-btn:disabled{color:var(--ash);opacity:0.4;cursor:not-allowed;}
+  .qty-input{width:2.6rem;text-align:center;background:transparent;border:none;border-left:1px solid var(--line);border-right:1px solid var(--line);color:var(--bone);font-family:'JetBrains Mono',monospace;font-size:0.75rem;padding:0.35rem 0;-moz-appearance:textfield;}
+  .qty-input::-webkit-outer-spin-button,.qty-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .qty-input:focus{outline:none;background:rgba(176,141,69,0.06);}
+  .qty-max{font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.35rem 0.55rem;background:transparent;border:1px solid var(--brass-dim);color:var(--brass);cursor:pointer;}
+  .qty-max:hover:not(:disabled){background:var(--brass-dim);color:var(--bone);}
+  .qty-max:disabled{border-color:var(--line);color:var(--ash);opacity:0.5;cursor:not-allowed;}
+  .item-total{font-family:'Cinzel',serif;font-size:0.95rem;color:var(--brass);}
+  .item-total.short{color:var(--rust-bright);}
+  .item-unit{display:block;font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:0.06em;color:var(--ash);}
   .store-section{font-family:'Cinzel',serif;font-size:0.85rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--parchment);margin:1.4rem 0 0.8rem;}
 </style>
 </head>
@@ -118,26 +133,86 @@
     return `<div class="item-icon-wrap"><img src="${esc(src)}" alt="" width="52" height="52" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_ICON}';"></div>`;
   }
 
+  const MAX_PER_PURCHASE = 99;        // the server's limit for one purchase
+  const chosen = new Map();             // itemId -> quantity picked on this visit
+
+  // Most of this item the player can afford in one purchase (0 if not even one).
+  const maxAffordable = item => Math.min(MAX_PER_PURCHASE, Math.floor(myGold / item.basePrice));
+  const qtyFor = item => Math.max(1, Math.min(chosen.get(item.id) || 1, Math.max(1, maxAffordable(item))));
+
   function card(item){
-    const affordable = myGold >= item.basePrice;
+    const max = maxAffordable(item);
+    const qty = qtyFor(item);
+    const total = qty * item.basePrice;
+    const affordable = max >= 1;
     const have = owned[item.id] || 0;
     return `
-      <div class="item-card">
+      <div class="item-card" data-card-id="${item.id}">
         <div class="item-type ${esc(item.type)}">${esc(item.type)}</div>
         ${itemIconHtml(item.icon)}
         <div class="item-name">${esc(item.name)}</div>
         <div class="item-owned">${have ? `YOU CARRY ${have}` : '&nbsp;'}</div>
         <div class="item-desc">${esc(item.description)}</div>
+        <div class="qty-row">
+          <div class="qty-stepper" role="group" aria-label="Quantity of ${esc(item.name)}">
+            <button class="qty-btn" data-step="-1" ${!affordable || qty <= 1 ? 'disabled' : ''} aria-label="One fewer">−</button>
+            <input class="qty-input" type="number" inputmode="numeric" min="1" max="${Math.max(1, max)}" value="${qty}" ${affordable ? '' : 'disabled'} aria-label="Quantity">
+            <button class="qty-btn" data-step="1" ${!affordable || qty >= max ? 'disabled' : ''} aria-label="One more">+</button>
+          </div>
+          <button class="qty-max" ${!affordable || qty >= max ? 'disabled' : ''} title="As many as your purse allows (up to ${MAX_PER_PURCHASE})">Max</button>
+        </div>
         <div class="item-footer">
-          <span class="item-price">${item.basePrice} g</span>
+          <span class="item-total${affordable ? '' : ' short'}">${total.toLocaleString()} g<span class="item-unit">${qty > 1 ? `${item.basePrice} g each` : 'each'}</span></span>
           <button class="item-btn buy" ${affordable ? '' : 'disabled'} data-item-id="${item.id}" data-item-name="${esc(item.name)}">
-            ${affordable ? 'Buy' : 'Too costly'}
+            ${affordable ? (qty > 1 ? `Buy ${qty}` : 'Buy') : 'Too costly'}
           </button>
         </div>
       </div>`;
   }
 
+  // Update one card's quantity, total and buttons in place. Nothing is
+  // re-created, so typing, focus and Enter-to-buy keep working.
+  function syncCard(el, item){
+    const max = maxAffordable(item);
+    const qty = qtyFor(item);
+    const affordable = max >= 1;
+    const inp = el.querySelector('.qty-input');
+    if (document.activeElement !== inp || inp.value !== '') inp.value = qty;
+    inp.max = Math.max(1, max);
+    el.querySelector('.qty-btn[data-step="-1"]').disabled = !affordable || qty <= 1;
+    el.querySelector('.qty-btn[data-step="1"]').disabled  = !affordable || qty >= max;
+    el.querySelector('.qty-max').disabled = !affordable || qty >= max;
+    const total = el.querySelector('.item-total');
+    total.firstChild.textContent = `${(qty * item.basePrice).toLocaleString()} g`;
+    total.querySelector('.item-unit').textContent = qty > 1 ? `${item.basePrice} g each` : 'each';
+    el.querySelector('.item-btn.buy').textContent = affordable ? (qty > 1 ? `Buy ${qty}` : 'Buy') : 'Too costly';
+  }
+
+  function setQty(el, item, n){
+    const max = Math.max(1, maxAffordable(item));
+    chosen.set(item.id, Math.max(1, Math.min(max, Number.isFinite(n) ? Math.floor(n) : 1)));
+    syncCard(el, item);
+  }
+
+  function wireCard(el, item){
+    const inp = el.querySelector('.qty-input');
+    el.querySelectorAll('.qty-btn').forEach(b =>
+      b.addEventListener('click', () => setQty(el, item, qtyFor(item) + parseInt(b.dataset.step, 10))));
+    el.querySelector('.qty-max').addEventListener('click', () => setQty(el, item, maxAffordable(item)));
+    inp.addEventListener('change', () => setQty(el, item, parseInt(inp.value, 10)));
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter')     { e.preventDefault(); setQty(el, item, parseInt(inp.value, 10)); if (maxAffordable(item) >= 1) buyItem(item, qtyFor(item)); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setQty(el, item, qtyFor(item) + 1); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setQty(el, item, qtyFor(item) - 1); }
+    });
+    el.querySelector('.item-btn.buy').addEventListener('click', () => {
+      if (maxAffordable(item) >= 1) buyItem(item, qtyFor(item));
+    });
+  }
+
+  let storeItems = [];
   function renderStore(items){
+    storeItems = items;
     const wrap = document.getElementById('store-sections');
     if(!items.length){
       wrap.innerHTML = `<div class="empty-state">The store has nothing in stock right now.</div>`;
@@ -150,9 +225,10 @@
     wrap.innerHTML = groups.map(g => `
       <div class="store-section">${g.title}</div>
       <div class="items-grid">${g.items.map(card).join('')}</div>`).join('');
-    wrap.querySelectorAll('.item-btn[data-item-id]:not(:disabled)').forEach(btn => {
-      btn.addEventListener('click', () => buyItem(btn.dataset.itemId, btn.dataset.itemName));
-    });
+    for (const item of items) {
+      const el = wrap.querySelector(`.item-card[data-card-id="${item.id}"]`);
+      if (el) wireCard(el, item);
+    }
   }
 
   async function loadOwned(){
@@ -166,16 +242,24 @@
     renderStore(data.items || []);
   }
 
-  async function buyItem(itemId, itemName){
+  let buying = false;
+  async function buyItem(item, qty){
+    if (buying) return;
+    qty = Math.max(1, Math.min(MAX_PER_PURCHASE, qty || 1));
+    if (qty * item.basePrice > myGold) { showToast('Not enough gold for that many.'); return; }
+    buying = true;
     let data;
     try {
-      data = await apiPost('/api/shop/buy', { itemId: parseInt(itemId, 10), quantity: 1 });
-    } catch(e){ showToast(e.message); return; }
-    addLog(`You bought <span class="gain">${esc(itemName)}</span>. <span class="loss">-${data.cost} gold</span>`);
-    showToast(`Bought ${itemName}`);
+      data = await apiPost('/api/shop/buy', { itemId: item.id, quantity: qty });
+    } catch(e){ showToast(e.message); buying = false; return; }
+    const what = qty > 1 ? `${qty}× ${esc(item.name)}` : esc(item.name);
+    addLog(`You bought <span class="gain">${what}</span>. <span class="loss">-${data.cost} gold</span>`);
+    showToast(`Bought ${qty > 1 ? `${qty}× ` : ''}${item.name}`);
+    chosen.delete(item.id);              // back to 1 for the next purchase
     await loadPlayer();
     await loadOwned();
-    await loadStore();
+    renderStore(storeItems);
+    buying = false;
   }
 
   async function loadPlayer(){

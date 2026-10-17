@@ -742,6 +742,13 @@ app.get('/monsters', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'monsters.html'));
 });
 
+app.get('/store', (req, res) => {
+  if (!req.isAuthenticated())   return res.redirect('/');
+  if (!req.user.characterName)  return res.redirect('/choose-name');
+  if (!req.user.characterClass) return res.redirect('/choose-class');
+  res.sendFile(path.join(__dirname, 'public', 'store.html'));
+});
+
 app.get('/inventory', (req, res) => {
   if (!req.isAuthenticated())   return res.redirect('/');
   if (!req.user.characterName)  return res.redirect('/choose-name');

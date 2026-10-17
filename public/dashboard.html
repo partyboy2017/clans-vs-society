@@ -628,18 +628,18 @@
     const jailBanner = document.getElementById('jail-banner');
     const hospitalBanner = document.getElementById('hospital-banner');
 
-    if(stats.inJail && stats.jailUntil){
+    jailRemainingMs = (stats.inJail && stats.jailUntil) ? Math.max(0, new Date(stats.jailUntil).getTime() - now) : 0;
+    if(stats.inJail && stats.jailUntil && jailRemainingMs > 0) {
       jailBanner.classList.add('show');
-      jailRemainingMs = Math.max(0, new Date(stats.jailUntil).getTime() - now);
       document.getElementById('jail-timer').textContent = `Released in ${formatMs(jailRemainingMs)}`;
     } else {
       jailBanner.classList.remove('show');
       jailRemainingMs = 0;
     }
 
-    if(stats.inHospital && stats.hospitalUntil){
+    hospitalRemainingMs = (stats.inHospital && stats.hospitalUntil) ? Math.max(0, new Date(stats.hospitalUntil).getTime() - now) : 0;
+    if(stats.inHospital && stats.hospitalUntil && hospitalRemainingMs > 0) {
       hospitalBanner.classList.add('show');
-      hospitalRemainingMs = Math.max(0, new Date(stats.hospitalUntil).getTime() - now);
       document.getElementById('hospital-timer').textContent = `Discharged in ${formatMs(hospitalRemainingMs)}`;
     } else {
       hospitalBanner.classList.remove('show');
@@ -651,12 +651,12 @@
       if(jailRemainingMs > 0){
         jailRemainingMs = Math.max(0, jailRemainingMs - 1000);
         document.getElementById('jail-timer').textContent = `Released in ${formatMs(jailRemainingMs)}`;
-        if(jailRemainingMs === 0){ loadPlayer(); }
+        if(jailRemainingMs === 0){ document.getElementById('jail-banner').classList.remove('show'); setTimeout(loadPlayer, 1500); }
       }
       if(hospitalRemainingMs > 0){
         hospitalRemainingMs = Math.max(0, hospitalRemainingMs - 1000);
         document.getElementById('hospital-timer').textContent = `Discharged in ${formatMs(hospitalRemainingMs)}`;
-        if(hospitalRemainingMs === 0){ loadPlayer(); }
+        if(hospitalRemainingMs === 0){ document.getElementById('hospital-banner').classList.remove('show'); setTimeout(loadPlayer, 1500); }
       }
     }, 1000);
   }

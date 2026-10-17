@@ -762,10 +762,10 @@ app.get('/api/me', async (req, res) => {
   let stats = req.user.stats;
   if (stats) {
     try {
-      await regenEnergy(req.user.id);
-      stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+      // checkStatus applies energy regen and clears expired jail/hospital timers.
+      stats = await checkStatus(req.user.id);
     } catch (err) {
-      logError('[api/me] energy regen failed', err);
+      logError('[api/me] status refresh failed', err);
     }
   }
 
@@ -1807,11 +1807,11 @@ async function checkStatus(userId) {
   const stats = await prisma.stats.findUnique({ where: { userId } });
   const now = new Date();
   const updates = {};
-  if (stats.inJail && stats.jailUntil && now > stats.jailUntil) {
+  if (stats.inJail && stats.jailUntil && now >= stats.jailUntil) {
     updates.inJail = false;
     updates.jailUntil = null;
   }
-  if (stats.inHospital && stats.hospitalUntil && now > stats.hospitalUntil) {
+  if (stats.inHospital && stats.hospitalUntil && now >= stats.hospitalUntil) {
     updates.inHospital = false;
     updates.hospitalUntil = null;
     updates.health = stats.maxHealth;

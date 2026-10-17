@@ -81,18 +81,18 @@ function updateStatusBanners(stats, onExpire) {
   const jailBanner = document.getElementById('jail-banner');
   const hospitalBanner = document.getElementById('hospital-banner');
 
-  if (stats.inJail && stats.jailUntil && jailBanner) {
+  _jailRemainingMs = (stats.inJail && stats.jailUntil) ? Math.max(0, new Date(stats.jailUntil).getTime() - now) : 0;
+  if (stats.inJail && stats.jailUntil && jailBanner && _jailRemainingMs > 0) {
     jailBanner.classList.add('show');
-    _jailRemainingMs = Math.max(0, new Date(stats.jailUntil).getTime() - now);
     document.getElementById('jail-timer').textContent = `Released in ${formatMs(_jailRemainingMs)}`;
   } else {
     jailBanner?.classList.remove('show');
     _jailRemainingMs = 0;
   }
 
-  if (stats.inHospital && stats.hospitalUntil && hospitalBanner) {
+  _hospitalRemainingMs = (stats.inHospital && stats.hospitalUntil) ? Math.max(0, new Date(stats.hospitalUntil).getTime() - now) : 0;
+  if (stats.inHospital && stats.hospitalUntil && hospitalBanner && _hospitalRemainingMs > 0) {
     hospitalBanner.classList.add('show');
-    _hospitalRemainingMs = Math.max(0, new Date(stats.hospitalUntil).getTime() - now);
     document.getElementById('hospital-timer').textContent = `Discharged in ${formatMs(_hospitalRemainingMs)}`;
   } else {
     hospitalBanner?.classList.remove('show');
@@ -105,13 +105,13 @@ function updateStatusBanners(stats, onExpire) {
       _jailRemainingMs = Math.max(0, _jailRemainingMs - 1000);
       const el = document.getElementById('jail-timer');
       if (el) el.textContent = `Released in ${formatMs(_jailRemainingMs)}`;
-      if (_jailRemainingMs === 0) onExpire?.();
+      if (_jailRemainingMs === 0) { document.getElementById('jail-banner')?.classList.remove('show'); setTimeout(() => onExpire?.(), 1500); }
     }
     if (_hospitalRemainingMs > 0) {
       _hospitalRemainingMs = Math.max(0, _hospitalRemainingMs - 1000);
       const el = document.getElementById('hospital-timer');
       if (el) el.textContent = `Discharged in ${formatMs(_hospitalRemainingMs)}`;
-      if (_hospitalRemainingMs === 0) onExpire?.();
+      if (_hospitalRemainingMs === 0) { document.getElementById('hospital-banner')?.classList.remove('show'); setTimeout(() => onExpire?.(), 1500); }
     }
   }, 1000);
 }

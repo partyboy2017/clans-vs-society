@@ -474,6 +474,33 @@ app.use('/api', (req, res, next) => {
   res.status(400).json({ error: 'Finish creating your character first.', needsCharacter: true });
 });
 
+// ─── Coming soon ──────────────────────────────────────────────────────────────
+// Sections that aren't open to players yet. Their pages send players back to
+// the dashboard and their APIs refuse, so typing the URL doesn't get around
+// the "SOON" badge in the sidebar. Admins can still use them for testing.
+// To open one up, take it out of this list (or set LOCKED_FEATURES in the
+// environment, e.g. LOCKED_FEATURES=achievements).
+const LOCKED_FEATURES = new Set(
+  (process.env.LOCKED_FEATURES ?? 'house,market,achievements')
+    .split(',').map(f => f.trim()).filter(Boolean)
+);
+const FEATURE_PAGES = { '/house': 'house', '/market': 'market', '/achievements': 'achievements' };
+function lockedFeatureForApi(p) {
+  if (p === '/house' || p.startsWith('/house/') || p === '/houses') return 'house';
+  if (p.startsWith('/market/')) return 'market';
+  return null;
+}
+const featureLocked = (req, feature) => feature && LOCKED_FEATURES.has(feature) && !req.user?.isAdmin;
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET' || !featureLocked(req, FEATURE_PAGES[req.path])) return next();
+  res.redirect('/dashboard');
+});
+app.use('/api', (req, res, next) => {
+  if (!req.isAuthenticated() || !featureLocked(req, lockedFeatureForApi(req.path))) return next();
+  res.status(403).json({ error: 'This part of the realm opens soon.', comingSoon: true });
+});
+
 // ─── Email ────────────────────────────────────────────────────────────────────
 
 // Railway blocks outbound SMTP on Free/Trial/Hobby plans, so we send email

@@ -501,6 +501,45 @@ app.use('/api', (req, res, next) => {
   res.status(403).json({ error: 'This part of the realm opens soon.', comingSoon: true });
 });
 
+// ─── On the road ──────────────────────────────────────────────────────────────
+// While a lord is traveling, the journey is all they get: every game page
+// sends them to the traveling screen, and game actions are refused until they
+// arrive or turn back. A journey whose arrival time has passed is settled
+// first (settleTravel), so arriving players are never caught by this.
+// Still open on the road: the traveling page itself, logging out, sending
+// feedback, the admin panel, and every read-only API call (the traveling page
+// needs /api/me and /api/travel/status).
+const TRAVEL_BLOCKED_PAGES = new Set([
+  '/dashboard', '/training', '/skills', '/raids', '/monsters', '/store', '/inventory',
+  '/wiki', '/realm-map', '/house', '/market', '/achievements',
+]);
+const TRAVEL_ALLOWED_ACTIONS = new Set(['/travel/start', '/travel/cancel', '/logout', '/feedback']);
+
+async function travelingTo(req) {
+  if (!req.isAuthenticated() || !req.user.characterClass) return null;
+  await settleTravel(req.user.id);
+  const s = await prisma.stats.findUnique({ where: { userId: req.user.id }, select: { travelDestination: true } });
+  return s?.travelDestination || null;
+}
+
+app.use(async (req, res, next) => {
+  if (req.method !== 'GET' || !(TRAVEL_BLOCKED_PAGES.has(req.path) || req.path.startsWith('/city/'))) return next();
+  try {
+    const dest = await travelingTo(req);
+    if (!dest) return next();
+    res.redirect(`/traveling?to=${encodeURIComponent(dest)}`);
+  } catch (e) { next(e); }
+});
+
+app.use('/api', async (req, res, next) => {
+  if (req.method === 'GET' || TRAVEL_ALLOWED_ACTIONS.has(req.path) || req.path.startsWith('/admin')) return next();
+  try {
+    const dest = await travelingTo(req);
+    if (!dest) return next();
+    res.status(400).json({ error: `You are on the road to ${placeName(dest === HOME_ID ? null : dest)}. Arrive or turn back first.`, traveling: true, travelDestination: dest });
+  } catch (e) { next(e); }
+});
+
 // ─── Email ────────────────────────────────────────────────────────────────────
 
 // Railway blocks outbound SMTP on Free/Trial/Hobby plans, so we send email

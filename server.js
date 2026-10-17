@@ -102,6 +102,16 @@ function validate(schema) {
 // UI, and an apostrophe would also break the Raids page's onclick handlers.
 const CHARACTER_NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u;
 
+// ─── Market rules ─────────────────────────────────────────────────────────────
+// Listing an item costs 10% of the asking price up front (rounded up, at least
+// 1 gold). The fee is not refunded. A listing stays up for 4 days; after that
+// it comes down and the items go back to the seller's inventory.
+const MARKET_LISTING_FEE_RATE = 0.10;
+const MARKET_LISTING_DAYS     = 4;
+const MARKET_LISTING_MS       = MARKET_LISTING_DAYS * 24 * 60 * 60 * 1000;
+const MARKET_MAX_PRICE        = 1_000_000;
+const listingFee = price => Math.max(1, Math.ceil(price * MARKET_LISTING_FEE_RATE));
+
 const id = () => z.coerce.number().int().positive('Must be a positive number');
 
 const schemas = {
@@ -137,8 +147,9 @@ const schemas = {
   }),
   marketList: z.object({
     inventoryId: id(),
-    price:       z.coerce.number().int().min(1, 'Price must be at least 1 gold'),
-    quantity:    z.coerce.number().int().min(1, 'Quantity must be at least 1'),
+    price:       z.coerce.number().int().min(1, 'Price must be at least 1 gold')
+                   .max(MARKET_MAX_PRICE, `Price can be at most ${MARKET_MAX_PRICE.toLocaleString('en-US')} gold`),
+    quantity:    z.coerce.number().int().min(1, 'Quantity must be at least 1').max(9999),
   }),
   inventoryId: z.object({
     inventoryId: id(),
@@ -1534,8 +1545,41 @@ app.post('/api/house/disband', blockIfDetained, async (req, res) => {
 });
 
 // ─── MARKET ───────────────────────────────────────────────────────────────────
+// Takes down every listing past its expiry and returns the items to their
+// sellers. Safe to call from several requests at once: each listing is only
+// returned by whichever call manages to delete it.
+async function expireListings() {
+  const due = await prisma.listing.findMany({
+    where: { expiresAt: { lte: new Date() } },
+    include: { item: { select: { name: true } } },
+    take: 200,
+  });
+  for (const l of due) {
+    try {
+      const returned = await prisma.$transaction(async (tx) => {
+        const gone = await tx.listing.deleteMany({ where: { id: l.id } });
+        if (gone.count === 0) return false; // someone else handled it
+        const existing = await tx.inventory.findFirst({ where: { userId: l.sellerId, itemId: l.itemId } });
+        if (existing) {
+          await tx.inventory.update({ where: { id: existing.id }, data: { quantity: { increment: l.quantity } } });
+        } else {
+          await tx.inventory.create({ data: { userId: l.sellerId, itemId: l.itemId, quantity: l.quantity } });
+        }
+        return true;
+      });
+      if (returned) {
+        logActivity(l.sellerId, 'inventory', `Your market listing for ${l.quantity}x ${l.item.name} expired unsold. The items are back in your inventory.`);
+      }
+    } catch (e) {
+      logError('expireListings error for listing', l.id, e);
+    }
+  }
+}
+setInterval(() => expireListings().catch(e => logError('expireListings sweep error:', e)), 15 * 60 * 1000).unref();
+
 app.get('/api/market/listings', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  await expireListings();
   const listings = await prisma.listing.findMany({
     include: {
       item: true,
@@ -1546,8 +1590,15 @@ app.get('/api/market/listings', async (req, res) => {
   res.json(listings);
 });
 
+// Market rules, for the page to show the fee and timer.
+app.get('/api/market/rules', (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  res.json({ feeRate: MARKET_LISTING_FEE_RATE, listingDays: MARKET_LISTING_DAYS, maxPrice: MARKET_MAX_PRICE });
+});
+
 app.get('/api/market/inventory', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  await expireListings();
   const inventory = await prisma.inventory.findMany({
     where: { userId: req.user.id },
     include: { item: true }
@@ -1558,6 +1609,7 @@ app.get('/api/market/inventory', async (req, res) => {
 app.post('/api/market/buy', validate(schemas.marketBuy), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { listingId } = req.body;
+  await expireListings(); // an expired listing goes back to its seller, not to a buyer
 
   try {
     const listing = await prisma.$transaction(async (tx) => {
@@ -1566,7 +1618,7 @@ app.post('/api/market/buy', validate(schemas.marketBuy), blockIfDetained, async 
       // will throw P2025 (record not found), rolling back their transaction
       // before any gold or inventory changes are made.
       const found = await tx.listing.findUnique({ where: { id: listingId }, include: { item: true } });
-      if (!found) throw Object.assign(new Error('Listing not found'), { code: 'NOT_FOUND' });
+      if (!found || found.expiresAt <= new Date()) throw Object.assign(new Error('Listing not found'), { code: 'NOT_FOUND' });
       if (found.sellerId === req.user.id) throw Object.assign(new Error('Cannot buy own listing'), { code: 'OWN_LISTING' });
 
       await tx.listing.delete({ where: { id: listingId } });
@@ -1609,16 +1661,44 @@ app.post('/api/market/buy', validate(schemas.marketBuy), blockIfDetained, async 
 app.post('/api/market/list', validate(schemas.marketList), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { inventoryId, price, quantity } = req.body;
-  const inv = await prisma.inventory.findFirst({ where: { id: inventoryId, userId: req.user.id } });
-  if (!inv) return res.status(404).json({ error: 'Item not found in your inventory' });
-  if (inv.quantity < quantity) return res.status(400).json({ error: 'Not enough of that item' });
-  await prisma.listing.create({ data: { sellerId: req.user.id, itemId: inv.itemId, price, quantity } });
-  if (inv.quantity - quantity <= 0) {
-    await prisma.inventory.delete({ where: { id: inv.id } });
-  } else {
-    await prisma.inventory.update({ where: { id: inv.id }, data: { quantity: inv.quantity - quantity } });
+  const fee = listingFee(price);
+  try {
+    // One transaction: take the items out of the satchel (only if they're
+    // still there), charge the fee (only if the gold is there), then post the
+    // listing. Any failure rolls all of it back, and two simultaneous listings
+    // of the same item can't both succeed.
+    const listing = await prisma.$transaction(async (tx) => {
+      const taken = await tx.inventory.updateMany({
+        where: { id: inventoryId, userId: req.user.id, quantity: { gte: quantity } },
+        data:  { quantity: { decrement: quantity } },
+      });
+      if (taken.count === 0) {
+        const inv = await tx.inventory.findFirst({ where: { id: inventoryId, userId: req.user.id } });
+        throw { code: inv ? 'NOT_ENOUGH' : 'NOT_FOUND' };
+      }
+      const paid = await tx.stats.updateMany({
+        where: { userId: req.user.id, gold: { gte: fee } },
+        data:  { gold: { decrement: fee } },
+      });
+      if (paid.count === 0) throw { code: 'NO_GOLD' };
+
+      const inv = await tx.inventory.findUnique({ where: { id: inventoryId }, include: { item: { select: { name: true } } } });
+      if (inv.quantity <= 0) await tx.inventory.delete({ where: { id: inventoryId } });
+
+      const created = await tx.listing.create({
+        data: { sellerId: req.user.id, itemId: inv.itemId, price, quantity, expiresAt: new Date(Date.now() + MARKET_LISTING_MS) },
+      });
+      return { ...created, itemName: inv.item.name };
+    });
+    logActivity(req.user.id, 'inventory', `Listed ${quantity}x ${listing.itemName} on the market for ${price} gold (fee ${fee} gold).`);
+    res.json({ ok: true, fee, expiresAt: listing.expiresAt, listingId: listing.id });
+  } catch (e) {
+    if (e && e.code === 'NOT_FOUND')  return res.status(404).json({ error: 'Item not found in your inventory' });
+    if (e && e.code === 'NOT_ENOUGH') return res.status(400).json({ error: 'Not enough of that item' });
+    if (e && e.code === 'NO_GOLD')    return res.status(400).json({ error: `Listing this costs a ${fee} gold fee (10% of the price). You don't have enough gold.` });
+    logError('/api/market/list error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
   }
-  res.json({ ok: true });
 });
 
 // ─── INVENTORY & GENERAL STORE ──────────────────────────────────────────────────
@@ -1637,6 +1717,7 @@ function parseItemEffect(effectStr) {
 
 app.get('/api/inventory', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  await expireListings(); // expired listings come back to the satchel
   const inventory = await prisma.inventory.findMany({
     where: { userId: req.user.id },
     include: { item: true },

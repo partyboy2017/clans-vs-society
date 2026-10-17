@@ -79,6 +79,10 @@
   .join-info .jh-members{font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--brass);margin-top:0.2rem;letter-spacing:0.06em;}
   .join-btn{font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:0.08em;padding:0.4rem 0.9rem;background:transparent;border:1px solid var(--green);color:var(--green-bright);cursor:pointer;white-space:nowrap;transition:background 0.15s;}
   .join-btn:hover{background:var(--green);color:var(--bone);}
+  .join-btn:disabled{opacity:0.5;cursor:default;background:transparent;color:var(--ash);border-color:var(--line);}
+  .join-btn.deny{border-color:var(--rust-bright);color:var(--rust-bright);}
+  .join-btn.deny:hover{background:var(--rust);color:var(--bone);}
+  .pending-panel{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1.2rem;border-color:var(--brass-dim);}
 
   .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--bg-panel-2);border:1px solid var(--brass-dim);padding:0.8rem 1.2rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;letter-spacing:0.06em;color:var(--bone);opacity:0;transform:translateY(8px);transition:opacity 0.2s,transform 0.2s;pointer-events:none;max-width:300px;z-index:100;}
   .toast.show{opacity:1;transform:translateY(0);}
@@ -127,57 +131,99 @@
 
   function showToast(msg){ const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800); }
 
-  function renderNoHouse(houses){
+  // Player-written text (names, house names, mottos) is always escaped before it
+  // goes into innerHTML, so it can never run as code on someone else's screen.
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+  async function post(url, body){
+    const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {}) });
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok){ showToast(data.error || 'Something went wrong'); return null; }
+    return data;
+  }
+
+  function renderNoHouse(houses, request){
+    const pending = request ? `
+      <div class="panel pending-panel">
+        <div>Your request to join <strong>House ${esc(request.house.name)}</strong> is waiting for its Lord.</div>
+        <button class="btn btn-ghost" style="width:auto;padding:0.5rem 1rem;" onclick="cancelRequest()">Withdraw</button>
+      </div>` : '';
     document.getElementById('content').innerHTML = `
+      ${pending}
       <div class="no-house">
         <div class="choice-card">
           <div class="choice-icon">🏰</div>
           <div class="choice-title">Found a House</div>
           <div class="choice-desc">Raise your own banner and call yourself lord. Recruit bannermen and build your power from nothing.</div>
           <div class="choice-cost">COST: 500 GOLD</div>
-          <div class="field"><label>House Name</label><input id="house-name" maxlength="32" placeholder="House Ashveil..." autocomplete="off"></div>
-          <div class="field"><label>Motto</label><input id="house-motto" maxlength="64" placeholder="Strength through unity." autocomplete="off"></div>
+          <div class="field"><label>House Name</label><input id="house-name" maxlength="30" placeholder="Ashveil" autocomplete="off"></div>
+          <div class="field"><label>Motto</label><input id="house-motto" maxlength="100" placeholder="Strength through unity." autocomplete="off"></div>
           <button class="btn btn-primary" onclick="createHouse()">Found this House</button>
         </div>
         <div class="choice-card">
           <div class="choice-icon">⚔</div>
           <div class="choice-title">Join a House</div>
-          <div class="choice-desc">Swear fealty to an existing lord. Rise through their ranks and share in the spoils of their campaigns.</div>
-          <div class="choice-cost">FREE</div>
+          <div class="choice-desc">Ask to swear fealty to an existing lord. Once they accept, you rise through their ranks and share in the spoils of their campaigns.</div>
+          <div class="choice-cost">FREE · THE LORD MUST ACCEPT</div>
           <div class="join-list" id="join-list">
             ${houses.length === 0
               ? '<div style="color:var(--ash);font-style:italic;font-size:0.9rem;">No houses have been founded yet. Be the first.</div>'
-              : houses.map(h => `
+              : houses.map(h => {
+                  const asked = request && request.houseId === h.id;
+                  return `
                 <div class="join-row">
                   <div class="join-info">
-                    <div class="jh-name">House ${h.name}</div>
-                    <div class="jh-motto">${h.motto}</div>
+                    <div class="jh-name">House ${esc(h.name)}</div>
+                    <div class="jh-motto">${esc(h.motto)}</div>
                     <div class="jh-members">${h._count.members} member${h._count.members !== 1 ? 's' : ''}</div>
                   </div>
-                  <button class="join-btn" onclick="joinHouse(${h.id}, '${h.name}')">Swear Fealty</button>
-                </div>`).join('')}
+                  <button class="join-btn" data-house-id="${h.id}" ${asked ? 'disabled' : ''}>${asked ? 'Requested' : 'Ask to Join'}</button>
+                </div>`; }).join('')}
           </div>
         </div>
       </div>`;
+    document.querySelectorAll('.join-btn[data-house-id]').forEach(btn =>
+      btn.addEventListener('click', () => joinHouse(parseInt(btn.dataset.houseId, 10))));
   }
 
   function renderMyHouse(member){
     const house = member.house;
-    const isLeader = house.leaderId === undefined; // we'll check by rank
+    const isLord = member.rank === 'Lord';
+    const requests = member.joinRequests || [];
+    const requestsPanel = !isLord ? '' : `
+      <div class="panel" style="margin-bottom:1.4rem;">
+        <div class="panel-title">Requests to Join${requests.length ? ` (${requests.length})` : ''}</div>
+        ${requests.length === 0
+          ? '<div style="color:var(--ash);font-style:italic;font-size:0.9rem;">No one is asking to join right now.</div>'
+          : `<div class="join-list">${requests.map(r => `
+              <div class="join-row">
+                <div class="join-info">
+                  <div class="jh-name">${esc(r.user.characterName || 'Unknown')}</div>
+                  <div class="jh-members">LEVEL ${r.user.stats?.level ?? '?'} · ${esc(r.user.characterClass || '')}</div>
+                </div>
+                <div style="display:flex;gap:0.5rem;">
+                  <button class="join-btn" data-request-id="${r.id}" data-decision="approve">Accept</button>
+                  <button class="join-btn deny" data-request-id="${r.id}" data-decision="deny">Decline</button>
+                </div>
+              </div>`).join('')}</div>`}
+      </div>`;
     document.getElementById('content').innerHTML = `
       <div class="house-header">
         <div>
-          <div class="house-name-display">House ${house.name}</div>
-          <div class="house-motto">"${house.motto}"</div>
-          <div class="house-rank">${member.rank}</div>
+          <div class="house-name-display">House ${esc(house.name)}</div>
+          <div class="house-motto">"${esc(house.motto)}"</div>
+          <div class="house-rank">${esc(member.rank)}</div>
         </div>
-        ${member.rank !== 'Lord' ? `<button class="btn btn-ghost" style="width:auto;padding:0.5rem 1rem;" onclick="leaveHouse()">Leave House</button>` : ''}
+        ${isLord
+          ? `<button class="btn btn-ghost" style="width:auto;padding:0.5rem 1rem;" onclick="disbandHouse()">Disband House</button>`
+          : `<button class="btn btn-ghost" style="width:auto;padding:0.5rem 1rem;" onclick="leaveHouse()">Leave House</button>`}
       </div>
       <div class="house-stats">
         <div class="house-stat"><div class="hs-label">Members</div><div class="hs-val">${house.members.length}</div></div>
         <div class="house-stat"><div class="hs-label">House Gold</div><div class="hs-val" style="color:var(--brass);">${house.gold.toLocaleString()} g</div></div>
-        <div class="house-stat"><div class="hs-label">Your Rank</div><div class="hs-val" style="font-size:1rem;color:var(--parchment);">${member.rank}</div></div>
+        <div class="house-stat"><div class="hs-label">Your Rank</div><div class="hs-val" style="font-size:1rem;color:var(--parchment);">${esc(member.rank)}</div></div>
       </div>
+      ${requestsPanel}
       <div class="panel">
         <div class="panel-title">Bannermen</div>
         <table class="members-table">
@@ -185,41 +231,60 @@
           <tbody>
             ${house.members.map(m => `
               <tr>
-                <td><span class="member-name">${m.user.characterName || 'Unknown'}${m.user.characterName === myUsername ? ' <span style="font-family:JetBrains Mono,monospace;font-size:0.58rem;color:var(--rust-bright);">YOU</span>' : ''}</span></td>
-                <td><span class="member-rank">${m.rank}</span></td>
+                <td><span class="member-name">${esc(m.user.characterName || 'Unknown')}${m.user.characterName === myUsername ? ' <span style="font-family:JetBrains Mono,monospace;font-size:0.58rem;color:var(--rust-bright);">YOU</span>' : ''}</span></td>
+                <td><span class="member-rank">${esc(m.rank)}</span></td>
                 <td style="font-family:JetBrains Mono,monospace;font-size:0.75rem;">${m.user.stats?.level ?? '?'}</td>
                 <td style="font-family:JetBrains Mono,monospace;font-size:0.75rem;">${m.user.stats?.strength ?? '?'}</td>
               </tr>`).join('')}
           </tbody>
         </table>
       </div>`;
+    document.querySelectorAll('.join-btn[data-request-id]').forEach(btn =>
+      btn.addEventListener('click', () => answerRequest(parseInt(btn.dataset.requestId, 10), btn.dataset.decision)));
   }
 
   async function createHouse(){
     const name = document.getElementById('house-name').value.trim();
     const motto = document.getElementById('house-motto').value.trim();
     if(!name){ showToast('Enter a house name.'); return; }
-    const res = await fetch('/api/house/create', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, motto}) });
-    const data = await res.json();
-    if(!res.ok){ showToast(data.error); return; }
-    showToast(`House ${name} founded!`);
+    const data = await post('/api/house/create', { name, motto });
+    if(!data) return;
+    showToast(`House ${data.house.name} founded!`);
     load();
   }
 
-  async function joinHouse(houseId, name){
-    const res = await fetch('/api/house/join', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({houseId}) });
-    const data = await res.json();
-    if(!res.ok){ showToast(data.error); return; }
-    showToast(`You have sworn fealty to House ${name}.`);
+  async function joinHouse(houseId){
+    const data = await post('/api/house/join', { houseId });
+    if(!data) return;
+    showToast(`Your request has been sent to the Lord of House ${data.houseName}.`);
+    load();
+  }
+
+  async function cancelRequest(){
+    if(!await post('/api/house/request/cancel')) return;
+    showToast('Request withdrawn.');
+    load();
+  }
+
+  async function answerRequest(requestId, decision){
+    const data = await post(`/api/house/requests/${requestId}/${decision}`);
+    if(!data) return;
+    showToast(decision === 'approve' ? `${data.name} has sworn fealty.` : `Request from ${data.name} declined.`);
     load();
   }
 
   async function leaveHouse(){
     if(!confirm('Are you sure you wish to abandon your house?')) return;
-    const res = await fetch('/api/house/leave', { method:'POST' });
-    const data = await res.json();
-    if(!res.ok){ showToast(data.error); return; }
+    if(!await post('/api/house/leave')) return;
     showToast('You have left your house.');
+    load();
+  }
+
+  async function disbandHouse(){
+    if(!confirm('Disband your house? Every member is released, and this cannot be undone.')) return;
+    const data = await post('/api/house/disband');
+    if(!data) return;
+    showToast(data.goldReturned > 0 ? `House disbanded. ${data.goldReturned} gold returned to you.` : 'House disbanded.');
     load();
   }
 
@@ -229,13 +294,14 @@
     myUsername = me.username;
     document.getElementById('player-name').textContent = me.username;
 
-    const [member, houses] = await Promise.all([
+    const [member, houses, req] = await Promise.all([
       fetch('/api/house').then(r => r.json()),
-      fetch('/api/houses').then(r => r.json())
+      fetch('/api/houses').then(r => r.json()),
+      fetch('/api/house/request').then(r => r.json()),
     ]);
 
     if(member){ renderMyHouse(member); }
-    else { renderNoHouse(houses); }
+    else { renderNoHouse(houses, req.request); }
   }
 
   load();

@@ -540,6 +540,58 @@ app.use('/api', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ─── In a remote city ─────────────────────────────────────────────────────────
+// Aurelia's own pages belong to Aurelia. While a lord is in another city they
+// get that city's page (with its local shop), the Realm Map to travel on, and
+// their Inventory, Skills, Wiki and Feedback; everything else sends them back
+// to the city they're in, and the actions behind those pages are refused.
+// The city's shop only sells that city's goods.
+const AURELIA_ONLY_PAGES = new Set([
+  '/dashboard', '/training', '/raids', '/monsters', '/store', '/house', '/market', '/achievements',
+]);
+const AURELIA_ONLY_ACTIONS = [
+  '/action/train', '/training/train', '/action/rest', '/action/skill',
+  '/raid/npc', '/raid/player', '/monsters/start', '/monsters/turn',
+];
+const isAureliaOnlyAction = p => AURELIA_ONLY_ACTIONS.includes(p) || p.startsWith('/house') || p.startsWith('/market/');
+
+// The remote city a player is standing in right now, or null in Aurelia /
+// on the road / without a character.
+async function remoteCityOf(req) {
+  if (!req.isAuthenticated() || !req.user.characterClass) return null;
+  const s = await prisma.stats.findUnique({ where: { userId: req.user.id }, select: { currentCityId: true, travelDestination: true } });
+  return s && !s.travelDestination ? (s.currentCityId || null) : null;
+}
+
+app.use(async (req, res, next) => {
+  if (req.method !== 'GET' || !AURELIA_ONLY_PAGES.has(req.path)) return next();
+  try {
+    const city = await remoteCityOf(req);
+    if (!city) return next();
+    res.redirect(`/city/${encodeURIComponent(city)}`);
+  } catch (e) { next(e); }
+});
+
+app.use('/api', async (req, res, next) => {
+  if (req.method === 'GET') return next();
+  const aureliaOnly = isAureliaOnlyAction(req.path);
+  if (!aureliaOnly && req.path !== '/shop/buy') return next();
+  try {
+    const city = await remoteCityOf(req);
+    if (!city) return next();
+    const name = placeName(city);
+    if (aureliaOnly) return res.status(400).json({ error: `That can only be done in Aurelia. You are in ${name}.`, inCity: city });
+    // Shopping in a city: only that city's own goods.
+    const itemId = parseInt(req.body?.itemId, 10);
+    const item = Number.isInteger(itemId) ? await prisma.item.findUnique({ where: { id: itemId }, select: { name: true } }) : null;
+    const cityDef = CITIES.find(c => c.id === city);
+    if (item && cityDef && !cityDef.shopItemNames.includes(item.name)) {
+      return res.status(400).json({ error: `${name}'s market doesn't sell ${item.name}.`, inCity: city });
+    }
+    next();
+  } catch (e) { next(e); }
+});
+
 // ─── Email ────────────────────────────────────────────────────────────────────
 
 // Railway blocks outbound SMTP on Free/Trial/Hobby plans, so we send email
@@ -922,6 +974,8 @@ app.get('/api/me', async (req, res) => {
     avatar:          req.user.avatar,
     characterClass:  req.user.characterClass,
     classLabel:      req.user.characterClass ? CLASSES[req.user.characterClass].label : null,
+    location:        stats && !stats.travelDestination && stats.currentCityId
+                       ? { cityId: stats.currentCityId, name: placeName(stats.currentCityId) } : null,
     lastLoginAt:     req.user.lastLoginAt,
     createdAt:       req.user.createdAt,
     isAdmin:         !!req.user.isAdmin,

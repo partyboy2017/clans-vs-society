@@ -67,7 +67,7 @@
   /* NEARBY LINKS */
   .link-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0.8rem;}
   .link-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.1rem;text-decoration:none;color:inherit;display:block;transition:border-color 0.15s,transform 0.1s;}
-  .link-card:hover{border-color:var(--brass-dim);transform:translateY(-1px);}
+  .link-card:hover{border-color:var(--brass-dim);}
   .link-risk{font-family:'JetBrains Mono',monospace;font-size:0.56rem;letter-spacing:0.14em;margin-bottom:0.4rem;text-transform:uppercase;}
   .link-risk.LOW{color:var(--green-bright);}
   .link-risk.MEDIUM{color:var(--brass);}
@@ -207,24 +207,24 @@
     const zonesHtml = city.nearbyZones.length ? `
       <div class="link-grid">
         ${city.nearbyZones.map(z => `
-          <a class="link-card" href="/monsters">
+          <div class="link-card">
             <div class="link-risk ${riskClass(z.tier)}">${z.tier} · LVL ${z.levelMin}–${z.levelMax}</div>
             <div class="link-name">${z.name}</div>
             <div class="link-desc">${z.desc}</div>
-            <div class="link-cta">Hunt this ground →</div>
-          </a>`).join('')}
-      </div>` : `<div class="empty-state">No hunting grounds within easy reach. Try the Monsters page for the full map.</div>`;
+            <div class="link-cta">Hunted from Aurelia's Monsters page</div>
+          </div>`).join('')}
+      </div>` : `<div class="empty-state">No hunting grounds within easy reach.</div>`;
 
     const raidsHtml = city.nearbyRaids.length ? `
       <div class="link-grid">
         ${city.nearbyRaids.map(r => `
-          <a class="link-card" href="/raids">
+          <div class="link-card">
             <div class="link-risk ${riskClass(r.risk)}">${r.risk} RISK</div>
             <div class="link-name">${r.name}</div>
             <div class="link-desc">${r.desc}</div>
-            <div class="link-cta">Plan a raid →</div>
-          </a>`).join('')}
-      </div>` : `<div class="empty-state">No known raid targets nearby. Try the Raids page for the full list.</div>`;
+            <div class="link-cta">Raided from Aurelia's Raids page</div>
+          </div>`).join('')}
+      </div>` : `<div class="empty-state">No known raid targets nearby.</div>`;
 
     document.getElementById('content').innerHTML = `
       <div class="info-card">

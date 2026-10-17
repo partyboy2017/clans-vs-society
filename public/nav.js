@@ -42,8 +42,9 @@
       html += `<span class="nav-label">${group.section}</span>`;
       group.items.forEach(item => {
         const active = path === item.href ? ' active' : '';
-        const badge = item.soon
-          ? '<span style="font-family:JetBrains Mono,monospace;font-size:0.55rem;letter-spacing:0.08em;color:var(--rust-bright);margin-left:auto;padding:0.1rem 0.4rem;border:1px solid var(--rust);opacity:0.8;">SOON</span>'
+        const badgeText = item.badge || (item.soon ? 'SOON' : '');
+        const badge = badgeText
+          ? `<span style="font-family:JetBrains Mono,monospace;font-size:0.55rem;letter-spacing:0.08em;color:var(--rust-bright);margin-left:auto;padding:0.1rem 0.4rem;border:1px solid var(--rust);opacity:0.8;">${badgeText}</span>`
           : '';
 
         if(item.disabled){
@@ -76,8 +77,9 @@
 
     const items = allItems.map(item => {
       const active = path === item.href ? ' active' : '';
-      const soonBadge = item.soon
-        ? '<span style="font-family:JetBrains Mono,monospace;font-size:0.44rem;color:var(--rust-bright);display:block;letter-spacing:0.04em;">SOON</span>'
+      const badgeText = item.badge || (item.soon ? 'SOON' : '');
+      const soonBadge = badgeText
+        ? `<span style="font-family:JetBrains Mono,monospace;font-size:0.44rem;color:var(--rust-bright);display:block;letter-spacing:0.04em;">${badgeText}</span>`
         : '';
 
       if(item.disabled){
@@ -155,10 +157,33 @@
       .catch(() => {});
   }
 
+  // In a remote city, Aurelia's pages are closed (the server sends you back to
+  // the city). Grey them out with an AURELIA badge and put the city at the top.
+  const AURELIA_ONLY = ['/dashboard', '/training', '/raids', '/monsters', '/store', '/house', '/market', '/achievements'];
+  const CITY_ICON = '<path d="M3 21h18M5 21V10l7-5 7 5v11M9 21v-6h6v6" stroke-linecap="round" stroke-linejoin="round"/>';
+  function applyLocation(loc){
+    if (!loc || !loc.cityId) return;
+    links.forEach(g => g.items.forEach(item => {
+      if (AURELIA_ONLY.includes(item.href) && !item.disabled) { item.disabled = true; item.badge = 'AURELIA'; }
+    }));
+    const href = `/city/${encodeURIComponent(loc.cityId)}`;
+    links[0].items.unshift({ href, label: esc(loc.name || loc.cityId), icon: CITY_ICON });
+    buildNav();
+    buildMobileNav();
+  }
+
+  function loadLocation(){
+    fetch('/api/me', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : null)
+      .then(me => { if (me) applyLocation(me.location); })
+      .catch(() => {});
+  }
+
   function init(){
     buildNav();
     buildMobileNav();
     loadNavInfo();
+    loadLocation();
   }
 
   if(document.readyState === 'loading'){

@@ -220,7 +220,19 @@
   ];
 
   const params = new URLSearchParams(window.location.search);
-  const requestedCityId = params.get('to');
+  const requestedCityId = params.get('to') || params.get('city');
+
+  // Where to land: the capital is the dashboard, everywhere else has a city page.
+  const placeUrl = id => id === 'aurelia' ? '/dashboard' : `/city/${encodeURIComponent(id)}`;
+
+  // Show a problem on the page for a moment, then go back to the map.
+  function failTo(message){
+    const el = document.getElementById('load-state');
+    el.textContent = message;
+    el.style.display = 'block';
+    document.getElementById('journey-content').style.display = 'none';
+    setTimeout(() => { window.location.href = '/realm-map'; }, 2600);
+  }
 
   let destCityId = null;
   let arrivesAtMs = 0;
@@ -296,7 +308,7 @@
     // Confirm arrival with the server (it finalizes currentCityId) before
     // sending the player into the city page.
     fetch('/api/travel/status').finally(() => {
-      setTimeout(() => { window.location.href = `/city/${destCityId}`; }, 1200);
+      setTimeout(() => { window.location.href = placeUrl(destCityId); }, 1200);
     });
   }
 
@@ -325,6 +337,8 @@
     document.getElementById('journey-content').style.display = 'block';
 
     document.getElementById('to-city').textContent = status.name || status.cityId;
+    document.getElementById('from-city').textContent = status.fromName || 'Aurelia';
+    document.getElementById('endpoint-from').textContent = status.fromName || 'Aurelia';
     document.getElementById('to-region').textContent = status.region || '';
     document.getElementById('endpoint-to').textContent = status.name || status.cityId;
     document.title = `Clans vs Society — Traveling to ${status.name || status.cityId}`;
@@ -336,7 +350,8 @@
       : 'The road unwinds ahead';
 
     if (document.getElementById('log-entries').children.length === 0) {
-      addLogLine(isSea ? 'You cast off from the harbor at Aurelia.' : 'You set out from the gates of Aurelia.');
+      const from = status.fromName || 'Aurelia';
+      addLogLine(isSea ? `You cast off from the harbor at ${from}.` : `You set out from the gates of ${from}.`);
     }
 
     renderTick();
@@ -385,7 +400,8 @@
             const s = await fetch('/api/travel/status').then(r => r.json());
             if (s.traveling) { beginRendering(s); return; }
           }
-          window.location.href = '/realm-map';
+          if (startData.alreadyThere) { window.location.href = placeUrl(startData.cityId); return; }
+          failTo(startData.error || 'The road is closed to you for now.');
           return;
         }
         const s = await fetch('/api/travel/status').then(r => r.json());
@@ -405,7 +421,7 @@
     document.getElementById('load-state').textContent = 'You have arrived.';
     document.getElementById('load-state').style.display = 'block';
     document.getElementById('journey-content').style.display = 'none';
-    setTimeout(() => { window.location.href = `/city/${cityId}`; }, 900);
+    setTimeout(() => { window.location.href = placeUrl(cityId); }, 900);
   }
 
   async function init(){

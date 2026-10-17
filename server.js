@@ -166,6 +166,9 @@ const schemas = {
       .min(5, 'Please write a bit more detail (at least 5 characters).')
       .max(3000, 'Message is too long (max 3000 characters).'),
   }),
+  travelStart: z.object({
+    cityId: z.string().min(1, 'cityId is required').max(40),
+  }),
   monstersStart: z.object({
     zoneId: z.string().min(1, 'zoneId is required'),
   }),
@@ -810,7 +813,8 @@ app.get('/api/me', async (req, res) => {
   let stats = req.user.stats;
   if (stats) {
     try {
-      // checkStatus applies energy regen and clears expired jail/hospital timers.
+      // checkStatus settles finished journeys, applies energy regen and clears
+      // expired jail/hospital timers.
       stats = await checkStatus(req.user.id);
     } catch (err) {
       logError('[api/me] status refresh failed', err);
@@ -1969,7 +1973,8 @@ function energyTimers(stats, now = Date.now()) {
 }
 
 async function checkStatus(userId) {
-  // Apply any pending energy regen ticks first.
+  // Finish any journey whose arrival time has passed, then apply pending energy regen.
+  await settleTravel(userId);
   await regenEnergy(userId);
 
   const stats = await prisma.stats.findUnique({ where: { userId } });
@@ -2069,6 +2074,7 @@ app.post('/api/raid/npc', validate(schemas.raidNpc), async (req, res) => {
       if (!stats) throw { code: 'NO_STATS' };
       if (stats.inJail)     throw { code: 'JAILED' };
       if (stats.inHospital) throw { code: 'HOSPITAL' };
+      if (stats.travelDestination) throw { code: 'TRAVELING' };
       if (stats.energy < location.energyCost) throw { code: 'NO_ENERGY' };
 
       const attackPower  = stats.strength + stats.speed + Math.floor(Math.random() * 15);
@@ -2127,6 +2133,8 @@ app.post('/api/raid/npc', validate(schemas.raidNpc), async (req, res) => {
   } catch (e) {
     if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
     if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
+    if (e && e.code === 'TRAVELING') return res.status(400).json({ error: 'You are on the road. Finish or turn back from your journey first.' });
+    if (e && e.code === 'TARGET_TRAVELING') return res.status(400).json({ error: 'That lord is on the road and out of reach' });
     if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy' });
     logError('/api/raid/npc error:', e);
     res.status(500).json({ error: 'Something went wrong' });
@@ -2169,6 +2177,8 @@ app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
 
       if (attackerStats.inJail)     throw { code: 'JAILED' };
       if (attackerStats.inHospital) throw { code: 'HOSPITAL' };
+      if (attackerStats.travelDestination) throw { code: 'TRAVELING' };
+      if (defenderStats.travelDestination) throw { code: 'TARGET_TRAVELING' };
       if (attackerStats.energy < 20) throw { code: 'NO_ENERGY' };
 
       // Combat
@@ -2236,6 +2246,8 @@ app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
   } catch (e) {
     if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
     if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
+    if (e && e.code === 'TRAVELING') return res.status(400).json({ error: 'You are on the road. Finish or turn back from your journey first.' });
+    if (e && e.code === 'TARGET_TRAVELING') return res.status(400).json({ error: 'That lord is on the road and out of reach' });
     if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy — attacks cost 20 energy' });
     logError('/api/raid/player error:', e);
     res.status(500).json({ error: 'Something went wrong' });
@@ -2531,6 +2543,70 @@ const CITIES = [
   },
 ];
 
+// ─── TRAVEL ───────────────────────────────────────────────────────────────────
+// Aurelia, the capital, is home (Stats.currentCityId = null). A trip takes real
+// time: leaving Aurelia, or going city to city, takes the destination's
+// travelHours; coming home takes the current city's. Better wagons shorten
+// every trip (effectiveTravelHours). The journey lives in travelDestination /
+// travelStartedAt / travelArrivesAt, and the server clock decides arrival:
+// whichever request comes in after travelArrivesAt settles it (settleTravel).
+// While on the road a lord can't hunt, raid or attack, and can't be attacked.
+const HOME_ID = 'aurelia';
+const HOME = { id: HOME_ID, name: 'Aurelia', region: 'Eldric Kingdoms — Heart of Civilization', mode: 'road' };
+
+function placeById(id) {
+  if (id === HOME_ID) return HOME;
+  return CITIES.find(c => c.id === id) || null;
+}
+function placeName(cityId) {
+  return cityId ? (placeById(cityId)?.name || cityId) : HOME.name;
+}
+// The leg that sets the trip's length and mode: the destination's, or the
+// city you're leaving when heading home.
+function tripLeg(fromCityId, toId) {
+  return toId === HOME_ID ? CITIES.find(c => c.id === fromCityId) : placeById(toId);
+}
+function tripHours(fromCityId, toId, wagonTier) {
+  const leg = tripLeg(fromCityId, toId);
+  return effectiveTravelHours(leg ? leg.travelHours : 1, wagonTier);
+}
+
+// Finishes a journey whose arrival time has passed. Returns the place id the
+// player just arrived at, or null if nothing changed.
+async function settleTravel(userId) {
+  const now = new Date();
+  const s = await prisma.stats.findUnique({
+    where: { userId },
+    select: { travelDestination: true, travelArrivesAt: true },
+  });
+  if (!s?.travelDestination || !s.travelArrivesAt || s.travelArrivesAt > now) return null;
+  const dest = s.travelDestination;
+  const done = await prisma.stats.updateMany({
+    where: { userId, travelDestination: dest, travelArrivesAt: { lte: now } },
+    data:  { currentCityId: dest === HOME_ID ? null : dest, travelDestination: null, travelStartedAt: null, travelArrivesAt: null },
+  });
+  if (done.count === 0) return null; // another request settled it first
+  logActivity(userId, 'travel', `Arrived at ${placeName(dest === HOME_ID ? null : dest)}.`);
+  return dest;
+}
+
+function travelStatusBody(stats) {
+  const dest = placeById(stats.travelDestination);
+  const startedAt = new Date(stats.travelStartedAt), arrivesAt = new Date(stats.travelArrivesAt);
+  return {
+    traveling: true,
+    cityId:    stats.travelDestination,
+    name:      dest?.name || stats.travelDestination,
+    region:    dest?.region || '',
+    mode:      tripLeg(stats.currentCityId, stats.travelDestination)?.mode || 'road',
+    fromId:    stats.currentCityId || HOME_ID,
+    fromName:  placeName(stats.currentCityId),
+    startedAt, arrivesAt,
+    totalMs:   arrivesAt - startedAt,
+    remainingMs: Math.max(0, arrivesAt - Date.now()),
+  };
+}
+
 const MONSTER_ZONES = [
   {
     id: 'woods',
@@ -2800,6 +2876,7 @@ app.get('/api/cities/:cityId', async (req, res) => {
   if (!city) return res.status(404).json({ error: 'Unknown settlement' });
 
   try {
+    await settleTravel(req.user.id);
     const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
     const wagonTier = stats?.wagonTier || 0;
     const shopItems = await prisma.item.findMany({
@@ -2813,13 +2890,7 @@ app.get('/api/cities/:cityId', async (req, res) => {
       .filter(l => city.nearbyRaidIds.includes(l.id))
       .map(l => ({ id: l.id, name: l.name, risk: l.risk, desc: l.desc }));
 
-    // Visiting an unlocked city page means the player is now there — record
-    // it as their current location so other systems can key off it later.
-    // Locked-up players can still read about a city, but don't travel there.
-    const detained = stats ? await detainedMessage(req.user.id) : null;
-    if (stats?.hasWagon && !detained && stats.currentCityId !== city.id) {
-      await prisma.stats.update({ where: { userId: req.user.id }, data: { currentCityId: city.id } });
-    }
+    // Opening a city page never moves the player; travel does (see TRAVEL).
 
     res.json({
       id: city.id,
@@ -2831,7 +2902,10 @@ app.get('/api/cities/:cityId', async (req, res) => {
       mode: city.mode,
       hasWagon: !!stats?.hasWagon,
       wagonTier,
-      currentCityId: stats?.hasWagon && !detained ? city.id : (stats?.currentCityId ?? null),
+      currentCityId: stats?.currentCityId ?? null,
+      here:          !!stats && !stats.travelDestination && stats.currentCityId === city.id,
+      travelingTo:   stats?.travelDestination ?? null,
+      tripHours:     tripHours(stats?.currentCityId ?? null, city.id, wagonTier),
       shopItems,
       nearbyZones,
       nearbyRaids,
@@ -2842,16 +2916,83 @@ app.get('/api/cities/:cityId', async (req, res) => {
   }
 });
 
-// Returning to the capital — clears currentCityId (null means Aurelia).
-app.post('/api/travel/home', blockIfDetained, async (req, res) => {
+// Where the player is, or the journey they're on. `arrived` is true only on the
+// request that settled an arrival, so the traveling page can show it once.
+app.get('/api/travel/status', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   try {
-    await prisma.stats.update({ where: { userId: req.user.id }, data: { currentCityId: null } });
-    res.json({ ok: true, currentCityId: null });
+    const arrived = await settleTravel(req.user.id);
+    const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    if (!stats) return res.status(400).json({ error: 'Finish creating your character first.' });
+    if (stats.travelDestination) return res.json(travelStatusBody(stats));
+    const here = stats.currentCityId || HOME_ID;
+    res.json({ traveling: false, arrived: !!arrived, cityId: here, name: placeName(stats.currentCityId) });
   } catch (e) {
-    logError('/api/travel/home error:', e);
+    logError('/api/travel/status error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
+});
+
+app.post('/api/travel/start', validate(schemas.travelStart), async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const dest = placeById(req.body.cityId);
+  if (!dest) return res.status(404).json({ error: 'Unknown settlement' });
+  try {
+    const hasStats = await prisma.stats.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+    if (!hasStats) return res.status(400).json({ error: 'Finish creating your character first.' });
+    const stats = await checkStatus(req.user.id); // settles any finished trip, clears expired timers
+    if (stats.travelDestination) {
+      return res.status(400).json({ error: `You are already on the road to ${placeName(stats.travelDestination)}`, travelDestination: stats.travelDestination });
+    }
+    const here = stats.currentCityId || HOME_ID;
+    if (here === dest.id) return res.status(400).json({ error: `You are already in ${dest.name}`, alreadyThere: true, cityId: dest.id });
+    if (stats.inJail)     return res.status(400).json({ error: 'You are in jail' });
+    if (stats.inHospital) return res.status(400).json({ error: 'You are in hospital' });
+    if (dest.id !== HOME_ID && !stats.hasWagon) return res.status(400).json({ error: 'You need a wagon to travel that far. Build one on the Realm Map.' });
+    const fight = await prisma.combatSession.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+    if (fight) return res.status(400).json({ error: 'Finish or flee your fight before setting out' });
+
+    const hours = tripHours(stats.currentCityId, dest.id, stats.wagonTier || 0);
+    const startedAt = new Date();
+    const arrivesAt = new Date(startedAt.getTime() + hours * 60 * 60 * 1000);
+    const started = await prisma.stats.updateMany({
+      where: { userId: req.user.id, travelDestination: null },
+      data:  { travelDestination: dest.id, travelStartedAt: startedAt, travelArrivesAt: arrivesAt },
+    });
+    if (started.count === 0) return res.status(409).json({ error: 'You are already on the road' });
+    logActivity(req.user.id, 'travel', `Set out from ${placeName(stats.currentCityId)} for ${dest.name} (~${hours}h).`);
+    const fresh = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    res.json({ ok: true, hours, ...travelStatusBody(fresh) });
+  } catch (e) {
+    logError('/api/travel/start error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// Turn back: the journey is abandoned and the player stays where they started.
+app.post('/api/travel/cancel', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  try {
+    const arrived = await settleTravel(req.user.id);
+    if (arrived) return res.status(400).json({ error: `You have already arrived at ${placeName(arrived === HOME_ID ? null : arrived)}` });
+    const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    if (!stats?.travelDestination) return res.status(400).json({ error: 'You are not traveling' });
+    await prisma.stats.updateMany({
+      where: { userId: req.user.id, travelDestination: stats.travelDestination },
+      data:  { travelDestination: null, travelStartedAt: null, travelArrivesAt: null },
+    });
+    logActivity(req.user.id, 'travel', `Turned back on the road to ${placeName(stats.travelDestination)}.`);
+    res.json({ ok: true, cityId: stats.currentCityId || HOME_ID });
+  } catch (e) {
+    logError('/api/travel/cancel error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// Kept for older clients: heading home is now a journey like any other.
+app.post('/api/travel/home', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  res.status(400).json({ error: 'Returning to Aurelia takes a journey now. Use the Realm Map.', useTravel: true });
 });
 
 app.get('/api/activity', async (req, res) => {
@@ -2961,6 +3102,7 @@ app.post('/api/monsters/start', validate(schemas.monstersStart), async (req, res
       if (!stats) throw { code: 'NO_STATS' };
       if (stats.inJail)     throw { code: 'JAILED' };
       if (stats.inHospital) throw { code: 'HOSPITAL' };
+      if (stats.travelDestination) throw { code: 'TRAVELING' };
       if (stats.level < zone.levelMin) throw { code: 'LEVEL_TOO_LOW', minLevel: zone.levelMin };
       if (stats.energy < zone.energyCost) throw { code: 'NO_ENERGY' };
 
@@ -2993,6 +3135,8 @@ app.post('/api/monsters/start', validate(schemas.monstersStart), async (req, res
     if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
     if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
     if (e && e.code === 'LEVEL_TOO_LOW') return res.status(400).json({ error: `You must be at least Level ${e.minLevel} to hunt in ${zone.name}` });
+    if (e && e.code === 'TRAVELING') return res.status(400).json({ error: 'You are on the road. Finish or turn back from your journey first.' });
+    if (e && e.code === 'TARGET_TRAVELING') return res.status(400).json({ error: 'That lord is on the road and out of reach' });
     if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy' });
     logError('/api/monsters/start error:', e);
     res.status(500).json({ error: 'Something went wrong' });

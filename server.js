@@ -1632,14 +1632,59 @@ app.post('/api/house/requests/:requestId/:decision', blockIfDetained, async (req
   }
 });
 
-app.post('/api/house/leave', blockIfDetained, async (req, res) => {
+// Anyone can leave their house, even from a cell or the Infirmary.
+// A Lord who leaves hands the house to the highest-level member (ties go to
+// whoever joined first). A Lord with no one left closes the house and takes
+// the vault gold, the same as disbanding.
+app.post('/api/house/leave', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
-  const member = await prisma.houseMember.findUnique({ where: { userId: req.user.id } });
-  if (!member) return res.status(400).json({ error: 'You are not in a house' });
-  const house = await prisma.house.findUnique({ where: { id: member.houseId } });
-  if (house.leaderId === req.user.id) return res.status(400).json({ error: 'Lords cannot abandon their house. Disband it instead.' });
-  await prisma.houseMember.delete({ where: { userId: req.user.id } });
-  res.json({ ok: true });
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const member = await tx.houseMember.findUnique({ where: { userId: req.user.id }, include: { house: true } });
+      if (!member) return { error: 'You are not in a house' };
+      const house = member.house;
+      const gone = await tx.houseMember.deleteMany({ where: { userId: req.user.id, houseId: house.id } });
+      if (gone.count === 0) return { error: 'You are not in a house' }; // a second click got here first
+
+      if (house.leaderId !== req.user.id) {
+        return { house, wasLord: false };
+      }
+      const rest = await tx.houseMember.findMany({
+        where: { houseId: house.id },
+        include: { user: { select: { characterName: true, stats: { select: { level: true } } } } },
+      });
+      if (rest.length === 0) {
+        await tx.house.delete({ where: { id: house.id } }); // join requests cascade
+        if (house.gold > 0) await tx.stats.update({ where: { userId: req.user.id }, data: { gold: { increment: house.gold } } });
+        return { house, wasLord: true, closed: true, goldReturned: house.gold };
+      }
+      rest.sort((a, b) => (b.user.stats?.level ?? 0) - (a.user.stats?.level ?? 0) || a.id - b.id);
+      const heir = rest[0];
+      await tx.house.update({ where: { id: house.id }, data: { leaderId: heir.userId } });
+      await tx.houseMember.update({ where: { id: heir.id }, data: { rank: 'Lord' } });
+      return { house, wasLord: true, heir: { userId: heir.userId, name: heir.user.characterName }, others: rest.slice(1).map(m => m.userId) };
+    });
+    if (result.error) return res.status(400).json({ error: result.error });
+
+    const { house } = result;
+    const me = req.user.characterName || 'A bannerman';
+    if (!result.wasLord) {
+      logActivity(req.user.id, 'house', `You left House ${house.name}.`);
+      logActivity(house.leaderId, 'house', `${me} has left House ${house.name}.`);
+      return res.json({ ok: true });
+    }
+    if (result.closed) {
+      logActivity(req.user.id, 'house', `You left House ${house.name}. With no one left, the house is closed.${result.goldReturned > 0 ? ` ${result.goldReturned} gold returned from the vault.` : ''}`);
+      return res.json({ ok: true, closed: true, goldReturned: result.goldReturned });
+    }
+    logActivity(req.user.id, 'house', `You left House ${house.name}. ${result.heir.name} is now its Lord.`);
+    logActivity(result.heir.userId, 'house', `${me} has left House ${house.name}. You are now its Lord.`);
+    for (const id of result.others) logActivity(id, 'house', `${me} has left House ${house.name}. ${result.heir.name} is now its Lord.`);
+    res.json({ ok: true, newLord: result.heir.name });
+  } catch (e) {
+    logError('house leave error:', e);
+    res.status(500).json({ error: 'Could not leave the house. Try again.' });
+  }
 });
 
 // Lord only: disband the house. Members are released, open requests are

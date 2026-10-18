@@ -186,7 +186,9 @@
       btn.addEventListener('click', () => joinHouse(parseInt(btn.dataset.houseId, 10))));
   }
 
+  let currentMember = null;
   function renderMyHouse(member){
+    currentMember = member;
     const house = member.house;
     const isLord = member.rank === 'Lord';
     const requests = member.joinRequests || [];
@@ -214,9 +216,10 @@
           <div class="house-motto">"${esc(house.motto)}"</div>
           <div class="house-rank">${esc(member.rank)}</div>
         </div>
-        ${isLord
-          ? `<button class="btn btn-ghost" style="width:auto;padding:0.5rem 1rem;" onclick="disbandHouse()">Disband House</button>`
-          : `<button class="btn btn-ghost" style="width:auto;padding:0.5rem 1rem;" onclick="leaveHouse()">Leave House</button>`}
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">
+          <button class="btn btn-ghost" style="width:auto;padding:0.5rem 1rem;" onclick="leaveHouse()">Leave House</button>
+          ${isLord ? `<button class="btn btn-ghost" style="width:auto;padding:0.5rem 1rem;" onclick="disbandHouse()">Disband House</button>` : ''}
+        </div>
       </div>
       <div class="house-stats">
         <div class="house-stat"><div class="hs-label">Members</div><div class="hs-val">${house.members.length}</div></div>
@@ -274,9 +277,22 @@
   }
 
   async function leaveHouse(){
-    if(!confirm('Are you sure you wish to abandon your house?')) return;
-    if(!await post('/api/house/leave')) return;
-    showToast('You have left your house.');
+    let msg = 'Are you sure you wish to leave your house?';
+    const currentHouse = currentMember?.house;
+    if (currentHouse && currentHouse.leaderId === currentMember.userId) {
+      const heir = (currentHouse.members || [])
+        .filter(m => m.userId !== currentMember.userId)
+        .sort((a, b) => (b.user?.stats?.level ?? 0) - (a.user?.stats?.level ?? 0) || a.id - b.id)[0];
+      msg = heir
+        ? `Leave your house? ${heir.user?.characterName || 'Your highest-level bannerman'} will become its Lord.`
+        : `Leave your house? You are its only member, so the house will close${currentHouse.gold > 0 ? ` and its ${currentHouse.gold.toLocaleString()} vault gold will return to you` : ''}.`;
+    }
+    if(!confirm(msg)) return;
+    const data = await post('/api/house/leave');
+    if(!data) return;
+    showToast(data.newLord ? `You have left your house. ${data.newLord} is now its Lord.`
+      : data.closed ? (data.goldReturned > 0 ? `You have left. The house is closed and ${data.goldReturned} gold returned to you.` : 'You have left. The house is closed.')
+      : 'You have left your house.');
     load();
   }
 

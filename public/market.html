@@ -54,6 +54,9 @@
   .listing-seller{font-size:0.78rem;color:var(--ash);font-style:italic;}
   .buy-btn{font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.08em;padding:0.35rem 0.8rem;background:var(--green);color:var(--bone);border:none;cursor:pointer;transition:background 0.15s;}
   .buy-btn:hover{background:var(--green-bright);}
+  .cancel-btn{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;padding:0.35rem 0.7rem;background:transparent;border:1px solid var(--rust);color:var(--rust-bright);cursor:pointer;transition:background 0.15s,color 0.15s;}
+  .cancel-btn:hover:not(:disabled){background:var(--rust);color:var(--bone);}
+  .cancel-btn:disabled{opacity:0.4;cursor:wait;}
   .mine-badge{font-family:'JetBrains Mono',monospace;font-size:0.58rem;color:var(--ash);letter-spacing:0.08em;padding:0.35rem 0.6rem;border:1px solid var(--line);}
 
   .empty-state{text-align:center;padding:3rem;color:var(--ash);font-style:italic;background:var(--bg-panel);border:1px solid var(--line);}
@@ -201,12 +204,28 @@
               !left.span ? 'Expiring now' : mine ? `Returns to you in ${left.span}` : `${left.span} left`}</div>
           </div>
           ${mine
-            ? `<span class="mine-badge">YOUR LISTING</span>`
+            ? `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:0.4rem;">
+                 <span class="mine-badge">YOUR LISTING</span>
+                 <button class="cancel-btn" data-cancel-id="${l.id}" data-name="${esc(l.item.name)}" data-qty="${l.quantity}">Take Down</button>
+               </div>`
             : `<button class="buy-btn" data-listing-id="${l.id}" data-name="${esc(l.item.name)}" data-price="${l.price}">Buy</button>`}
         </div>
       </div>`; }).join('');
     grid.querySelectorAll('.buy-btn[data-listing-id]').forEach(btn =>
       btn.addEventListener('click', () => buy(parseInt(btn.dataset.listingId, 10), btn.dataset.name, parseInt(btn.dataset.price, 10))));
+    grid.querySelectorAll('.cancel-btn[data-cancel-id]').forEach(btn =>
+      btn.addEventListener('click', () => cancelListing(parseInt(btn.dataset.cancelId, 10), btn.dataset.name, parseInt(btn.dataset.qty, 10), btn)));
+  }
+
+  async function cancelListing(listingId, name, qty, btn){
+    if(!confirm(`Take down your listing for ${qty > 1 ? qty + '× ' : ''}${name}? The items come back to your inventory. The listing fee is not refunded.`)) return;
+    btn.disabled = true;
+    const res = await fetch('/api/market/cancel', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({listingId}) });
+    const data = await res.json();
+    if(!res.ok){ showToast(data.error); loadMarket(); return; }
+    showToast(`Listing taken down. ${name} is back in your inventory.`);
+    loadMarket();
+    loadInventory();
   }
 
   async function buy(listingId, name, price){

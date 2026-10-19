@@ -1646,6 +1646,21 @@ app.post('/api/house/disband', blockIfDetained, async (req, res) => {
 // Takes down every listing past its expiry and returns the items to their
 // sellers. Safe to call from several requests at once: each listing is only
 // returned by whichever call manages to delete it.
+// Removes a listing and puts its items back in the seller's inventory.
+// Returns false if the listing was already gone (bought, cancelled or expired
+// by a request that got there first), so nothing is ever returned twice.
+async function takeDownListing(tx, l) {
+  const gone = await tx.listing.deleteMany({ where: { id: l.id, sellerId: l.sellerId } });
+  if (gone.count === 0) return false;
+  const existing = await tx.inventory.findFirst({ where: { userId: l.sellerId, itemId: l.itemId } });
+  if (existing) {
+    await tx.inventory.update({ where: { id: existing.id }, data: { quantity: { increment: l.quantity } } });
+  } else {
+    await tx.inventory.create({ data: { userId: l.sellerId, itemId: l.itemId, quantity: l.quantity } });
+  }
+  return true;
+}
+
 async function expireListings() {
   const due = await prisma.listing.findMany({
     where: { expiresAt: { lte: new Date() } },
@@ -1654,17 +1669,7 @@ async function expireListings() {
   });
   for (const l of due) {
     try {
-      const returned = await prisma.$transaction(async (tx) => {
-        const gone = await tx.listing.deleteMany({ where: { id: l.id } });
-        if (gone.count === 0) return false; // someone else handled it
-        const existing = await tx.inventory.findFirst({ where: { userId: l.sellerId, itemId: l.itemId } });
-        if (existing) {
-          await tx.inventory.update({ where: { id: existing.id }, data: { quantity: { increment: l.quantity } } });
-        } else {
-          await tx.inventory.create({ data: { userId: l.sellerId, itemId: l.itemId, quantity: l.quantity } });
-        }
-        return true;
-      });
+      const returned = await prisma.$transaction(tx => takeDownListing(tx, l));
       if (returned) {
         logActivity(l.sellerId, 'inventory', `Your market listing for ${l.quantity}x ${l.item.name} expired unsold. The items are back in your inventory.`);
       }
@@ -1752,6 +1757,25 @@ app.post('/api/market/buy', validate(schemas.marketBuy), blockIfDetained, async 
     if (e.code === 'NO_GOLD')     return res.status(400).json({ error: 'Not enough gold' });
     if (e.code === 'P2025')       return res.status(404).json({ error: 'Listing no longer available' });
     logError(e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// Sellers can take down their own listing at any time. The items come back;
+// the listing fee does not (otherwise listing would be a free way to park items).
+app.post('/api/market/cancel', validate(schemas.marketBuy), blockIfDetained, async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const { listingId } = req.body;
+  try {
+    const listing = await prisma.listing.findUnique({ where: { id: listingId }, include: { item: { select: { name: true } } } });
+    if (!listing) return res.status(404).json({ error: 'Listing no longer available' });
+    if (listing.sellerId !== req.user.id) return res.status(403).json({ error: 'You can only cancel your own listings' });
+    const returned = await prisma.$transaction(tx => takeDownListing(tx, listing));
+    if (!returned) return res.status(404).json({ error: 'Listing no longer available' });
+    logActivity(req.user.id, 'inventory', `You took down your market listing for ${listing.quantity}x ${listing.item.name}. The items are back in your inventory.`);
+    res.json({ ok: true, itemName: listing.item.name, quantity: listing.quantity });
+  } catch (e) {
+    logError('/api/market/cancel error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });

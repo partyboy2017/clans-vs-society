@@ -67,7 +67,7 @@
   /* NEARBY LINKS */
   .link-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0.8rem;}
   .link-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.1rem;text-decoration:none;color:inherit;display:block;transition:border-color 0.15s,transform 0.1s;}
-  .link-card:hover{border-color:var(--brass-dim);transform:translateY(-1px);}
+  .link-card:hover{border-color:var(--brass-dim);}
   .link-risk{font-family:'JetBrains Mono',monospace;font-size:0.56rem;letter-spacing:0.14em;margin-bottom:0.4rem;text-transform:uppercase;}
   .link-risk.LOW{color:var(--green-bright);}
   .link-risk.MEDIUM{color:var(--brass);}
@@ -162,6 +162,32 @@
     `;
   }
 
+  // Not here yet: show the lore and offer the journey (or follow the one under way).
+  function renderAway(city){
+    const onRoad = city.travelingTo;
+    const hrs = city.tripHours === 1 ? '1 hour' : `${city.tripHours} hours`;
+    const action = onRoad === city.id
+      ? `<a class="lock-btn" href="/traveling.html?to=${encodeURIComponent(city.id)}">Follow the Journey</a>`
+      : onRoad
+        ? `<a class="lock-btn" href="/traveling.html?to=${encodeURIComponent(onRoad)}">You are on the road elsewhere</a>`
+        : `<a class="lock-btn" href="/traveling.html?to=${encodeURIComponent(city.id)}">Travel Here (~${hrs})</a>`;
+    document.getElementById('content').innerHTML = `
+      <div class="lock-card">
+        <div class="lock-icon">${city.mode === 'sea' ? '⛵' : '🐎'}</div>
+        <div class="lock-title">${onRoad === city.id ? `On the Road to ${city.name}` : `You Are Not in ${city.name}`}</div>
+        <div class="lock-desc">${onRoad === city.id
+          ? 'Your wagon is still on its way. The gates open when you arrive.'
+          : `Its market and its roads open to you once you arrive. The journey takes about ${hrs}.`}</div>
+        ${action}
+      </div>
+      <div class="info-card">
+        <div class="info-title">What Travelers Say</div>
+        <div class="info-desc">${city.lore}</div>
+        <div class="travel-pill">${travelPill(city)}</div>
+      </div>
+    `;
+  }
+
   function renderCity(city){
     const shopHtml = city.shopItems.length ? `
       <div class="shop-grid">
@@ -181,24 +207,24 @@
     const zonesHtml = city.nearbyZones.length ? `
       <div class="link-grid">
         ${city.nearbyZones.map(z => `
-          <a class="link-card" href="/monsters">
+          <div class="link-card">
             <div class="link-risk ${riskClass(z.tier)}">${z.tier} · LVL ${z.levelMin}–${z.levelMax}</div>
             <div class="link-name">${z.name}</div>
             <div class="link-desc">${z.desc}</div>
-            <div class="link-cta">Hunt this ground →</div>
-          </a>`).join('')}
-      </div>` : `<div class="empty-state">No hunting grounds within easy reach. Try the Monsters page for the full map.</div>`;
+            <div class="link-cta">Hunted from Aurelia's Monsters page</div>
+          </div>`).join('')}
+      </div>` : `<div class="empty-state">No hunting grounds within easy reach.</div>`;
 
     const raidsHtml = city.nearbyRaids.length ? `
       <div class="link-grid">
         ${city.nearbyRaids.map(r => `
-          <a class="link-card" href="/raids">
+          <div class="link-card">
             <div class="link-risk ${riskClass(r.risk)}">${r.risk} RISK</div>
             <div class="link-name">${r.name}</div>
             <div class="link-desc">${r.desc}</div>
-            <div class="link-cta">Plan a raid →</div>
-          </a>`).join('')}
-      </div>` : `<div class="empty-state">No known raid targets nearby. Try the Raids page for the full list.</div>`;
+            <div class="link-cta">Raided from Aurelia's Raids page</div>
+          </div>`).join('')}
+      </div>` : `<div class="empty-state">No known raid targets nearby.</div>`;
 
     document.getElementById('content').innerHTML = `
       <div class="info-card">
@@ -258,10 +284,12 @@
       document.getElementById('city-tagline').textContent = city.tagline;
       document.title = `Clans vs Society — ${city.name}`;
 
-      if (!city.hasWagon) {
+      if (city.here) {
+        renderCity(city);
+      } else if (!city.hasWagon) {
         renderLocked(city);
       } else {
-        renderCity(city);
+        renderAway(city);
       }
     } catch (e) {
       console.error('loadCity error:', e);

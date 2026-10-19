@@ -51,6 +51,9 @@
   .attack-btn{font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.08em;padding:0.3rem 0.8rem;background:transparent;border:1px solid var(--rust);color:var(--rust-bright);cursor:pointer;transition:background 0.15s,color 0.15s;}
   .attack-btn:hover:not(:disabled){background:var(--rust);color:var(--bone);}
   .attack-btn:disabled{opacity:0.35;cursor:not-allowed;}
+  .pvp-note{border:1px solid var(--rust);color:var(--parchment);padding:0.7rem 1rem;margin-bottom:1rem;font-style:italic;}
+  .pvp-note strong{color:var(--rust-bright);font-style:normal;}
+  .protected-tag{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;color:var(--ash);}
   .empty-state{text-align:center;padding:2.5rem;color:var(--ash);font-style:italic;}
 
   /* one-off log color not covered by theme.css's .gain/.loss/.levelup */
@@ -105,9 +108,9 @@
 
     <!-- HOSPITAL BANNER -->
     <div class="status-banner hospital" id="hospital-banner">
-      <div class="status-icon">🏥</div>
+      <div class="status-icon">⚕</div>
       <div>
-        <div class="status-title">You are recovering in hospital</div>
+        <div class="status-title">You are recovering in the Infirmary</div>
         <div class="status-timer" id="hospital-timer">Discharged in —</div>
       </div>
     </div>
@@ -133,6 +136,7 @@
           <input class="search-input" id="search-players" placeholder="Search lords..." oninput="filterPlayers()">
         </div>
       </div>
+      <div id="pvp-level-note" class="pvp-note" style="display:none;"></div>
       <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="targets-table">
         <thead>
           <tr>
@@ -186,6 +190,7 @@
   let myStats = null;
   let allPlayers = [];
   let isRestricted = false;
+  const PVP_MIN_LEVEL = 5;
 
   function switchTab(tab){
     document.getElementById('pane-npc').style.display = tab==='npc'?'block':'none';
@@ -235,7 +240,14 @@
       body.innerHTML = '<tr><td colspan="6" class="empty-state">No other lords found.</td></tr>';
       return;
     }
-    body.innerHTML = players.map(p => `
+    const myLevel = myStats?.level ?? 0;
+    const tooLow = myLevel < PVP_MIN_LEVEL;
+    const note = document.getElementById('pvp-level-note');
+    note.style.display = tooLow ? 'block' : 'none';
+    note.innerHTML = tooLow ? `<strong>Reach level ${PVP_MIN_LEVEL} to attack other lords.</strong> Until then you're also safe from their attacks. You are level ${myLevel}.` : '';
+    body.innerHTML = players.map(p => {
+      const protectedTarget = (p.stats?.level ?? 0) < PVP_MIN_LEVEL;
+      return `
       <tr>
         <td><div class="target-name">${p.characterName||'Unknown'}</div></td>
         <td><span class="lvl-badge">LVL ${p.stats?.level??'?'}</span></td>
@@ -243,14 +255,17 @@
         <td class="stat-cell">${p.stats?.defense??'?'}</td>
         <td class="stat-cell" style="color:var(--brass);">${(p.stats?.gold??0).toLocaleString()} g</td>
         <td>
-          <button class="attack-btn" ${isRestricted?'disabled':''} onclick="attackPlayer(${p.id}, '${p.characterName}')">
+          ${protectedTarget
+            ? `<span class="protected-tag" title="Lords under level ${PVP_MIN_LEVEL} can't be attacked">PROTECTED</span>`
+            : `<button class="attack-btn" ${isRestricted || tooLow ? 'disabled' : ''} ${tooLow ? `title="Reach level ${PVP_MIN_LEVEL} to attack"` : ''} onclick="attackPlayer(${p.id}, '${p.characterName}')">
             Attack
-          </button>
+          </button>`}
         </td>
-      </tr>`).join('');
+      </tr>`; }).join('');
   }
 
   async function loadPlayers(){
+    if(!myStats) await loadStatus();
     const res = await fetch('/api/players');
     allPlayers = await res.json();
     filterPlayers();
@@ -276,8 +291,8 @@
       ]);
     } else {
       addLog(`You raided <span class="loss">${locationName}</span> and were repelled. You escaped but were injured.`);
-      showModal('🏥', 'Repelled!', `You attacked ${locationName} but were driven back and injured.`, [
-        { label: 'RESULT',    value: 'Sent to hospital', cls: 'neg' },
+      showModal('⚕', 'Repelled!', `You attacked ${locationName} but were driven back and injured.`, [
+        { label: 'RESULT',    value: 'Sent to the Infirmary', cls: 'neg' },
         { label: 'XP GAINED', value: `+${data.xpGain}`,  cls: 'pos' },
       ]);
     }
@@ -301,12 +316,12 @@
       showModal('⚔', 'Victory!', `You defeated ${targetName} in combat.`, [
         { label: 'GOLD STOLEN', value: `+${data.goldStolen} g`, cls: 'pos' },
         { label: 'XP GAINED',   value: `+${data.xpGain}`,      cls: 'pos' },
-        { label: 'TARGET',      value: data.defenderHospitalized ? 'Sent to hospital' : 'Injured', cls: 'neg' },
+        { label: 'TARGET',      value: data.defenderHospitalized ? 'Sent to the Infirmary' : 'Injured', cls: 'neg' },
       ]);
     } else {
-      addLog(`You attacked <span class="loss">${targetName}</span> and lost. You were sent to hospital.`);
-      showModal('🏥', 'Defeated!', `${targetName} repelled your attack and you were badly wounded.`, [
-        { label: 'RESULT',    value: 'Sent to hospital', cls: 'neg' },
+      addLog(`You attacked <span class="loss">${targetName}</span> and lost. You were sent to the Infirmary.`);
+      showModal('⚕', 'Defeated!', `${targetName} repelled your attack and you were badly wounded.`, [
+        { label: 'RESULT',    value: 'Sent to the Infirmary', cls: 'neg' },
         { label: 'XP GAINED', value: `+${data.xpGain}`,  cls: 'pos' },
       ]);
     }

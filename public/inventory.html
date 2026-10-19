@@ -64,7 +64,7 @@
 
   <main class="main">
     <div class="page-title">Inventory</div>
-    <div class="page-sub">Your satchel of potions, trinkets, and spoils. Use what you carry, or stock up at the store.</div>
+    <div class="page-sub">Your satchel of potions, trinkets, and spoils. Use what you carry, or stock up at the <a href="/store" style="color:var(--brass);">General Store</a>.</div>
 
     <div class="resources two-col">
       <div class="resource-card">
@@ -81,7 +81,6 @@
 
     <div class="tabs">
       <button class="tab active" id="tab-items" onclick="switchTab('items')">Your Items</button>
-      <button class="tab" id="tab-store" onclick="switchTab('store')">General Store</button>
       <button class="tab" id="tab-equipment" onclick="switchTab('equipment')">Equipment</button>
     </div>
 
@@ -184,11 +183,6 @@
       </div>
     </div>
 
-    <div id="pane-store" style="display:none;">
-      <div class="items-grid" id="store-grid">
-        <div style="color:var(--ash);font-style:italic;">Loading store...</div>
-      </div>
-    </div>
 
     <div class="panel">
       <div class="panel-title">Activity Log</div>
@@ -215,10 +209,8 @@
 
   function switchTab(tab){
     document.getElementById('tab-items').classList.toggle('active', tab === 'items');
-    document.getElementById('tab-store').classList.toggle('active', tab === 'store');
     document.getElementById('tab-equipment').classList.toggle('active', tab === 'equipment');
     document.getElementById('pane-items').style.display = tab === 'items' ? 'block' : 'none';
-    document.getElementById('pane-store').style.display = tab === 'store' ? 'block' : 'none';
     document.getElementById('pane-equipment').style.display = tab === 'equipment' ? 'block' : 'none';
   }
 
@@ -230,7 +222,7 @@
   function renderInventory(inventory){
     const grid = document.getElementById('items-grid');
     if(!inventory.length){
-      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Your satchel is empty. Visit the General Store to stock up.</div>`;
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Your satchel is empty. Visit the <a href="/store" style="color:var(--brass);">General Store</a> to stock up.</div>`;
       return;
     }
     grid.innerHTML = inventory.map(inv => {
@@ -260,44 +252,10 @@
     });
   }
 
-  function renderStore(items){
-    const grid = document.getElementById('store-grid');
-    if(!items.length){
-      grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">The store has nothing in stock right now.</div>`;
-      return;
-    }
-    grid.innerHTML = items.map(item => {
-      const affordable = myGold >= item.basePrice;
-      return `
-        <div class="item-card">
-          <div class="item-type ${item.type}">${item.type}</div>
-          ${itemIconHtml(item.icon)}
-          <div class="item-name">${item.name}</div>
-          <div class="item-desc">${item.description}</div>
-          <div class="item-footer">
-            <span class="item-price">${item.basePrice} g</span>
-            <button class="item-btn buy" ${affordable?'':'disabled'} data-item-id="${item.id}" data-item-name="${item.name.replace(/"/g,'&quot;')}">
-              ${affordable ? 'Buy' : 'Too costly'}
-            </button>
-          </div>
-        </div>`;
-    }).join('');
-
-    grid.querySelectorAll('.item-btn[data-item-id]:not(:disabled)').forEach(btn => {
-      btn.addEventListener('click', () => buyItem(btn.dataset.itemId, btn.dataset.itemName));
-    });
-  }
-
   async function loadInventory(){
     const res = await fetch('/api/inventory');
     const data = await res.json();
     renderInventory(data.inventory || []);
-  }
-
-  async function loadStore(){
-    const res = await fetch('/api/shop/items');
-    const data = await res.json();
-    renderStore(data.items || []);
   }
 
   async function useItem(inventoryId, itemName){
@@ -327,20 +285,7 @@
     showToast(`Sold ${itemName} for ${data.totalValue}g`);
 
     await loadPlayer();
-    await Promise.all([loadInventory(), loadStore()]);
-  }
-
-  async function buyItem(itemId, itemName){
-    let data;
-    try {
-      data = await apiPost('/api/shop/buy', { itemId: parseInt(itemId, 10), quantity: 1 });
-    } catch(e){ showToast(e.message); return; }
-
-    addLog(`You bought <span class="gain">${itemName}</span>. <span class="loss">-${data.cost} gold</span>`);
-    showToast(`Bought ${itemName}`);
-
-    await loadPlayer();
-    await Promise.all([loadStore(), loadInventory()]);
+    await loadInventory();
   }
 
   async function loadPlayer(){
@@ -354,7 +299,7 @@
 
   async function init(){
     await loadPlayer();
-    await Promise.all([loadInventory(), loadStore()]);
+    await loadInventory();
   }
 
   init();

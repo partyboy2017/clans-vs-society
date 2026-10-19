@@ -230,7 +230,7 @@
     if(isBanned(u)) h += '<span class="chip banned">banned</span>';
     if(u.isAdmin) h += '<span class="chip admin">admin</span>';
     if(u.stats?.inJail) h += '<span class="chip jail">jail</span>';
-    if(u.stats?.inHospital) h += '<span class="chip hosp">hospital</span>';
+    if(u.stats?.inHospital) h += '<span class="chip hosp">infirmary</span>';
     return h;
   }
 
@@ -334,7 +334,7 @@
       <div class="toolbar">
         <input class="in grow" id="p-q" placeholder="Search by character, Google name, email or #id" value="${esc(pState.q)}">
         <select class="in" id="p-filter">
-          ${[['all','All players'],['online','Online now'],['banned','Banned'],['jailed','In jail / hospital'],['admins','Admins']].map(([v,l]) => `<option value="${v}" ${pState.filter===v?'selected':''}>${l}</option>`).join('')}
+          ${[['all','All players'],['online','Online now'],['banned','Banned'],['jailed','In jail / infirmary'],['admins','Admins']].map(([v,l]) => `<option value="${v}" ${pState.filter===v?'selected':''}>${l}</option>`).join('')}
         </select>
         <select class="in" id="p-sort">
           ${[['lastSeen','Last seen'],['level','Level'],['gold','Gold'],['newest','Newest']].map(([v,l]) => `<option value="${v}" ${pState.sort===v?'selected':''}>Sort: ${l}</option>`).join('')}
@@ -821,7 +821,7 @@
         <div class="panel-title">Status fixes</div>
         <dl class="dl" style="margin-bottom:0.8rem">
           <dt>Jail</dt><dd>${s.inJail ? 'in jail · free ' + rel(s.jailUntil) : 'no'}</dd>
-          <dt>Hospital</dt><dd>${s.inHospital ? 'in hospital · out ' + rel(s.hospitalUntil) : 'no'}</dd>
+          <dt>Infirmary</dt><dd>${s.inHospital ? 'in the infirmary · out ' + rel(s.hospitalUntil) : 'no'}</dd>
           <dt>Travel</dt><dd>${travelling ? esc(s.travelDestination || s.travelDestinationId || '?') + ' · arrives ' + rel(s.travelArrivesAt || s.travelArrivalAt) : 'no'}</dd>
           <dt>Fight</dt><dd>${u.combatSession ? esc(u.combatSession.monsterName) + ' (Lv ' + u.combatSession.monsterLevel + ') · turn ' + u.combatSession.turnCount : 'no'}</dd>
         </dl>

@@ -97,13 +97,31 @@ function validate(schema) {
   };
 }
 
+// Letters (any language, so accented names work), digits, spaces and - _ .
+// Anything else, notably < > " ' &, is rejected: names are shown all over the
+// UI, and an apostrophe would also break the Raids page's onclick handlers.
+const CHARACTER_NAME_RE = /^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u;
+
+// ─── Market rules ─────────────────────────────────────────────────────────────
+// Listing an item costs 10% of the asking price up front (rounded up, at least
+// 1 gold). The fee is not refunded. A listing stays up for 4 days; after that
+// it comes down and the items go back to the seller's inventory.
+const MARKET_LISTING_FEE_RATE = 0.10;
+const MARKET_LISTING_DAYS     = 4;
+const MARKET_LISTING_MS       = MARKET_LISTING_DAYS * 24 * 60 * 60 * 1000;
+const MARKET_MAX_PRICE        = 1_000_000;
+const listingFee = price => Math.max(1, Math.ceil(price * MARKET_LISTING_FEE_RATE));
+
 const id = () => z.coerce.number().int().positive('Must be a positive number');
 
 const schemas = {
   chooseName: z.object({
     characterName: z.string().trim()
-      .min(2, 'Name must be at least 2 characters')
-      .max(24, 'Name must be 24 characters or fewer'),
+      .transform(s => s.replace(/\s+/g, ' '))   // collapse runs of spaces
+      .pipe(z.string()
+        .min(2, 'Name must be at least 2 characters')
+        .max(24, 'Name must be 24 characters or fewer')
+        .regex(CHARACTER_NAME_RE, 'Names can use letters, numbers, spaces, and - _ .')),
   }),
   chooseClass: z.object({
     characterClass: z.enum(VALID_CLASSES, { message: 'Invalid class' }),
@@ -115,8 +133,11 @@ const schemas = {
     stat: z.enum(['strength', 'defense', 'speed', 'dexterity', 'intelligence'], { message: 'Invalid stat' }),
   }),
   houseCreate: z.object({
-    name:  z.string().trim().min(2, 'House name must be at least 2 characters').max(30, 'House name must be 30 characters or fewer'),
-    motto: z.string().trim().max(100, 'Motto must be 100 characters or fewer').optional(),
+    name:  z.string().trim().transform(v => v.replace(/\s+/g, ' ')).pipe(z.string()
+      .min(2, 'House name must be at least 2 characters').max(30, 'House name must be 30 characters or fewer')
+      .regex(/^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u, 'House names can use letters, numbers, spaces, and - _ .')),
+    motto: z.string().trim().max(100, 'Motto must be 100 characters or fewer')
+      .regex(/^[^<>]*$/, 'Mottos cannot contain < or >').optional(),
   }),
   houseJoin: z.object({
     houseId: id(),
@@ -126,8 +147,9 @@ const schemas = {
   }),
   marketList: z.object({
     inventoryId: id(),
-    price:       z.coerce.number().int().min(1, 'Price must be at least 1 gold'),
-    quantity:    z.coerce.number().int().min(1, 'Quantity must be at least 1'),
+    price:       z.coerce.number().int().min(1, 'Price must be at least 1 gold')
+                   .max(MARKET_MAX_PRICE, `Price can be at most ${MARKET_MAX_PRICE.toLocaleString('en-US')} gold`),
+    quantity:    z.coerce.number().int().min(1, 'Quantity must be at least 1').max(9999),
   }),
   inventoryId: z.object({
     inventoryId: id(),
@@ -154,6 +176,9 @@ const schemas = {
     message:  z.string().trim()
       .min(5, 'Please write a bit more detail (at least 5 characters).')
       .max(3000, 'Message is too long (max 3000 characters).'),
+  }),
+  travelStart: z.object({
+    cityId: z.string().min(1, 'cityId is required').max(40),
   }),
   monstersStart: z.object({
     zoneId: z.string().min(1, 'zoneId is required'),
@@ -405,6 +430,17 @@ async function hasSkill(userId, skillKey) {
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
 app.use(express.json());
+
+// Every game page is served by a guarded route below (/training, /raids, …)
+// that checks sign-in and character creation. express.static would also serve
+// the same files as /training.html etc., skipping those checks, so send any
+// raw page URL to its clean route instead (keeping the query string).
+app.get(/^\/([a-z-]+)\.html$/, (req, res) => {
+  const page = req.params[0];
+  const query = req.originalUrl.slice(req.path.length);
+  const target = page === 'index' ? '/' : page === 'city' ? '/realm-map' : `/${page}`;
+  res.redirect(target + query);
+});
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   store: new pgSession({
@@ -423,6 +459,138 @@ app.use(passport.initialize());
 app.use(passport.session());
 // Kicks out banned players and keeps User.lastSeenAt fresh ("online now").
 admin.installPresence(app, { prisma });
+
+// A Google sign-in creates the User right away, but Stats (gold, health,
+// energy…) only exist once a class is chosen. Until then, game APIs answer
+// with a clear 400 instead of crashing on the missing Stats row. Signed-out
+// requests fall through to each route's own 401.
+const PRE_CHARACTER_API = new Set([
+  '/me', '/classes', '/choose-name', '/choose-class', '/logout', '/announcements',
+]);
+app.use('/api', (req, res, next) => {
+  if (!req.isAuthenticated()) return next();
+  if (PRE_CHARACTER_API.has(req.path) || req.path.startsWith('/admin')) return next();
+  if (req.user.characterName && req.user.characterClass && req.user.stats) return next();
+  res.status(400).json({ error: 'Finish creating your character first.', needsCharacter: true });
+});
+
+// ─── Coming soon ──────────────────────────────────────────────────────────────
+// Sections that aren't open to players yet. Their pages send players back to
+// the dashboard and their APIs refuse, so typing the URL doesn't get around
+// the "SOON" badge in the sidebar. Admins can still use them for testing.
+// To open one up, take it out of this list (or set LOCKED_FEATURES in the
+// environment, e.g. LOCKED_FEATURES=achievements).
+const LOCKED_FEATURES = new Set(
+  (process.env.LOCKED_FEATURES ?? 'house,market,achievements')
+    .split(',').map(f => f.trim()).filter(Boolean)
+);
+const FEATURE_PAGES = { '/house': 'house', '/market': 'market', '/achievements': 'achievements' };
+function lockedFeatureForApi(p) {
+  if (p === '/house' || p.startsWith('/house/') || p === '/houses') return 'house';
+  if (p.startsWith('/market/')) return 'market';
+  return null;
+}
+const featureLocked = (req, feature) => feature && LOCKED_FEATURES.has(feature) && !req.user?.isAdmin;
+
+app.use((req, res, next) => {
+  if (req.method !== 'GET' || !featureLocked(req, FEATURE_PAGES[req.path])) return next();
+  res.redirect('/dashboard');
+});
+app.use('/api', (req, res, next) => {
+  if (!req.isAuthenticated() || !featureLocked(req, lockedFeatureForApi(req.path))) return next();
+  res.status(403).json({ error: 'This part of the realm opens soon.', comingSoon: true });
+});
+
+// ─── On the road ──────────────────────────────────────────────────────────────
+// While a lord is traveling, the journey is all they get: every game page
+// sends them to the traveling screen, and game actions are refused until they
+// arrive or turn back. A journey whose arrival time has passed is settled
+// first (settleTravel), so arriving players are never caught by this.
+// Still open on the road: the traveling page itself, logging out, sending
+// feedback, the admin panel, and every read-only API call (the traveling page
+// needs /api/me and /api/travel/status).
+const TRAVEL_BLOCKED_PAGES = new Set([
+  '/dashboard', '/training', '/skills', '/raids', '/monsters', '/store', '/inventory',
+  '/wiki', '/realm-map', '/house', '/market', '/achievements',
+]);
+const TRAVEL_ALLOWED_ACTIONS = new Set(['/travel/start', '/travel/cancel', '/logout', '/feedback']);
+
+async function travelingTo(req) {
+  if (!req.isAuthenticated() || !req.user.characterClass) return null;
+  await settleTravel(req.user.id);
+  const s = await prisma.stats.findUnique({ where: { userId: req.user.id }, select: { travelDestination: true } });
+  return s?.travelDestination || null;
+}
+
+app.use(async (req, res, next) => {
+  if (req.method !== 'GET' || !(TRAVEL_BLOCKED_PAGES.has(req.path) || req.path.startsWith('/city/'))) return next();
+  try {
+    const dest = await travelingTo(req);
+    if (!dest) return next();
+    res.redirect(`/traveling?to=${encodeURIComponent(dest)}`);
+  } catch (e) { next(e); }
+});
+
+app.use('/api', async (req, res, next) => {
+  if (req.method === 'GET' || TRAVEL_ALLOWED_ACTIONS.has(req.path) || req.path.startsWith('/admin')) return next();
+  try {
+    const dest = await travelingTo(req);
+    if (!dest) return next();
+    res.status(400).json({ error: `You are on the road to ${placeName(dest === HOME_ID ? null : dest)}. Arrive or turn back first.`, traveling: true, travelDestination: dest });
+  } catch (e) { next(e); }
+});
+
+// ─── In a remote city ─────────────────────────────────────────────────────────
+// Aurelia's own pages belong to Aurelia. While a lord is in another city they
+// get that city's page (with its local shop), the Realm Map to travel on, and
+// their Inventory, Skills, Wiki and Feedback; everything else sends them back
+// to the city they're in, and the actions behind those pages are refused.
+// The city's shop only sells that city's goods.
+const AURELIA_ONLY_PAGES = new Set([
+  '/dashboard', '/training', '/raids', '/monsters', '/store', '/house', '/market', '/achievements',
+]);
+const AURELIA_ONLY_ACTIONS = [
+  '/training/train', '/action/rest', '/action/skill',
+  '/raid/npc', '/raid/player', '/monsters/start', '/monsters/turn',
+];
+const isAureliaOnlyAction = p => AURELIA_ONLY_ACTIONS.includes(p) || p.startsWith('/house') || p.startsWith('/market/');
+
+// The remote city a player is standing in right now, or null in Aurelia /
+// on the road / without a character.
+async function remoteCityOf(req) {
+  if (!req.isAuthenticated() || !req.user.characterClass) return null;
+  const s = await prisma.stats.findUnique({ where: { userId: req.user.id }, select: { currentCityId: true, travelDestination: true } });
+  return s && !s.travelDestination ? (s.currentCityId || null) : null;
+}
+
+app.use(async (req, res, next) => {
+  if (req.method !== 'GET' || !AURELIA_ONLY_PAGES.has(req.path)) return next();
+  try {
+    const city = await remoteCityOf(req);
+    if (!city) return next();
+    res.redirect(`/city/${encodeURIComponent(city)}`);
+  } catch (e) { next(e); }
+});
+
+app.use('/api', async (req, res, next) => {
+  if (req.method === 'GET') return next();
+  const aureliaOnly = isAureliaOnlyAction(req.path);
+  if (!aureliaOnly && req.path !== '/shop/buy') return next();
+  try {
+    const city = await remoteCityOf(req);
+    if (!city) return next();
+    const name = placeName(city);
+    if (aureliaOnly) return res.status(400).json({ error: `That can only be done in Aurelia. You are in ${name}.`, inCity: city });
+    // Shopping in a city: only that city's own goods.
+    const itemId = parseInt(req.body?.itemId, 10);
+    const item = Number.isInteger(itemId) ? await prisma.item.findUnique({ where: { id: itemId }, select: { name: true } }) : null;
+    const cityDef = CITIES.find(c => c.id === city);
+    if (item && cityDef && !cityDef.shopItemNames.includes(item.name)) {
+      return res.status(400).json({ error: `${name}'s market doesn't sell ${item.name}.`, inCity: city });
+    }
+    next();
+  } catch (e) { next(e); }
+});
 
 // ─── Email ────────────────────────────────────────────────────────────────────
 
@@ -680,15 +848,34 @@ app.get('/skills', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'skills.html'));
 });
 app.get('/raids', (req, res) => {
-  if (!req.isAuthenticated()) return res.redirect('/');
+  if (!req.isAuthenticated())   return res.redirect('/');
+  if (!req.user.characterName)  return res.redirect('/choose-name');
+  if (!req.user.characterClass) return res.redirect('/choose-class');
   res.sendFile(path.join(__dirname, 'public', 'raids.html'));
 });
+
+// These two pages used to be reachable only as raw .html files.
+for (const page of ['traveling', 'achievements']) {
+  app.get(`/${page}`, (req, res) => {
+    if (!req.isAuthenticated())   return res.redirect('/');
+    if (!req.user.characterName)  return res.redirect('/choose-name');
+    if (!req.user.characterClass) return res.redirect('/choose-class');
+    res.sendFile(path.join(__dirname, 'public', `${page}.html`));
+  });
+}
 
 app.get('/monsters', (req, res) => {
   if (!req.isAuthenticated())   return res.redirect('/');
   if (!req.user.characterName)  return res.redirect('/choose-name');
   if (!req.user.characterClass) return res.redirect('/choose-class');
   res.sendFile(path.join(__dirname, 'public', 'monsters.html'));
+});
+
+app.get('/store', (req, res) => {
+  if (!req.isAuthenticated())   return res.redirect('/');
+  if (!req.user.characterName)  return res.redirect('/choose-name');
+  if (!req.user.characterClass) return res.redirect('/choose-class');
+  res.sendFile(path.join(__dirname, 'public', 'store.html'));
 });
 
 app.get('/inventory', (req, res) => {
@@ -762,7 +949,8 @@ app.get('/api/me', async (req, res) => {
   let stats = req.user.stats;
   if (stats) {
     try {
-      // checkStatus applies energy regen and clears expired jail/hospital timers.
+      // checkStatus settles finished journeys, applies energy regen and clears
+      // expired jail/hospital timers.
       stats = await checkStatus(req.user.id);
     } catch (err) {
       logError('[api/me] status refresh failed', err);
@@ -786,6 +974,8 @@ app.get('/api/me', async (req, res) => {
     avatar:          req.user.avatar,
     characterClass:  req.user.characterClass,
     classLabel:      req.user.characterClass ? CLASSES[req.user.characterClass].label : null,
+    location:        stats && !stats.travelDestination && stats.currentCityId
+                       ? { cityId: stats.currentCityId, name: placeName(stats.currentCityId) } : null,
     lastLoginAt:     req.user.lastLoginAt,
     createdAt:       req.user.createdAt,
     isAdmin:         !!req.user.isAdmin,
@@ -815,12 +1005,28 @@ app.get('/api/classes', (req, res) => {
 
 app.post('/api/choose-name', validate(schemas.chooseName), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
-  const { characterName } = req.body;
-  const clean = characterName;
+  // A name is chosen once, at character creation. There is no rename yet.
+  if (req.user.characterName) return res.status(409).json({ error: 'Your name is already set' });
+  const clean = req.body.characterName;
   try {
-    const exists = await prisma.user.findFirst({ where: { characterName: clean } });
-    if (exists) return res.status(409).json({ error: 'That name is already taken' });
-    await prisma.user.update({ where: { id: req.user.id }, data: { characterName: clean } });
+    // Names are unique regardless of case ("Bob" blocks "bob"). The advisory
+    // lock serializes concurrent claims of the same name, so two sign-ups
+    // can't both pass the check and save the same name.
+    const taken = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(lower(${clean})))`;
+      const exists = await tx.user.findFirst({
+        where: { characterName: { equals: clean, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (exists) return true;
+      const updated = await tx.user.updateMany({
+        where: { id: req.user.id, characterName: null },
+        data:  { characterName: clean },
+      });
+      if (updated.count === 0) throw Object.assign(new Error('already named'), { code: 'ALREADY_NAMED' });
+      return false;
+    });
+    if (taken) return res.status(409).json({ error: 'That name is already taken' });
 
     // Refresh session so the new characterName is visible immediately.
     const updatedUser = await prisma.user.findUnique({
@@ -829,9 +1035,11 @@ app.post('/api/choose-name', validate(schemas.chooseName), async (req, res) => {
     });
     req.login(updatedUser, (err) => {
       if (err) return res.status(500).json({ error: 'Session refresh failed' });
-      res.json({ ok: true });
+      res.json({ ok: true, characterName: clean });
     });
   } catch (e) {
+    if (e.code === 'ALREADY_NAMED') return res.status(409).json({ error: 'Your name is already set' });
+    logError('/api/choose-name error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
@@ -904,78 +1112,11 @@ async function energyCost(base, characterClass, userId) {
   return base;
 }
 
-app.post('/api/action/train', async (req, res) => {
-  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
-  const { characterClass } = req.user;
-  await regenEnergy(req.user.id);
-  const cost = await energyCost(20, characterClass, req.user.id);
+// The old one-click training route (/api/action/train) was removed: it had no
+// cooldown and out-gained the Training page (playtest finding E3). All
+// training goes through /api/training/train.
 
-  // Atomic energy deduct — rejects if energy is insufficient.
-  const deducted = await prisma.stats.updateMany({
-    where: { userId: req.user.id, energy: { gte: cost } },
-    data:  { energy: { decrement: cost } },
-  });
-  if (deducted.count === 0) return res.status(400).json({ error: 'Not enough energy' });
-
-  let strGain = Math.floor(Math.random() * 3) + 1;
-  let defGain = 0;
-  let intGain = 0;
-
-  // Warrior: also gains defense
-  if (characterClass === 'WARRIOR') defGain = Math.floor(Math.random() * 2) + 1;
-
-  // Magician / Necromancer: train intelligence instead of strength
-  if (characterClass === 'MAGICIAN' || characterClass === 'NECROMANCER') {
-    intGain = strGain;
-    strGain = 0;
-  }
-
-  // Cleric: trains INT and DEF, no raw strength
-  if (characterClass === 'CLERIC') {
-    intGain = Math.floor(Math.random() * 2) + 1;
-    defGain = Math.floor(Math.random() * 2) + 1;
-    strGain = 0;
-  }
-
-  // Bard: trains DEX and INT
-  let dexGain = 0;
-  if (characterClass === 'BARD') {
-    dexGain = Math.floor(Math.random() * 2) + 1;
-    intGain = Math.floor(Math.random() * 2) + 1;
-    strGain = 0;
-  }
-
-  // Silver Tongue (BARD_1): +10% XP
-  let xpGain = 15;
-  if (characterClass === 'BARD' && await hasSkill(req.user.id, 'BARD_1')) {
-    xpGain = Math.floor(xpGain * 1.1);
-  }
-
-  // All stat gains are incremental — safe regardless of concurrent writes.
-  await prisma.stats.update({
-    where: { userId: req.user.id },
-    data: {
-      strength:     { increment: strGain },
-      defense:      { increment: defGain },
-      intelligence: { increment: intGain },
-      dexterity:    { increment: dexGain },
-      xp:           { increment: xpGain },
-    },
-  });
-
-  const levelResult = await checkLevelUp(req.user.id);
-
-  const gainParts = [];
-  if (strGain) gainParts.push(`+${strGain} STR`);
-  if (defGain) gainParts.push(`+${defGain} DEF`);
-  if (intGain) gainParts.push(`+${intGain} INT`);
-  if (dexGain) gainParts.push(`+${dexGain} DEX`);
-  logActivity(req.user.id, 'training', `Trained: ${gainParts.join(', ')}, +${xpGain} XP.`);
-
-  res.json({ strGain, defGain, intGain, dexGain, xpGain, ...levelResult });
-});
-
-app.post('/api/action/rest', async (req, res) => {
+app.post('/api/action/rest', blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { characterClass } = req.user;
 
@@ -1106,7 +1247,7 @@ app.post('/api/skills/unlock', validate(schemas.skillKey), async (req, res) => {
 });
 
 // POST /api/action/skill — fire an active skill
-app.post('/api/action/skill', validate(schemas.skillKey), async (req, res) => {
+app.post('/api/action/skill', validate(schemas.skillKey), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
 
   const { skillKey } = req.body;
@@ -1275,6 +1416,15 @@ app.get('/api/players', async (req, res) => {
 });
 
 // ─── HOUSE ────────────────────────────────────────────────────────────────────
+// Joining a house is a request the Lord approves or denies. Anyone can leave;
+// a leaving Lord hands the house on (see /api/house/leave). A Lord can also
+// disband the house; any gold in the house vault goes back to the Lord. Housemates can't raid each other (see
+// /api/raid/player).
+
+async function houseOf(userId) {
+  return prisma.houseMember.findUnique({ where: { userId }, include: { house: true } });
+}
+
 app.get('/api/house', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const member = await prisma.houseMember.findUnique({
@@ -1289,6 +1439,14 @@ app.get('/api/house', async (req, res) => {
       }
     }
   });
+  // The Lord also sees who is asking to join.
+  if (member && member.house.leaderId === req.user.id) {
+    member.joinRequests = await prisma.houseJoinRequest.findMany({
+      where: { houseId: member.houseId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, createdAt: true, user: { select: { characterName: true, characterClass: true, stats: { select: { level: true } } } } },
+    });
+  }
   res.json(member || null);
 });
 
@@ -1301,11 +1459,23 @@ app.get('/api/houses', async (req, res) => {
   res.json(houses);
 });
 
-app.post('/api/house/create', validate(schemas.houseCreate), async (req, res) => {
+// The player's own open join request, if any.
+app.get('/api/house/request', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const request = await prisma.houseJoinRequest.findUnique({
+    where: { userId: req.user.id },
+    select: { id: true, houseId: true, createdAt: true, house: { select: { name: true } } },
+  });
+  res.json({ request });
+});
+
+app.post('/api/house/create', validate(schemas.houseCreate), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { name, motto } = req.body;
   const existing = await prisma.houseMember.findUnique({ where: { userId: req.user.id } });
   if (existing) return res.status(400).json({ error: 'You already belong to a house' });
+  const clash = await prisma.house.findFirst({ where: { name: { equals: name, mode: 'insensitive' } }, select: { id: true } });
+  if (clash) return res.status(409).json({ error: 'That house name is already taken' });
   try {
     const house = await prisma.$transaction(async (tx) => {
       // Atomically deduct 500 gold — rolls back house creation if insufficient.
@@ -1315,10 +1485,13 @@ app.post('/api/house/create', validate(schemas.houseCreate), async (req, res) =>
       });
       if (deducted.count === 0) throw Object.assign(new Error('Not enough gold'), { code: 'NO_GOLD' });
 
+      // Founding a house withdraws any request to join another one.
+      await tx.houseJoinRequest.deleteMany({ where: { userId: req.user.id } });
+
       return tx.house.create({
         data: {
-          name:    name.trim(),
-          motto:   motto?.trim() || 'Strength through unity.',
+          name,
+          motto:   motto || 'Strength through unity.',
           leaderId: req.user.id,
           members: { create: { userId: req.user.id, rank: 'Lord' } },
         },
@@ -1333,30 +1506,178 @@ app.post('/api/house/create', validate(schemas.houseCreate), async (req, res) =>
   }
 });
 
-app.post('/api/house/join', validate(schemas.houseJoin), async (req, res) => {
+// Ask to join a house. Asking a different house replaces the earlier request.
+app.post('/api/house/join', validate(schemas.houseJoin), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { houseId } = req.body;
   const existing = await prisma.houseMember.findUnique({ where: { userId: req.user.id } });
   if (existing) return res.status(400).json({ error: 'You already belong to a house' });
   const house = await prisma.house.findUnique({ where: { id: houseId } });
   if (!house) return res.status(404).json({ error: 'House not found' });
-  await prisma.houseMember.create({ data: { userId: req.user.id, houseId, rank: 'Bannerman' } });
+  await prisma.houseJoinRequest.upsert({
+    where:  { userId: req.user.id },
+    update: { houseId, createdAt: new Date() },
+    create: { userId: req.user.id, houseId },
+  });
+  logActivity(req.user.id, 'house', `Asked to join House ${house.name}.`);
+  res.json({ ok: true, requested: true, houseName: house.name });
+});
+
+app.post('/api/house/request/cancel', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const { count } = await prisma.houseJoinRequest.deleteMany({ where: { userId: req.user.id } });
+  if (count === 0) return res.status(404).json({ error: 'You have no open request' });
   res.json({ ok: true });
 });
 
+// Lord only: approve or deny a request to join their house.
+app.post('/api/house/requests/:requestId/:decision', blockIfDetained, async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const { decision } = req.params;
+  const requestId = parseInt(req.params.requestId, 10);
+  if (!['approve', 'deny'].includes(decision) || !Number.isInteger(requestId)) return res.status(404).json({ error: 'Not found' });
+
+  const mine = await houseOf(req.user.id);
+  if (!mine || mine.house.leaderId !== req.user.id) return res.status(403).json({ error: 'Only the Lord of a house can answer requests' });
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const request = await tx.houseJoinRequest.findUnique({
+        where: { id: requestId },
+        include: { user: { select: { characterName: true } } },
+      });
+      if (!request || request.houseId !== mine.houseId) throw { code: 'NO_REQUEST' };
+      await tx.houseJoinRequest.delete({ where: { id: requestId } });
+      if (decision === 'deny') return { name: request.user.characterName, userId: request.userId };
+      // userId is unique on HouseMember, so a player can never end up in two houses.
+      await tx.houseMember.create({ data: { userId: request.userId, houseId: mine.houseId, rank: 'Bannerman' } });
+      return { name: request.user.characterName, userId: request.userId };
+    });
+    logActivity(result.userId, 'house', decision === 'approve'
+      ? `Your request to join House ${mine.house.name} was accepted.`
+      : `Your request to join House ${mine.house.name} was declined.`);
+    res.json({ ok: true, decision, name: result.name });
+  } catch (e) {
+    if (e && e.code === 'NO_REQUEST') return res.status(404).json({ error: 'That request is no longer open' });
+    if (e && e.code === 'P2002')      return res.status(409).json({ error: 'That player already belongs to a house' });
+    logError('/api/house/requests error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// Anyone can leave their house, even from a cell or the Infirmary.
+// A Lord who leaves hands the house to the highest-level member (ties go to
+// whoever joined first). A Lord with no one left closes the house and takes
+// the vault gold, the same as disbanding.
 app.post('/api/house/leave', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
-  const member = await prisma.houseMember.findUnique({ where: { userId: req.user.id } });
-  if (!member) return res.status(400).json({ error: 'You are not in a house' });
-  const house = await prisma.house.findUnique({ where: { id: member.houseId } });
-  if (house.leaderId === req.user.id) return res.status(400).json({ error: 'Lords cannot abandon their house. Disband it instead.' });
-  await prisma.houseMember.delete({ where: { userId: req.user.id } });
-  res.json({ ok: true });
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const member = await tx.houseMember.findUnique({ where: { userId: req.user.id }, include: { house: true } });
+      if (!member) return { error: 'You are not in a house' };
+      const house = member.house;
+      const gone = await tx.houseMember.deleteMany({ where: { userId: req.user.id, houseId: house.id } });
+      if (gone.count === 0) return { error: 'You are not in a house' }; // a second click got here first
+
+      if (house.leaderId !== req.user.id) {
+        return { house, wasLord: false };
+      }
+      const rest = await tx.houseMember.findMany({
+        where: { houseId: house.id },
+        include: { user: { select: { characterName: true, stats: { select: { level: true } } } } },
+      });
+      if (rest.length === 0) {
+        await tx.house.delete({ where: { id: house.id } }); // join requests cascade
+        if (house.gold > 0) await tx.stats.update({ where: { userId: req.user.id }, data: { gold: { increment: house.gold } } });
+        return { house, wasLord: true, closed: true, goldReturned: house.gold };
+      }
+      rest.sort((a, b) => (b.user.stats?.level ?? 0) - (a.user.stats?.level ?? 0) || a.id - b.id);
+      const heir = rest[0];
+      await tx.house.update({ where: { id: house.id }, data: { leaderId: heir.userId } });
+      await tx.houseMember.update({ where: { id: heir.id }, data: { rank: 'Lord' } });
+      return { house, wasLord: true, heir: { userId: heir.userId, name: heir.user.characterName }, others: rest.slice(1).map(m => m.userId) };
+    });
+    if (result.error) return res.status(400).json({ error: result.error });
+
+    const { house } = result;
+    const me = req.user.characterName || 'A bannerman';
+    if (!result.wasLord) {
+      logActivity(req.user.id, 'house', `You left House ${house.name}.`);
+      logActivity(house.leaderId, 'house', `${me} has left House ${house.name}.`);
+      return res.json({ ok: true });
+    }
+    if (result.closed) {
+      logActivity(req.user.id, 'house', `You left House ${house.name}. With no one left, the house is closed.${result.goldReturned > 0 ? ` ${result.goldReturned} gold returned from the vault.` : ''}`);
+      return res.json({ ok: true, closed: true, goldReturned: result.goldReturned });
+    }
+    logActivity(req.user.id, 'house', `You left House ${house.name}. ${result.heir.name} is now its Lord.`);
+    logActivity(result.heir.userId, 'house', `${me} has left House ${house.name}. You are now its Lord.`);
+    for (const id of result.others) logActivity(id, 'house', `${me} has left House ${house.name}. ${result.heir.name} is now its Lord.`);
+    res.json({ ok: true, newLord: result.heir.name });
+  } catch (e) {
+    logError('house leave error:', e);
+    res.status(500).json({ error: 'Could not leave the house. Try again.' });
+  }
+});
+
+// Lord only: disband the house. Members are released, open requests are
+// dropped, and any vault gold goes back to the Lord.
+app.post('/api/house/disband', blockIfDetained, async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const mine = await houseOf(req.user.id);
+  if (!mine) return res.status(400).json({ error: 'You are not in a house' });
+  if (mine.house.leaderId !== req.user.id) return res.status(403).json({ error: 'Only the Lord can disband the house' });
+  const house = mine.house;
+  const members = await prisma.houseMember.findMany({ where: { houseId: house.id }, select: { userId: true } });
+  await prisma.$transaction([
+    prisma.houseMember.deleteMany({ where: { houseId: house.id } }),
+    prisma.house.delete({ where: { id: house.id } }),   // join requests cascade
+    ...(house.gold > 0 ? [prisma.stats.update({ where: { userId: req.user.id }, data: { gold: { increment: house.gold } } })] : []),
+  ]);
+  for (const m of members) {
+    logActivity(m.userId, 'house', m.userId === req.user.id
+      ? `You disbanded House ${house.name}.${house.gold > 0 ? ` ${house.gold} gold returned from the vault.` : ''}`
+      : `House ${house.name} was disbanded by its Lord.`);
+  }
+  res.json({ ok: true, goldReturned: house.gold });
 });
 
 // ─── MARKET ───────────────────────────────────────────────────────────────────
+// Takes down every listing past its expiry and returns the items to their
+// sellers. Safe to call from several requests at once: each listing is only
+// returned by whichever call manages to delete it.
+async function expireListings() {
+  const due = await prisma.listing.findMany({
+    where: { expiresAt: { lte: new Date() } },
+    include: { item: { select: { name: true } } },
+    take: 200,
+  });
+  for (const l of due) {
+    try {
+      const returned = await prisma.$transaction(async (tx) => {
+        const gone = await tx.listing.deleteMany({ where: { id: l.id } });
+        if (gone.count === 0) return false; // someone else handled it
+        const existing = await tx.inventory.findFirst({ where: { userId: l.sellerId, itemId: l.itemId } });
+        if (existing) {
+          await tx.inventory.update({ where: { id: existing.id }, data: { quantity: { increment: l.quantity } } });
+        } else {
+          await tx.inventory.create({ data: { userId: l.sellerId, itemId: l.itemId, quantity: l.quantity } });
+        }
+        return true;
+      });
+      if (returned) {
+        logActivity(l.sellerId, 'inventory', `Your market listing for ${l.quantity}x ${l.item.name} expired unsold. The items are back in your inventory.`);
+      }
+    } catch (e) {
+      logError('expireListings error for listing', l.id, e);
+    }
+  }
+}
+setInterval(() => expireListings().catch(e => logError('expireListings sweep error:', e)), 15 * 60 * 1000).unref();
+
 app.get('/api/market/listings', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  await expireListings();
   const listings = await prisma.listing.findMany({
     include: {
       item: true,
@@ -1367,8 +1688,15 @@ app.get('/api/market/listings', async (req, res) => {
   res.json(listings);
 });
 
+// Market rules, for the page to show the fee and timer.
+app.get('/api/market/rules', (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  res.json({ feeRate: MARKET_LISTING_FEE_RATE, listingDays: MARKET_LISTING_DAYS, maxPrice: MARKET_MAX_PRICE });
+});
+
 app.get('/api/market/inventory', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  await expireListings();
   const inventory = await prisma.inventory.findMany({
     where: { userId: req.user.id },
     include: { item: true }
@@ -1376,9 +1704,10 @@ app.get('/api/market/inventory', async (req, res) => {
   res.json(inventory);
 });
 
-app.post('/api/market/buy', validate(schemas.marketBuy), async (req, res) => {
+app.post('/api/market/buy', validate(schemas.marketBuy), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { listingId } = req.body;
+  await expireListings(); // an expired listing goes back to its seller, not to a buyer
 
   try {
     const listing = await prisma.$transaction(async (tx) => {
@@ -1387,7 +1716,7 @@ app.post('/api/market/buy', validate(schemas.marketBuy), async (req, res) => {
       // will throw P2025 (record not found), rolling back their transaction
       // before any gold or inventory changes are made.
       const found = await tx.listing.findUnique({ where: { id: listingId }, include: { item: true } });
-      if (!found) throw Object.assign(new Error('Listing not found'), { code: 'NOT_FOUND' });
+      if (!found || found.expiresAt <= new Date()) throw Object.assign(new Error('Listing not found'), { code: 'NOT_FOUND' });
       if (found.sellerId === req.user.id) throw Object.assign(new Error('Cannot buy own listing'), { code: 'OWN_LISTING' });
 
       await tx.listing.delete({ where: { id: listingId } });
@@ -1427,19 +1756,47 @@ app.post('/api/market/buy', validate(schemas.marketBuy), async (req, res) => {
   }
 });
 
-app.post('/api/market/list', validate(schemas.marketList), async (req, res) => {
+app.post('/api/market/list', validate(schemas.marketList), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { inventoryId, price, quantity } = req.body;
-  const inv = await prisma.inventory.findFirst({ where: { id: inventoryId, userId: req.user.id } });
-  if (!inv) return res.status(404).json({ error: 'Item not found in your inventory' });
-  if (inv.quantity < quantity) return res.status(400).json({ error: 'Not enough of that item' });
-  await prisma.listing.create({ data: { sellerId: req.user.id, itemId: inv.itemId, price, quantity } });
-  if (inv.quantity - quantity <= 0) {
-    await prisma.inventory.delete({ where: { id: inv.id } });
-  } else {
-    await prisma.inventory.update({ where: { id: inv.id }, data: { quantity: inv.quantity - quantity } });
+  const fee = listingFee(price);
+  try {
+    // One transaction: take the items out of the satchel (only if they're
+    // still there), charge the fee (only if the gold is there), then post the
+    // listing. Any failure rolls all of it back, and two simultaneous listings
+    // of the same item can't both succeed.
+    const listing = await prisma.$transaction(async (tx) => {
+      const taken = await tx.inventory.updateMany({
+        where: { id: inventoryId, userId: req.user.id, quantity: { gte: quantity } },
+        data:  { quantity: { decrement: quantity } },
+      });
+      if (taken.count === 0) {
+        const inv = await tx.inventory.findFirst({ where: { id: inventoryId, userId: req.user.id } });
+        throw { code: inv ? 'NOT_ENOUGH' : 'NOT_FOUND' };
+      }
+      const paid = await tx.stats.updateMany({
+        where: { userId: req.user.id, gold: { gte: fee } },
+        data:  { gold: { decrement: fee } },
+      });
+      if (paid.count === 0) throw { code: 'NO_GOLD' };
+
+      const inv = await tx.inventory.findUnique({ where: { id: inventoryId }, include: { item: { select: { name: true } } } });
+      if (inv.quantity <= 0) await tx.inventory.delete({ where: { id: inventoryId } });
+
+      const created = await tx.listing.create({
+        data: { sellerId: req.user.id, itemId: inv.itemId, price, quantity, expiresAt: new Date(Date.now() + MARKET_LISTING_MS) },
+      });
+      return { ...created, itemName: inv.item.name };
+    });
+    logActivity(req.user.id, 'inventory', `Listed ${quantity}x ${listing.itemName} on the market for ${price} gold (fee ${fee} gold).`);
+    res.json({ ok: true, fee, expiresAt: listing.expiresAt, listingId: listing.id });
+  } catch (e) {
+    if (e && e.code === 'NOT_FOUND')  return res.status(404).json({ error: 'Item not found in your inventory' });
+    if (e && e.code === 'NOT_ENOUGH') return res.status(400).json({ error: 'Not enough of that item' });
+    if (e && e.code === 'NO_GOLD')    return res.status(400).json({ error: `Listing this costs a ${fee} gold fee (10% of the price). You don't have enough gold.` });
+    logError('/api/market/list error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
   }
-  res.json({ ok: true });
 });
 
 // ─── INVENTORY & GENERAL STORE ──────────────────────────────────────────────────
@@ -1458,6 +1815,7 @@ function parseItemEffect(effectStr) {
 
 app.get('/api/inventory', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  await expireListings(); // expired listings come back to the satchel
   const inventory = await prisma.inventory.findMany({
     where: { userId: req.user.id },
     include: { item: true },
@@ -1466,7 +1824,7 @@ app.get('/api/inventory', async (req, res) => {
   res.json({ inventory });
 });
 
-app.post('/api/inventory/use', validate(schemas.inventoryId), async (req, res) => {
+app.post('/api/inventory/use', validate(schemas.inventoryId), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { inventoryId } = req.body;
 
@@ -1536,22 +1894,30 @@ app.post('/api/inventory/use', validate(schemas.inventoryId), async (req, res) =
   }
 });
 
+// The General Store sells potions and building materials only. Monster drops
+// (Ancient Coin, Golem Core, trophies…) have to be earned. The list and the
+// buy button use this same rule (playtest finding E4).
+const STORE_ITEM_TYPES = ['consumable', 'crafting'];
+
 app.get('/api/shop/items', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const items = await prisma.item.findMany({
-    where: { type: { in: ['consumable', 'crafting'] } },
+    where: { type: { in: STORE_ITEM_TYPES } },
     orderBy: [{ type: 'asc' }, { basePrice: 'asc' }],
   });
   res.json({ items });
 });
 
-app.post('/api/shop/buy', validate(schemas.shopBuy), async (req, res) => {
+app.post('/api/shop/buy', validate(schemas.shopBuy), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { itemId, quantity } = req.body;
   const qty = quantity;
 
   const item = await prisma.item.findUnique({ where: { id: itemId } });
   if (!item) return res.status(404).json({ error: 'Item not found' });
+  if (!STORE_ITEM_TYPES.includes(item.type)) {
+    return res.status(400).json({ error: `The General Store doesn't sell ${item.name}.`, notForSale: true });
+  }
 
   const cost = item.basePrice * qty;
 
@@ -1580,7 +1946,7 @@ app.post('/api/shop/buy', validate(schemas.shopBuy), async (req, res) => {
   }
 });
 
-app.post('/api/inventory/sell', validate(schemas.inventorySell), async (req, res) => {
+app.post('/api/inventory/sell', validate(schemas.inventorySell), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { inventoryId, quantity } = req.body;
   const qty = quantity;
@@ -1644,7 +2010,7 @@ app.get('/api/training/status', async (req, res) => {
   res.json({ stats, cooldowns });
 });
 
-app.post('/api/training/train', validate(schemas.trainingTrain), async (req, res) => {
+app.post('/api/training/train', validate(schemas.trainingTrain), blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { stat } = req.body;
   const cfg = TRAINING_CONFIG[stat];
@@ -1801,7 +2167,8 @@ function energyTimers(stats, now = Date.now()) {
 }
 
 async function checkStatus(userId) {
-  // Apply any pending energy regen ticks first.
+  // Finish any journey whose arrival time has passed, then apply pending energy regen.
+  await settleTravel(userId);
   await regenEnergy(userId);
 
   const stats = await prisma.stats.findUnique({ where: { userId } });
@@ -1820,6 +2187,45 @@ async function checkStatus(userId) {
     return await prisma.stats.update({ where: { userId }, data: updates });
   }
   return stats;
+}
+
+// ─── Jail / hospital lockout ──────────────────────────────────────────────────
+// A jailed or hospitalized player can still look around (every GET), manage
+// their character (stat points, skill unlocks) and send feedback, but can't do
+// anything that changes the world: train, rest, use skills or items, shop,
+// trade, join/leave houses, build wagons or travel. Raids and hunting already
+// check these flags inside their own transactions.
+
+function formatWait(ms) {
+  const totalSec = Math.max(1, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSec / 60), s = totalSec % 60;
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+// Returns an error message if the player is currently locked up, else null.
+// Also clears any jail/hospital timer that has already run out.
+async function detainedMessage(userId) {
+  const stats = await checkStatus(userId);
+  const now = Date.now();
+  if (stats.inJail) {
+    const left = stats.jailUntil ? new Date(stats.jailUntil).getTime() - now : 0;
+    return `You are in jail — released in ${formatWait(left)}.`;
+  }
+  if (stats.inHospital) {
+    const left = stats.hospitalUntil ? new Date(stats.hospitalUntil).getTime() - now : 0;
+    return `You are in the Infirmary — released in ${formatWait(left)}.`;
+  }
+  return null;
+}
+
+// Route middleware: rejects the request while the player is in jail or hospital.
+async function blockIfDetained(req, res, next) {
+  if (!req.isAuthenticated()) return next(); // the handler returns the 401
+  const hasStats = await prisma.stats.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+  if (!hasStats) return next(); // no character yet, nothing to lock
+  const msg = await detainedMessage(req.user.id);
+  if (msg) return res.status(400).json({ error: msg, detained: true });
+  next();
 }
 
 app.get('/api/raid/status', async (req, res) => {
@@ -1862,6 +2268,7 @@ app.post('/api/raid/npc', validate(schemas.raidNpc), async (req, res) => {
       if (!stats) throw { code: 'NO_STATS' };
       if (stats.inJail)     throw { code: 'JAILED' };
       if (stats.inHospital) throw { code: 'HOSPITAL' };
+      if (stats.travelDestination) throw { code: 'TRAVELING' };
       if (stats.energy < location.energyCost) throw { code: 'NO_ENERGY' };
 
       const attackPower  = stats.strength + stats.speed + Math.floor(Math.random() * 15);
@@ -1910,7 +2317,7 @@ app.post('/api/raid/npc', validate(schemas.raidNpc), async (req, res) => {
     } else if (result.jailMins > 0) {
       logActivity(req.user.id, 'raid', `Caught raiding ${location.name} — thrown in jail for ${result.jailMins}m.`);
     } else if (result.hospitalMins > 0) {
-      logActivity(req.user.id, 'raid', `Lost the raid at ${location.name} — hospitalized for ${result.hospitalMins}m.`);
+      logActivity(req.user.id, 'raid', `Lost the raid at ${location.name} — sent to the Infirmary for ${result.hospitalMins}m.`);
     } else {
       logActivity(req.user.id, 'raid', `Lost the raid at ${location.name}.`);
     }
@@ -1919,17 +2326,31 @@ app.post('/api/raid/npc', validate(schemas.raidNpc), async (req, res) => {
 
   } catch (e) {
     if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
-    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
+    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in the Infirmary' });
+    if (e && e.code === 'TRAVELING') return res.status(400).json({ error: 'You are on the road. Finish or turn back from your journey first.' });
+    if (e && e.code === 'TARGET_TRAVELING') return res.status(400).json({ error: 'That lord is on the road and out of reach' });
     if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy' });
     logError('/api/raid/npc error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
 });
 
+// Lords below this level can't attack other players, and can't be attacked.
+const PVP_MIN_LEVEL = 5;
+
 app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { targetId } = req.body;
   if (targetId === req.user.id) return res.status(400).json({ error: 'You cannot attack yourself' });
+
+  // Housemates can't raid each other.
+  const [myHouse, theirHouse] = await Promise.all([
+    prisma.houseMember.findUnique({ where: { userId: req.user.id }, select: { houseId: true } }),
+    prisma.houseMember.findUnique({ where: { userId: targetId },   select: { houseId: true } }),
+  ]);
+  if (myHouse && theirHouse && myHouse.houseId === theirHouse.houseId) {
+    return res.status(400).json({ error: 'You cannot attack a member of your own house' });
+  }
 
   // Clear expired status flags (idempotent, benign if racy).
   await checkStatus(req.user.id);
@@ -1953,6 +2374,10 @@ app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
 
       if (attackerStats.inJail)     throw { code: 'JAILED' };
       if (attackerStats.inHospital) throw { code: 'HOSPITAL' };
+      if (attackerStats.travelDestination) throw { code: 'TRAVELING' };
+      if (defenderStats.travelDestination) throw { code: 'TARGET_TRAVELING' };
+      if (attackerStats.level < PVP_MIN_LEVEL) throw { code: 'LOW_LEVEL' };
+      if (defenderStats.level < PVP_MIN_LEVEL) throw { code: 'TARGET_PROTECTED' };
       if (attackerStats.energy < 20) throw { code: 'NO_ENERGY' };
 
       // Combat
@@ -2005,7 +2430,7 @@ app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
 
     if (result.won) {
       logActivity(req.user.id, 'raid', `Attacked ${target.characterName} and won — stole ${result.goldStolen} gold, +${result.xpGain} XP.`);
-      logActivity(targetId, 'raid', `Was attacked by ${req.user.characterName} and lost ${result.goldStolen} gold.${result.defenderHospitalized ? ' Hospitalized.' : ''}`);
+      logActivity(targetId, 'raid', `Was attacked by ${req.user.characterName} and lost ${result.goldStolen} gold.${result.defenderHospitalized ? ' Sent to the Infirmary.' : ''}`);
     } else {
       logActivity(req.user.id, 'raid', `Attacked ${target.characterName} and lost, +${result.xpGain} XP.`);
       logActivity(targetId, 'raid', `Successfully defended against an attack from ${req.user.characterName}.`);
@@ -2019,7 +2444,11 @@ app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
 
   } catch (e) {
     if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
-    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
+    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in the Infirmary' });
+    if (e && e.code === 'TRAVELING') return res.status(400).json({ error: 'You are on the road. Finish or turn back from your journey first.' });
+    if (e && e.code === 'TARGET_TRAVELING') return res.status(400).json({ error: 'That lord is on the road and out of reach' });
+    if (e && e.code === 'LOW_LEVEL') return res.status(400).json({ error: `You must reach level ${PVP_MIN_LEVEL} before you can attack other lords`, minLevel: PVP_MIN_LEVEL });
+    if (e && e.code === 'TARGET_PROTECTED') return res.status(400).json({ error: `That lord is under level ${PVP_MIN_LEVEL} and protected from attack`, minLevel: PVP_MIN_LEVEL });
     if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy — attacks cost 20 energy' });
     logError('/api/raid/player error:', e);
     res.status(500).json({ error: 'Something went wrong' });
@@ -2315,6 +2744,70 @@ const CITIES = [
   },
 ];
 
+// ─── TRAVEL ───────────────────────────────────────────────────────────────────
+// Aurelia, the capital, is home (Stats.currentCityId = null). A trip takes real
+// time: leaving Aurelia, or going city to city, takes the destination's
+// travelHours; coming home takes the current city's. Better wagons shorten
+// every trip (effectiveTravelHours). The journey lives in travelDestination /
+// travelStartedAt / travelArrivesAt, and the server clock decides arrival:
+// whichever request comes in after travelArrivesAt settles it (settleTravel).
+// While on the road a lord can't hunt, raid or attack, and can't be attacked.
+const HOME_ID = 'aurelia';
+const HOME = { id: HOME_ID, name: 'Aurelia', region: 'Eldric Kingdoms — Heart of Civilization', mode: 'road' };
+
+function placeById(id) {
+  if (id === HOME_ID) return HOME;
+  return CITIES.find(c => c.id === id) || null;
+}
+function placeName(cityId) {
+  return cityId ? (placeById(cityId)?.name || cityId) : HOME.name;
+}
+// The leg that sets the trip's length and mode: the destination's, or the
+// city you're leaving when heading home.
+function tripLeg(fromCityId, toId) {
+  return toId === HOME_ID ? CITIES.find(c => c.id === fromCityId) : placeById(toId);
+}
+function tripHours(fromCityId, toId, wagonTier) {
+  const leg = tripLeg(fromCityId, toId);
+  return effectiveTravelHours(leg ? leg.travelHours : 1, wagonTier);
+}
+
+// Finishes a journey whose arrival time has passed. Returns the place id the
+// player just arrived at, or null if nothing changed.
+async function settleTravel(userId) {
+  const now = new Date();
+  const s = await prisma.stats.findUnique({
+    where: { userId },
+    select: { travelDestination: true, travelArrivesAt: true },
+  });
+  if (!s?.travelDestination || !s.travelArrivesAt || s.travelArrivesAt > now) return null;
+  const dest = s.travelDestination;
+  const done = await prisma.stats.updateMany({
+    where: { userId, travelDestination: dest, travelArrivesAt: { lte: now } },
+    data:  { currentCityId: dest === HOME_ID ? null : dest, travelDestination: null, travelStartedAt: null, travelArrivesAt: null },
+  });
+  if (done.count === 0) return null; // another request settled it first
+  logActivity(userId, 'travel', `Arrived at ${placeName(dest === HOME_ID ? null : dest)}.`);
+  return dest;
+}
+
+function travelStatusBody(stats) {
+  const dest = placeById(stats.travelDestination);
+  const startedAt = new Date(stats.travelStartedAt), arrivesAt = new Date(stats.travelArrivesAt);
+  return {
+    traveling: true,
+    cityId:    stats.travelDestination,
+    name:      dest?.name || stats.travelDestination,
+    region:    dest?.region || '',
+    mode:      tripLeg(stats.currentCityId, stats.travelDestination)?.mode || 'road',
+    fromId:    stats.currentCityId || HOME_ID,
+    fromName:  placeName(stats.currentCityId),
+    startedAt, arrivesAt,
+    totalMs:   arrivesAt - startedAt,
+    remainingMs: Math.max(0, arrivesAt - Date.now()),
+  };
+}
+
 const MONSTER_ZONES = [
   {
     id: 'woods',
@@ -2385,6 +2878,16 @@ const MONSTER_ZONES = [
 
 // Threshold below which a losing fighter is considered defeated (mirrors raid hospital logic).
 const COMBAT_DEFEAT_HEALTH = 10;
+
+// Zone gating: a player must reach a zone's levelMin to hunt there, and
+// monsters spawn at most this many levels above the player (still within the
+// zone's own range), so a new lord isn't thrown at a level-10 wolf.
+const MONSTER_LEVEL_LEAD = 3;
+
+function monsterLevelRange(zone, playerLevel) {
+  const max = Math.min(zone.levelMax, Math.max(zone.levelMin, playerLevel + MONSTER_LEVEL_LEAD));
+  return { min: zone.levelMin, max };
+}
 
 function scaleMonster(template, level) {
   return {
@@ -2488,7 +2991,7 @@ app.get('/api/wagon/status', async (req, res) => {
 
 // Builds the Basic Wagon (tier 1) or upgrades to the next tier — same flow,
 // since each tier is just "the next thing you don't have yet".
-app.post('/api/wagon/build', async (req, res) => {
+app.post('/api/wagon/build', blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
 
   try {
@@ -2574,6 +3077,7 @@ app.get('/api/cities/:cityId', async (req, res) => {
   if (!city) return res.status(404).json({ error: 'Unknown settlement' });
 
   try {
+    await settleTravel(req.user.id);
     const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
     const wagonTier = stats?.wagonTier || 0;
     const shopItems = await prisma.item.findMany({
@@ -2587,11 +3091,7 @@ app.get('/api/cities/:cityId', async (req, res) => {
       .filter(l => city.nearbyRaidIds.includes(l.id))
       .map(l => ({ id: l.id, name: l.name, risk: l.risk, desc: l.desc }));
 
-    // Visiting an unlocked city page means the player is now there — record
-    // it as their current location so other systems can key off it later.
-    if (stats?.hasWagon && stats.currentCityId !== city.id) {
-      await prisma.stats.update({ where: { userId: req.user.id }, data: { currentCityId: city.id } });
-    }
+    // Opening a city page never moves the player; travel does (see TRAVEL).
 
     res.json({
       id: city.id,
@@ -2603,7 +3103,10 @@ app.get('/api/cities/:cityId', async (req, res) => {
       mode: city.mode,
       hasWagon: !!stats?.hasWagon,
       wagonTier,
-      currentCityId: stats?.hasWagon ? city.id : (stats?.currentCityId ?? null),
+      currentCityId: stats?.currentCityId ?? null,
+      here:          !!stats && !stats.travelDestination && stats.currentCityId === city.id,
+      travelingTo:   stats?.travelDestination ?? null,
+      tripHours:     tripHours(stats?.currentCityId ?? null, city.id, wagonTier),
       shopItems,
       nearbyZones,
       nearbyRaids,
@@ -2614,16 +3117,83 @@ app.get('/api/cities/:cityId', async (req, res) => {
   }
 });
 
-// Returning to the capital — clears currentCityId (null means Aurelia).
-app.post('/api/travel/home', async (req, res) => {
+// Where the player is, or the journey they're on. `arrived` is true only on the
+// request that settled an arrival, so the traveling page can show it once.
+app.get('/api/travel/status', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   try {
-    await prisma.stats.update({ where: { userId: req.user.id }, data: { currentCityId: null } });
-    res.json({ ok: true, currentCityId: null });
+    const arrived = await settleTravel(req.user.id);
+    const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    if (!stats) return res.status(400).json({ error: 'Finish creating your character first.' });
+    if (stats.travelDestination) return res.json(travelStatusBody(stats));
+    const here = stats.currentCityId || HOME_ID;
+    res.json({ traveling: false, arrived: !!arrived, cityId: here, name: placeName(stats.currentCityId) });
   } catch (e) {
-    logError('/api/travel/home error:', e);
+    logError('/api/travel/status error:', e);
     res.status(500).json({ error: 'Something went wrong' });
   }
+});
+
+app.post('/api/travel/start', validate(schemas.travelStart), async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  const dest = placeById(req.body.cityId);
+  if (!dest) return res.status(404).json({ error: 'Unknown settlement' });
+  try {
+    const hasStats = await prisma.stats.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+    if (!hasStats) return res.status(400).json({ error: 'Finish creating your character first.' });
+    const stats = await checkStatus(req.user.id); // settles any finished trip, clears expired timers
+    if (stats.travelDestination) {
+      return res.status(400).json({ error: `You are already on the road to ${placeName(stats.travelDestination)}`, travelDestination: stats.travelDestination });
+    }
+    const here = stats.currentCityId || HOME_ID;
+    if (here === dest.id) return res.status(400).json({ error: `You are already in ${dest.name}`, alreadyThere: true, cityId: dest.id });
+    if (stats.inJail)     return res.status(400).json({ error: 'You are in jail' });
+    if (stats.inHospital) return res.status(400).json({ error: 'You are in the Infirmary' });
+    if (dest.id !== HOME_ID && !stats.hasWagon) return res.status(400).json({ error: 'You need a wagon to travel that far. Build one on the Realm Map.' });
+    const fight = await prisma.combatSession.findUnique({ where: { userId: req.user.id }, select: { id: true } });
+    if (fight) return res.status(400).json({ error: 'Finish or flee your fight before setting out' });
+
+    const hours = tripHours(stats.currentCityId, dest.id, stats.wagonTier || 0);
+    const startedAt = new Date();
+    const arrivesAt = new Date(startedAt.getTime() + hours * 60 * 60 * 1000);
+    const started = await prisma.stats.updateMany({
+      where: { userId: req.user.id, travelDestination: null },
+      data:  { travelDestination: dest.id, travelStartedAt: startedAt, travelArrivesAt: arrivesAt },
+    });
+    if (started.count === 0) return res.status(409).json({ error: 'You are already on the road' });
+    logActivity(req.user.id, 'travel', `Set out from ${placeName(stats.currentCityId)} for ${dest.name} (~${hours}h).`);
+    const fresh = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    res.json({ ok: true, hours, ...travelStatusBody(fresh) });
+  } catch (e) {
+    logError('/api/travel/start error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// Turn back: the journey is abandoned and the player stays where they started.
+app.post('/api/travel/cancel', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  try {
+    const arrived = await settleTravel(req.user.id);
+    if (arrived) return res.status(400).json({ error: `You have already arrived at ${placeName(arrived === HOME_ID ? null : arrived)}` });
+    const stats = await prisma.stats.findUnique({ where: { userId: req.user.id } });
+    if (!stats?.travelDestination) return res.status(400).json({ error: 'You are not traveling' });
+    await prisma.stats.updateMany({
+      where: { userId: req.user.id, travelDestination: stats.travelDestination },
+      data:  { travelDestination: null, travelStartedAt: null, travelArrivesAt: null },
+    });
+    logActivity(req.user.id, 'travel', `Turned back on the road to ${placeName(stats.travelDestination)}.`);
+    res.json({ ok: true, cityId: stats.currentCityId || HOME_ID });
+  } catch (e) {
+    logError('/api/travel/cancel error:', e);
+    res.status(500).json({ error: 'Something went wrong' });
+  }
+});
+
+// Kept for older clients: heading home is now a journey like any other.
+app.post('/api/travel/home', async (req, res) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
+  res.status(400).json({ error: 'Returning to Aurelia takes a journey now. Use the Realm Map.', useTravel: true });
 });
 
 app.get('/api/activity', async (req, res) => {
@@ -2692,12 +3262,19 @@ app.get('/api/wiki', async (req, res) => {
   }
 });
 
-app.get('/api/monsters/zones', (req, res) => {
+app.get('/api/monsters/zones', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
-  res.json({ zones: MONSTER_ZONES.map(z => ({
-    id: z.id, name: z.name, tier: z.tier, desc: z.desc,
-    levelMin: z.levelMin, levelMax: z.levelMax, energyCost: z.energyCost,
-  })) });
+  const stats = await prisma.stats.findUnique({ where: { userId: req.user.id }, select: { level: true } });
+  const playerLevel = stats?.level ?? 1;
+  res.json({ zones: MONSTER_ZONES.map(z => {
+    const range = monsterLevelRange(z, playerLevel);
+    return {
+      id: z.id, name: z.name, tier: z.tier, desc: z.desc,
+      levelMin: z.levelMin, levelMax: z.levelMax, energyCost: z.energyCost,
+      locked: playerLevel < z.levelMin,       // can't hunt here yet
+      foeLevelMin: range.min, foeLevelMax: range.max, // what this player will actually meet
+    };
+  }) });
 });
 
 app.get('/api/monsters/session', async (req, res) => {
@@ -2726,6 +3303,8 @@ app.post('/api/monsters/start', validate(schemas.monstersStart), async (req, res
       if (!stats) throw { code: 'NO_STATS' };
       if (stats.inJail)     throw { code: 'JAILED' };
       if (stats.inHospital) throw { code: 'HOSPITAL' };
+      if (stats.travelDestination) throw { code: 'TRAVELING' };
+      if (stats.level < zone.levelMin) throw { code: 'LEVEL_TOO_LOW', minLevel: zone.levelMin };
       if (stats.energy < zone.energyCost) throw { code: 'NO_ENERGY' };
 
       await tx.stats.update({
@@ -2734,7 +3313,8 @@ app.post('/api/monsters/start', validate(schemas.monstersStart), async (req, res
       });
 
       const template = zone.monsters[Math.floor(Math.random() * zone.monsters.length)];
-      const level = zone.levelMin + Math.floor(Math.random() * (zone.levelMax - zone.levelMin + 1));
+      const range = monsterLevelRange(zone, stats.level);
+      const level = range.min + Math.floor(Math.random() * (range.max - range.min + 1));
       const monster = scaleMonster(template, level);
 
       return tx.combatSession.create({
@@ -2754,7 +3334,10 @@ app.post('/api/monsters/start', validate(schemas.monstersStart), async (req, res
     res.json({ session });
   } catch (e) {
     if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
-    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in hospital' });
+    if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in the Infirmary' });
+    if (e && e.code === 'LEVEL_TOO_LOW') return res.status(400).json({ error: `You must be at least Level ${e.minLevel} to hunt in ${zone.name}` });
+    if (e && e.code === 'TRAVELING') return res.status(400).json({ error: 'You are on the road. Finish or turn back from your journey first.' });
+    if (e && e.code === 'TARGET_TRAVELING') return res.status(400).json({ error: 'That lord is on the road and out of reach' });
     if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy' });
     logError('/api/monsters/start error:', e);
     res.status(500).json({ error: 'Something went wrong' });
@@ -2875,7 +3458,7 @@ app.post('/api/monsters/turn', validate(schemas.monstersTurn), async (req, res) 
       return res.json({ ...result, ...levelUp });
     }
     if (result.lost) {
-      logActivity(req.user.id, 'monster', `Defeated by ${result.monsterName} — hospitalized for ${result.hospitalMins}m.`);
+      logActivity(req.user.id, 'monster', `Defeated by ${result.monsterName} — sent to the Infirmary for ${result.hospitalMins}m.`);
     }
     if (result.fled) {
       logActivity(req.user.id, 'monster', `Fled from a fight.`);

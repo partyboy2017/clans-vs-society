@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clans vs Society — General Store</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/theme.css">
+<style>
+  /* ── PAGE-SPECIFIC STYLES ONLY ──
+     Tokens, shell, sidebar, resource bars, panel, log, toast, tabs,
+     mobile nav all come from /theme.css. Item cards and the equipment
+     silhouette panel are unique to this page. */
+
+  .items-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;}
+  .item-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.1rem;display:flex;flex-direction:column;transition:border-color 0.15s;}
+  .item-icon-wrap{width:52px;height:52px;margin:0 0 0.7rem;display:flex;align-items:center;justify-content:center;background:var(--bg-panel-2);border:1px solid var(--line);overflow:hidden;}
+  .item-icon-wrap img{width:100%;height:100%;object-fit:contain;image-rendering:-webkit-optimize-contrast;}
+  .item-card:hover{border-color:var(--brass-dim);}
+  .item-type{font-family:'JetBrains Mono',monospace;font-size:0.56rem;letter-spacing:0.16em;margin-bottom:0.4rem;text-transform:uppercase;}
+  .item-type.consumable{color:var(--green-bright);}
+  .item-type.material{color:var(--brass);}
+  .item-type.crafting{color:#8FB4D9;}
+  .item-name{font-family:'Cinzel',serif;font-size:1rem;color:var(--parchment);margin-bottom:0.35rem;}
+  .item-desc{font-size:0.85rem;color:var(--ash);font-style:italic;margin-bottom:0.9rem;line-height:1.55;flex:1;}
+  .item-footer{display:flex;align-items:center;justify-content:space-between;gap:0.6rem;}
+  .item-qty{font-family:'JetBrains Mono',monospace;font-size:0.68rem;color:var(--ash);}
+  .item-price{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--brass);}
+  .item-btn{font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;padding:0.4rem 0.9rem;border:none;cursor:pointer;background:var(--rust);color:var(--bone);transition:background 0.15s;}
+  .item-btn:hover:not(:disabled){background:var(--rust-bright);}
+  .item-btn:disabled{background:var(--bg-panel-2);color:var(--ash);border:1px solid var(--line);cursor:not-allowed;}
+  .item-btn.buy{background:var(--brass-dim);}
+  .item-btn.buy:hover:not(:disabled){background:var(--brass);}
+  .item-btn.sell{background:var(--bg-panel-2);border:1px solid var(--brass-dim);color:var(--brass);}
+  .item-btn.sell:hover:not(:disabled){background:var(--brass-dim);color:var(--bone);}
+
+  .equip-panel{background:var(--bg-panel);border:1px solid var(--line);padding:1.4rem;display:flex;justify-content:center;}
+  .equip-svg{width:100%;max-width:420px;height:auto;}
+  .slot-label{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;fill:var(--ash);}
+  .slot-soon{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.06em;fill:var(--rust-bright);}
+
+  @media(max-width:1000px){.items-grid{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:600px){.items-grid{grid-template-columns:1fr;}}
+  .store-purse{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;}
+  .store-purse .purse-gold{font-family:'Cinzel',serif;font-size:1.4rem;color:var(--brass);}
+  .store-purse .purse-note{font-size:0.9rem;color:var(--ash);font-style:italic;}
+  .store-purse a{font-family:'JetBrains Mono',monospace;font-size:0.66rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--bone);border:1px solid var(--line);padding:0.5rem 0.9rem;text-decoration:none;}
+  .store-purse a:hover{border-color:var(--brass-dim);}
+  .item-owned{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.06em;color:var(--ash);margin-bottom:0.5rem;}
+  /* Quantity picker — same brass-and-parchment look as the rest of the store */
+  .qty-row{display:flex;align-items:center;justify-content:space-between;gap:0.6rem;margin:0.2rem 0 0.7rem;}
+  .qty-stepper{display:inline-flex;align-items:stretch;border:1px solid var(--line);background:var(--bg);}
+  .qty-btn{font-family:'JetBrains Mono',monospace;font-size:0.8rem;width:1.9rem;background:transparent;border:none;color:var(--brass);cursor:pointer;transition:background 0.15s,color 0.15s;}
+  .qty-btn:hover:not(:disabled){background:rgba(176,141,69,0.12);color:var(--parchment);}
+  .qty-btn:disabled{color:var(--ash);opacity:0.4;cursor:not-allowed;}
+  .qty-input{width:2.6rem;text-align:center;background:transparent;border:none;border-left:1px solid var(--line);border-right:1px solid var(--line);color:var(--bone);font-family:'JetBrains Mono',monospace;font-size:0.75rem;padding:0.35rem 0;-moz-appearance:textfield;}
+  .qty-input::-webkit-outer-spin-button,.qty-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .qty-input:focus{outline:none;background:rgba(176,141,69,0.06);}
+  .qty-max{font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.35rem 0.55rem;background:transparent;border:1px solid var(--brass-dim);color:var(--brass);cursor:pointer;}
+  .qty-max:hover:not(:disabled){background:var(--brass-dim);color:var(--bone);}
+  .qty-max:disabled{border-color:var(--line);color:var(--ash);opacity:0.5;cursor:not-allowed;}
+  .item-total{font-family:'Cinzel',serif;font-size:0.95rem;color:var(--brass);}
+  .item-total.short{color:var(--rust-bright);}
+  .item-unit{display:block;font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:0.06em;color:var(--ash);}
+  .store-section{font-family:'Cinzel',serif;font-size:0.85rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--parchment);margin:1.4rem 0 0.8rem;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 40 40" fill="none">
+        <circle cx="20" cy="20" r="18" stroke="var(--brass)" stroke-width="1.5"/>
+        <path d="M12 24 L14 14 L17 18 L20 12 L23 18 L26 14 L28 24 Z" stroke="var(--brass)" stroke-width="1.3" stroke-linejoin="round"/>
+      </svg>
+      Clans vs Society
+    </div>
+    <div class="topbar-right">
+      <span class="player-name" id="player-name">Loading...</span>
+      <a class="logout" href="/logout">Leave Realm</a>
+    </div>
+  </header>
+
+  <nav class="sidebar" id="sidebar"></nav>
+
+  <main class="main">
+    <div class="page-title">General Store</div>
+    <div class="page-sub">Potions for the road and supplies for the workshop. Coin in hand, goods in your satchel.</div>
+
+    <div class="panel store-purse">
+      <div>
+        <div class="resource-label">Your Purse</div>
+        <div class="purse-gold" id="purse-gold">— g</div>
+      </div>
+      <div class="purse-note">The store buys nothing back — sell what you carry from your Inventory.</div>
+      <a href="/inventory">Open Inventory</a>
+    </div>
+
+    <div id="store-sections">
+      <div style="color:var(--ash);font-style:italic;">Loading store...</div>
+    </div>
+
+    <div class="panel" style="margin-top:1.4rem;">
+      <div class="panel-title">Activity Log</div>
+      <div class="log-list" id="log-list">
+        <div class="log-entry">
+          <span class="log-time">—</span>
+          <span class="log-text" id="log-placeholder" style="color:var(--ash);font-style:italic;">No purchases yet.</span>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/nav.js"></script>
+<script src="/ui.js"></script>
+<script>
+  /* showToast, addLog, apiPost come from /ui.js. */
+  let myGold = 0;
+  let owned = {};            // itemId -> quantity in the satchel
+  const FALLBACK_ICON = '/assets/items/_fallback/default-item.png';
+  const SECTIONS = [
+    { type: 'consumable', title: 'Potions & Tonics' },
+    { type: 'crafting',   title: 'Crafting Supplies' },
+  ];
+  const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+  function itemIconHtml(iconPath){
+    const src = iconPath || FALLBACK_ICON;
+    return `<div class="item-icon-wrap"><img src="${esc(src)}" alt="" width="52" height="52" loading="lazy" onerror="this.onerror=null;this.src='${FALLBACK_ICON}';"></div>`;
+  }
+
+  const MAX_PER_PURCHASE = 99;        // the server's limit for one purchase
+  const chosen = new Map();             // itemId -> quantity picked on this visit
+
+  // Most of this item the player can afford in one purchase (0 if not even one).
+  const maxAffordable = item => Math.min(MAX_PER_PURCHASE, Math.floor(myGold / item.basePrice));
+  const qtyFor = item => Math.max(1, Math.min(chosen.get(item.id) || 1, Math.max(1, maxAffordable(item))));
+
+  function card(item){
+    const max = maxAffordable(item);
+    const qty = qtyFor(item);
+    const total = qty * item.basePrice;
+    const affordable = max >= 1;
+    const have = owned[item.id] || 0;
+    return `
+      <div class="item-card" data-card-id="${item.id}">
+        <div class="item-type ${esc(item.type)}">${esc(item.type)}</div>
+        ${itemIconHtml(item.icon)}
+        <div class="item-name">${esc(item.name)}</div>
+        <div class="item-owned">${have ? `YOU CARRY ${have}` : '&nbsp;'}</div>
+        <div class="item-desc">${esc(item.description)}</div>
+        <div class="qty-row">
+          <div class="qty-stepper" role="group" aria-label="Quantity of ${esc(item.name)}">
+            <button class="qty-btn" data-step="-1" ${!affordable || qty <= 1 ? 'disabled' : ''} aria-label="One fewer">−</button>
+            <input class="qty-input" type="number" inputmode="numeric" min="1" max="${Math.max(1, max)}" value="${qty}" ${affordable ? '' : 'disabled'} aria-label="Quantity">
+            <button class="qty-btn" data-step="1" ${!affordable || qty >= max ? 'disabled' : ''} aria-label="One more">+</button>
+          </div>
+          <button class="qty-max" ${!affordable || qty >= max ? 'disabled' : ''} title="As many as your purse allows (up to ${MAX_PER_PURCHASE})">Max</button>
+        </div>
+        <div class="item-footer">
+          <span class="item-total${affordable ? '' : ' short'}">${total.toLocaleString()} g<span class="item-unit">${qty > 1 ? `${item.basePrice} g each` : 'each'}</span></span>
+          <button class="item-btn buy" ${affordable ? '' : 'disabled'} data-item-id="${item.id}" data-item-name="${esc(item.name)}">
+            ${affordable ? (qty > 1 ? `Buy ${qty}` : 'Buy') : 'Too costly'}
+          </button>
+        </div>
+      </div>`;
+  }
+
+  // Update one card's quantity, total and buttons in place. Nothing is
+  // re-created, so typing, focus and Enter-to-buy keep working.
+  function syncCard(el, item){
+    const max = maxAffordable(item);
+    const qty = qtyFor(item);
+    const affordable = max >= 1;
+    const inp = el.querySelector('.qty-input');
+    if (document.activeElement !== inp || inp.value !== '') inp.value = qty;
+    inp.max = Math.max(1, max);
+    el.querySelector('.qty-btn[data-step="-1"]').disabled = !affordable || qty <= 1;
+    el.querySelector('.qty-btn[data-step="1"]').disabled  = !affordable || qty >= max;
+    el.querySelector('.qty-max').disabled = !affordable || qty >= max;
+    const total = el.querySelector('.item-total');
+    total.firstChild.textContent = `${(qty * item.basePrice).toLocaleString()} g`;
+    total.querySelector('.item-unit').textContent = qty > 1 ? `${item.basePrice} g each` : 'each';
+    el.querySelector('.item-btn.buy').textContent = affordable ? (qty > 1 ? `Buy ${qty}` : 'Buy') : 'Too costly';
+  }
+
+  function setQty(el, item, n){
+    const max = Math.max(1, maxAffordable(item));
+    chosen.set(item.id, Math.max(1, Math.min(max, Number.isFinite(n) ? Math.floor(n) : 1)));
+    syncCard(el, item);
+  }
+
+  function wireCard(el, item){
+    const inp = el.querySelector('.qty-input');
+    el.querySelectorAll('.qty-btn').forEach(b =>
+      b.addEventListener('click', () => setQty(el, item, qtyFor(item) + parseInt(b.dataset.step, 10))));
+    el.querySelector('.qty-max').addEventListener('click', () => setQty(el, item, maxAffordable(item)));
+    inp.addEventListener('change', () => setQty(el, item, parseInt(inp.value, 10)));
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter')     { e.preventDefault(); setQty(el, item, parseInt(inp.value, 10)); if (maxAffordable(item) >= 1) buyItem(item, qtyFor(item)); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setQty(el, item, qtyFor(item) + 1); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setQty(el, item, qtyFor(item) - 1); }
+    });
+    el.querySelector('.item-btn.buy').addEventListener('click', () => {
+      if (maxAffordable(item) >= 1) buyItem(item, qtyFor(item));
+    });
+  }
+
+  let storeItems = [];
+  function renderStore(items){
+    storeItems = items;
+    const wrap = document.getElementById('store-sections');
+    if(!items.length){
+      wrap.innerHTML = `<div class="empty-state">The store has nothing in stock right now.</div>`;
+      return;
+    }
+    const known = SECTIONS.map(s => s.type);
+    const groups = [...SECTIONS, { type: null, title: 'Other Goods' }]
+      .map(s => ({ ...s, items: items.filter(i => s.type ? i.type === s.type : !known.includes(i.type)) }))
+      .filter(s => s.items.length);
+    wrap.innerHTML = groups.map(g => `
+      <div class="store-section">${g.title}</div>
+      <div class="items-grid">${g.items.map(card).join('')}</div>`).join('');
+    for (const item of items) {
+      const el = wrap.querySelector(`.item-card[data-card-id="${item.id}"]`);
+      if (el) wireCard(el, item);
+    }
+  }
+
+  async function loadOwned(){
+    const data = await fetch('/api/inventory').then(r => r.json()).catch(() => ({}));
+    owned = {};
+    for (const inv of (data.inventory || [])) owned[inv.itemId] = (owned[inv.itemId] || 0) + inv.quantity;
+  }
+
+  async function loadStore(){
+    const data = await fetch('/api/shop/items').then(r => r.json());
+    renderStore(data.items || []);
+  }
+
+  let buying = false;
+  async function buyItem(item, qty){
+    if (buying) return;
+    qty = Math.max(1, Math.min(MAX_PER_PURCHASE, qty || 1));
+    if (qty * item.basePrice > myGold) { showToast('Not enough gold for that many.'); return; }
+    buying = true;
+    let data;
+    try {
+      data = await apiPost('/api/shop/buy', { itemId: item.id, quantity: qty });
+    } catch(e){ showToast(e.message); buying = false; return; }
+    const what = qty > 1 ? `${qty}× ${esc(item.name)}` : esc(item.name);
+    addLog(`You bought <span class="gain">${what}</span>. <span class="loss">-${data.cost} gold</span>`);
+    showToast(`Bought ${qty > 1 ? `${qty}× ` : ''}${item.name}`);
+    chosen.delete(item.id);              // back to 1 for the next purchase
+    await loadPlayer();
+    await loadOwned();
+    renderStore(storeItems);
+    buying = false;
+  }
+
+  async function loadPlayer(){
+    const res = await fetch('/api/me');
+    if(!res.ok){ window.location.href='/'; return; }
+    const data = await res.json();
+    document.getElementById('player-name').textContent = data.username;
+    myGold = data.stats.gold;
+    document.getElementById('purse-gold').textContent = `${myGold.toLocaleString()} g`;
+  }
+
+  async function init(){
+    await loadPlayer();
+    await loadOwned();
+    await loadStore();
+  }
+
+  init();
+</script>
+<nav class="mobile-nav" id="mobile-nav"></nav>
+</body>
+</html>

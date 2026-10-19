@@ -29,6 +29,7 @@ model User {
   createdAt      DateTime     @default(now())
   stats          Stats?
   houseMember    HouseMember?
+  houseJoinRequest HouseJoinRequest?
   inventory      Inventory[]
   listings       Listing[]
   userSkills     UserSkill[]
@@ -181,6 +182,20 @@ model House {
   leaderId  Int           @unique
   createdAt DateTime      @default(now())
   members   HouseMember[]
+  joinRequests HouseJoinRequest[]
+}
+
+// A player asking to join a house. The house's Lord approves or denies it.
+// One open request per player at a time (asking another house replaces it).
+model HouseJoinRequest {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  houseId   Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  house     House    @relation(fields: [houseId], references: [id], onDelete: Cascade)
+
+  @@index([houseId])
 }
 
 model HouseMember {
@@ -220,8 +235,11 @@ model Listing {
   price     Int
   quantity  Int      @default(1)
   createdAt DateTime @default(now())
+  expiresAt DateTime // after this the listing comes down and the items go back to the seller
   seller    User     @relation(fields: [sellerId], references: [id])
   item      Item     @relation(fields: [itemId], references: [id])
+
+  @@index([expiresAt])
 }
 
 model CombatSession {

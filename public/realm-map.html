@@ -35,6 +35,11 @@
   .legend-item{display:flex;align-items:center;gap:0.5rem;font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:0.08em;color:var(--ash);text-transform:uppercase;}
 
   .info-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.3rem 1.4rem;margin-bottom:1rem;}
+  .location-bar{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;border-color:var(--brass-dim);}
+  .location-bar .loc-text{font-size:1rem;color:var(--parchment);}
+  .location-bar .loc-text b{color:var(--brass);font-weight:600;}
+  .location-bar a{font-family:'JetBrains Mono',monospace;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--bone);border:1px solid var(--brass-dim);padding:0.5rem 0.9rem;text-decoration:none;}
+  .location-bar a:hover{background:rgba(176,141,69,0.08);}
   .info-title{font-family:'Cinzel',serif;font-size:1rem;color:var(--parchment);margin-bottom:0.4rem;}
   .info-desc{font-size:0.9rem;color:var(--ash);font-style:italic;line-height:1.6;}
 
@@ -85,6 +90,7 @@
   <main class="main">
     <div class="page-title">Map of Karthûl</div>
     <div class="page-sub">A fallen kingdom's known lands. Click a point of interest to learn more.</div>
+    <div class="info-card location-bar" id="location-bar" style="display:none;"></div>
 
     <div class="map-panel">
       <div class="map-image-wrap" id="map-wrap">
@@ -208,12 +214,31 @@
 
   let hasWagon = false;
   let wagonTier = 0;
+  let currentCityId = null;   // null = Aurelia, the capital
+  let travelingTo = null;     // set while on the road
+  let travelArrivesAt = null;
+
+  const placeName = id => !id || id === 'aurelia' ? 'Aurelia'
+    : (POINTS_OF_INTEREST.find(p => p.cityId === id)?.name || id);
+
+  function renderLocationBar(){
+    const bar = document.getElementById('location-bar');
+    if (travelingTo) {
+      const mins = Math.max(0, Math.ceil((new Date(travelArrivesAt) - Date.now()) / 60000));
+      const eta = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+      bar.innerHTML = `<div class="loc-text">On the road to <b>${placeName(travelingTo)}</b> — arriving in ${eta}.</div>
+        <a href="/traveling.html?to=${encodeURIComponent(travelingTo)}">Follow the journey</a>`;
+    } else {
+      const here = placeName(currentCityId);
+      bar.innerHTML = `<div class="loc-text">You are in <b>${here}</b>.</div>` +
+        (currentCityId ? `<a href="/city/${encodeURIComponent(currentCityId)}">Enter ${here}</a>` : '');
+    }
+    bar.style.display = 'flex';
+  }
 
   function openPoi(poi){
-    if (poi.href) {
-      fetch('/api/travel/home', { method: 'POST' }).catch(() => {}).finally(() => {
-        window.location.href = poi.href;
-      });
+    if (poi.capital && !currentCityId && !travelingTo) {
+      window.location.href = poi.href || '/dashboard';   // already home
       return;
     }
     document.getElementById('modal-region').textContent = poi.region;
@@ -224,7 +249,7 @@
     const travelEl = document.getElementById('modal-travel');
     const travelBtn = document.getElementById('modal-travel-btn');
 
-    if (!poi.cityId) {
+    if (!poi.cityId && !poi.capital) {
       // No hub page built for this settlement yet.
       statusEl.textContent = 'Uncharted — coming soon';
       statusEl.className = 'poi-status';
@@ -233,15 +258,34 @@
         : '🔒 A wagon is required to travel this far. Build one below (Level 10+).';
       travelEl.style.display = 'block';
       travelBtn.style.display = 'none';
-    } else if (hasWagon) {
-      statusEl.textContent = 'Charted — ready to visit';
+    } else if (travelingTo) {
+      statusEl.textContent = travelingTo === poi.cityId ? 'Your destination' : 'You are on the road';
       statusEl.className = 'poi-status live';
-      travelEl.textContent = formatTravelTime(poi.travelHours, poi.mode);
+      travelEl.textContent = `On the road to ${placeName(travelingTo)}.`;
       travelEl.style.display = 'block';
       travelBtn.style.display = 'block';
       travelBtn.disabled = false;
-      travelBtn.textContent = `Travel to ${poi.name}`;
+      travelBtn.textContent = 'Follow the Journey';
+      travelBtn.onclick = () => { window.location.href = `/traveling.html?to=${encodeURIComponent(travelingTo)}`; };
+    } else if (poi.cityId === currentCityId) {
+      statusEl.textContent = 'You are here';
+      statusEl.className = 'poi-status live';
+      travelEl.style.display = 'none';
+      travelBtn.style.display = 'block';
+      travelBtn.disabled = false;
+      travelBtn.textContent = `Enter ${poi.name}`;
       travelBtn.onclick = () => { window.location.href = `/city/${poi.cityId}`; };
+    } else if (poi.capital || hasWagon) {
+      // Heading home takes as long as the trip out from where you are now.
+      const leg = poi.capital ? POINTS_OF_INTEREST.find(p => p.cityId === currentCityId) : poi;
+      statusEl.textContent = poi.capital ? 'Home' : 'Charted — ready to visit';
+      statusEl.className = 'poi-status live';
+      travelEl.textContent = formatTravelTime(leg.travelHours, leg.mode).replace('from Aurelia', `from ${placeName(currentCityId)}`);
+      travelEl.style.display = 'block';
+      travelBtn.style.display = 'block';
+      travelBtn.disabled = false;
+      travelBtn.textContent = poi.capital ? 'Return to Aurelia' : `Travel to ${poi.name}`;
+      travelBtn.onclick = () => { window.location.href = `/traveling.html?to=${poi.capital ? 'aurelia' : poi.cityId}`; };
     } else {
       statusEl.textContent = 'Charted — wagon required';
       statusEl.className = 'poi-status';
@@ -330,6 +374,10 @@
     if(!res.ok){ window.location.href='/'; return; }
     const data = await res.json();
     document.getElementById('player-name').textContent = data.username;
+    currentCityId = data.stats?.currentCityId ?? null;
+    travelingTo = data.stats?.travelDestination ?? null;
+    travelArrivesAt = data.stats?.travelArrivesAt ?? null;
+    renderLocationBar();
   }
 
   buildMarkers();

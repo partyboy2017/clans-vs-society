@@ -1894,10 +1894,15 @@ app.post('/api/inventory/use', validate(schemas.inventoryId), blockIfDetained, a
   }
 });
 
+// The General Store sells potions and building materials only. Monster drops
+// (Ancient Coin, Golem Core, trophies…) have to be earned. The list and the
+// buy button use this same rule (playtest finding E4).
+const STORE_ITEM_TYPES = ['consumable', 'crafting'];
+
 app.get('/api/shop/items', async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const items = await prisma.item.findMany({
-    where: { type: { in: ['consumable', 'crafting'] } },
+    where: { type: { in: STORE_ITEM_TYPES } },
     orderBy: [{ type: 'asc' }, { basePrice: 'asc' }],
   });
   res.json({ items });
@@ -1910,6 +1915,9 @@ app.post('/api/shop/buy', validate(schemas.shopBuy), blockIfDetained, async (req
 
   const item = await prisma.item.findUnique({ where: { id: itemId } });
   if (!item) return res.status(404).json({ error: 'Item not found' });
+  if (!STORE_ITEM_TYPES.includes(item.type)) {
+    return res.status(400).json({ error: `The General Store doesn't sell ${item.name}.`, notForSale: true });
+  }
 
   const cost = item.basePrice * qty;
 

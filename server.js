@@ -550,7 +550,7 @@ const AURELIA_ONLY_PAGES = new Set([
   '/dashboard', '/training', '/raids', '/monsters', '/store', '/house', '/market', '/achievements',
 ]);
 const AURELIA_ONLY_ACTIONS = [
-  '/action/train', '/training/train', '/action/rest', '/action/skill',
+  '/training/train', '/action/rest', '/action/skill',
   '/raid/npc', '/raid/player', '/monsters/start', '/monsters/turn',
 ];
 const isAureliaOnlyAction = p => AURELIA_ONLY_ACTIONS.includes(p) || p.startsWith('/house') || p.startsWith('/market/');
@@ -1112,76 +1112,9 @@ async function energyCost(base, characterClass, userId) {
   return base;
 }
 
-app.post('/api/action/train', blockIfDetained, async (req, res) => {
-  if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
-  const { characterClass } = req.user;
-  await regenEnergy(req.user.id);
-  const cost = await energyCost(20, characterClass, req.user.id);
-
-  // Atomic energy deduct — rejects if energy is insufficient.
-  const deducted = await prisma.stats.updateMany({
-    where: { userId: req.user.id, energy: { gte: cost } },
-    data:  { energy: { decrement: cost } },
-  });
-  if (deducted.count === 0) return res.status(400).json({ error: 'Not enough energy' });
-
-  let strGain = Math.floor(Math.random() * 3) + 1;
-  let defGain = 0;
-  let intGain = 0;
-
-  // Warrior: also gains defense
-  if (characterClass === 'WARRIOR') defGain = Math.floor(Math.random() * 2) + 1;
-
-  // Magician / Necromancer: train intelligence instead of strength
-  if (characterClass === 'MAGICIAN' || characterClass === 'NECROMANCER') {
-    intGain = strGain;
-    strGain = 0;
-  }
-
-  // Cleric: trains INT and DEF, no raw strength
-  if (characterClass === 'CLERIC') {
-    intGain = Math.floor(Math.random() * 2) + 1;
-    defGain = Math.floor(Math.random() * 2) + 1;
-    strGain = 0;
-  }
-
-  // Bard: trains DEX and INT
-  let dexGain = 0;
-  if (characterClass === 'BARD') {
-    dexGain = Math.floor(Math.random() * 2) + 1;
-    intGain = Math.floor(Math.random() * 2) + 1;
-    strGain = 0;
-  }
-
-  // Silver Tongue (BARD_1): +10% XP
-  let xpGain = 15;
-  if (characterClass === 'BARD' && await hasSkill(req.user.id, 'BARD_1')) {
-    xpGain = Math.floor(xpGain * 1.1);
-  }
-
-  // All stat gains are incremental — safe regardless of concurrent writes.
-  await prisma.stats.update({
-    where: { userId: req.user.id },
-    data: {
-      strength:     { increment: strGain },
-      defense:      { increment: defGain },
-      intelligence: { increment: intGain },
-      dexterity:    { increment: dexGain },
-      xp:           { increment: xpGain },
-    },
-  });
-
-  const levelResult = await checkLevelUp(req.user.id);
-
-  const gainParts = [];
-  if (strGain) gainParts.push(`+${strGain} STR`);
-  if (defGain) gainParts.push(`+${defGain} DEF`);
-  if (intGain) gainParts.push(`+${intGain} INT`);
-  if (dexGain) gainParts.push(`+${dexGain} DEX`);
-  logActivity(req.user.id, 'training', `Trained: ${gainParts.join(', ')}, +${xpGain} XP.`);
-
-  res.json({ strGain, defGain, intGain, dexGain, xpGain, ...levelResult });
-});
+// The old one-click training route (/api/action/train) was removed: it had no
+// cooldown and out-gained the Training page (playtest finding E3). All
+// training goes through /api/training/train.
 
 app.post('/api/action/rest', blockIfDetained, async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });

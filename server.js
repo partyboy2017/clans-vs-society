@@ -1483,9 +1483,9 @@ app.get('/api/players', async (req, res) => {
 });
 
 // ─── HOUSE ────────────────────────────────────────────────────────────────────
-// Joining a house is a request the Lord approves or denies. A Lord can't leave
-// (someone has to hold the banner) but can disband the house; any gold in the
-// house vault goes back to the Lord. Housemates can't raid each other (see
+// Joining a house is a request the Lord approves or denies. Anyone can leave;
+// a leaving Lord hands the house on (see /api/house/leave). A Lord can also
+// disband the house; any gold in the house vault goes back to the Lord. Housemates can't raid each other (see
 // /api/raid/player).
 
 async function houseOf(userId) {
@@ -2394,6 +2394,9 @@ app.post('/api/raid/npc', validate(schemas.raidNpc), async (req, res) => {
   }
 });
 
+// Lords below this level can't attack other players, and can't be attacked.
+const PVP_MIN_LEVEL = 5;
+
 app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
   if (!req.isAuthenticated()) return res.status(401).json({ error: 'Not logged in' });
   const { targetId } = req.body;
@@ -2432,6 +2435,8 @@ app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
       if (attackerStats.inHospital) throw { code: 'HOSPITAL' };
       if (attackerStats.travelDestination) throw { code: 'TRAVELING' };
       if (defenderStats.travelDestination) throw { code: 'TARGET_TRAVELING' };
+      if (attackerStats.level < PVP_MIN_LEVEL) throw { code: 'LOW_LEVEL' };
+      if (defenderStats.level < PVP_MIN_LEVEL) throw { code: 'TARGET_PROTECTED' };
       if (attackerStats.energy < 20) throw { code: 'NO_ENERGY' };
 
       // Combat
@@ -2501,6 +2506,8 @@ app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
     if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in the Infirmary' });
     if (e && e.code === 'TRAVELING') return res.status(400).json({ error: 'You are on the road. Finish or turn back from your journey first.' });
     if (e && e.code === 'TARGET_TRAVELING') return res.status(400).json({ error: 'That lord is on the road and out of reach' });
+    if (e && e.code === 'LOW_LEVEL') return res.status(400).json({ error: `You must reach level ${PVP_MIN_LEVEL} before you can attack other lords`, minLevel: PVP_MIN_LEVEL });
+    if (e && e.code === 'TARGET_PROTECTED') return res.status(400).json({ error: `That lord is under level ${PVP_MIN_LEVEL} and protected from attack`, minLevel: PVP_MIN_LEVEL });
     if (e && e.code === 'NO_ENERGY') return res.status(400).json({ error: 'Not enough energy — attacks cost 20 energy' });
     logError('/api/raid/player error:', e);
     res.status(500).json({ error: 'Something went wrong' });

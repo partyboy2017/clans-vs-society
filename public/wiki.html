@@ -126,7 +126,8 @@
     <input class="search-box" id="search-box" type="text" placeholder="Search the wiki...">
 
     <div class="tabs">
-      <button class="tab active" data-tab="classes" onclick="switchTab('classes')">Classes</button>
+      <button class="tab active" data-tab="lore" onclick="switchTab('lore')">Lore</button>
+      <button class="tab" data-tab="classes" onclick="switchTab('classes')">Classes</button>
       <button class="tab" data-tab="skills" onclick="switchTab('skills')">Skills</button>
       <button class="tab" data-tab="monsters" onclick="switchTab('monsters')">Monsters</button>
       <button class="tab" data-tab="raids" onclick="switchTab('raids')">Raids</button>
@@ -134,7 +135,8 @@
       <button class="tab" data-tab="mechanics" onclick="switchTab('mechanics')">Mechanics</button>
     </div>
 
-    <div id="pane-classes"></div>
+    <div id="pane-lore"></div>
+    <div id="pane-classes" style="display:none;"></div>
     <div id="pane-skills" style="display:none;"></div>
     <div id="pane-monsters" style="display:none;"></div>
     <div id="pane-raids" style="display:none;"></div>
@@ -150,7 +152,7 @@
 
   function switchTab(tab){
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-    ['classes','skills','monsters','raids','items','mechanics'].forEach(t => {
+    ['lore','classes','skills','monsters','raids','items','mechanics'].forEach(t => {
       document.getElementById('pane-'+t).style.display = (t === tab) ? 'block' : 'none';
     });
     document.getElementById('search-box').value = '';
@@ -267,6 +269,29 @@
       <div class="item-table-grid">${cards}</div>`;
   }
 
+  // Approved lore (lore/CANON.md, L-025). Static text, no API call needed.
+  function renderLore(){
+    const block = (title, body) => `
+      <div class="mechanic-block" data-search="${(title + ' ' + body).replace(/<[^>]+>/g, '').replace(/"/g, '').toLowerCase()}">
+        <div class="mechanic-title">${title}</div>
+        <div class="mechanic-desc">${body}</div>
+      </div>`;
+    document.getElementById('pane-lore').innerHTML = `
+      <div class="section-title">The Realm of Karthûl &middot; 312 A.F.</div>
+      ${block('The Empty Throne',
+        'The throne of Karthûl has stood empty since the Fracturing. The Clans count the years since then <em>After the Fracturing</em>; it is now <strong>312 A.F.</strong> The Concord refuses to admit anything ended, and dates its writs by <em>the Waiting</em>: “the 312th year of the Waiting.” Which date a lord writes on a letter says which side they stand on.')}
+      ${block('Society — the Concord',
+        'The great families of Aurelia formed the Concord, a council of Stewards who rule “in the name of the empty throne until the true heir returns.” Nobody has believed that for two hundred years, but the Stewards still guard the Royal Treasury, still collect the crown’s taxes, still keep the Stewards’ Gaol, and still call it law. Their motto: <em>“The throne waits.”</em>')}
+      ${block('The Clans',
+        'Outside Aurelia’s walls the regions stopped listening. Holds, families and sworn bands took their own names and banners. The Concord calls them Clans, and calls their lords bandits; the Clans call the Concord a treasury with a flag on it. Their creed: <em>“No king, no law, only what you can hold.”</em>')}
+      ${block('The Banner Oath',
+        'A House is born when its founder plants a banner and swears before witnesses: <em>“What I hold, I keep. What I keep, I share. What I share, I defend.”</em> Bannermen swear the same words when they join. From that moment the Concord enters the House in <strong>the Writ of Clans</strong>, its roll of outlaw Houses. A lord who abandons a House under attack is <strong>oathless</strong>, and no House is bound to take them in.')}
+      ${block('The Blood Ledger',
+        'Every House keeps a Blood Ledger: a record of every wrong done to it, to be settled one day.')}
+      ${block('Hearthnight',
+        'On the anniversary of the Fracturing every fire in Karthûl burns from dusk to dawn, so that if the world breaks again it finds everyone awake. By old custom it is also the Hearthnight Truce: no blade is drawn between lords. Houses read their Blood Ledgers aloud by the fire; in Aurelia the Stewards read out the Writ of Clans.')}`;
+  }
+
   function renderMechanics(){
     const m = wikiData.mechanics;
     document.getElementById('pane-mechanics').innerHTML = `
@@ -284,8 +309,8 @@
         <div class="mechanic-desc">Pay gold at the Inn to fully restore both Health and Energy instantly, bypassing the passive regen wait.</div>
       </div>
       <div class="mechanic-block">
-        <div class="mechanic-title">Jail & Infirmary</div>
-        <div class="mechanic-desc">Losing an NPC raid can land you in Jail (a timed lockout from raiding) depending on the location's jail chance. Losing a fight — whether against a monster, an NPC raid, or another player — can instead send you to the Infirmary if your health drops critically low, also a timed lockout until you recover.</div>
+        <div class="mechanic-title">The Stewards’ Gaol & Infirmary</div>
+        <div class="mechanic-desc">Losing an NPC raid can land you in the Stewards’ Gaol (a timed lockout from raiding) depending on the location's jail chance. Losing a fight — whether against a monster, an NPC raid, or another player — can instead send you to the Infirmary if your health drops critically low, also a timed lockout until you recover.</div>
       </div>
       <div class="mechanic-block">
         <div class="mechanic-title">Leveling & Stat Points</div>
@@ -314,6 +339,7 @@
   }
 
   async function loadWiki(){
+    renderLore();
     const res = await fetch('/api/wiki');
     if(!res.ok){ document.getElementById('pane-classes').innerHTML = '<div class="card">Failed to load wiki data.</div>'; return; }
     wikiData = await res.json();

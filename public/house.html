@@ -103,6 +103,8 @@
     .no-house{grid-template-columns:1fr;}
     .house-stats{grid-template-columns:1fr;}
   }
+  .oath{font-style:italic;color:var(--parchment);font-size:0.92rem;border-left:2px solid var(--brass-dim);padding:0.4rem 0 0.4rem 0.8rem;margin:-0.4rem 0 1.1rem;}
+  .house-oath{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ash);margin-top:0.35rem;}
 </style>
 </head>
 <body>
@@ -154,7 +156,8 @@
         <div class="choice-card">
           <div class="choice-icon">🏰</div>
           <div class="choice-title">Found a House</div>
-          <div class="choice-desc">Raise your own banner and call yourself lord. Recruit bannermen and build your power from nothing.</div>
+          <div class="choice-desc">Plant your banner and swear the Banner Oath before witnesses. The Concord will enter your House in the Writ of Clans; from that day you are an outlaw to the Stewards and a lord to your own.</div>
+          <div class="oath">&ldquo;What I hold, I keep. What I keep, I share. What I share, I defend.&rdquo;</div>
           <div class="choice-cost">COST: 500 GOLD</div>
           <div class="field"><label>House Name</label><input id="house-name" maxlength="30" placeholder="Ashveil" autocomplete="off"></div>
           <div class="field"><label>Motto</label><input id="house-motto" maxlength="100" placeholder="Strength through unity." autocomplete="off"></div>
@@ -163,7 +166,7 @@
         <div class="choice-card">
           <div class="choice-icon">⚔</div>
           <div class="choice-title">Join a House</div>
-          <div class="choice-desc">Ask to swear fealty to an existing lord. Once they accept, you rise through their ranks and share in the spoils of their campaigns.</div>
+          <div class="choice-desc">Ask to swear the Banner Oath to an existing lord. Once they accept, you rise through their ranks and share in the spoils of their campaigns. Abandon them under attack and you are oathless.</div>
           <div class="choice-cost">FREE · THE LORD MUST ACCEPT</div>
           <div class="join-list" id="join-list">
             ${houses.length === 0
@@ -215,6 +218,7 @@
           <div class="house-name-display">House ${esc(house.name)}</div>
           <div class="house-motto">"${esc(house.motto)}"</div>
           <div class="house-rank">${esc(member.rank)}</div>
+          <div class="house-oath">Sworn under the Banner Oath &middot; Entered in the Writ of Clans</div>
         </div>
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">
           <button class="btn btn-ghost" style="width:auto;padding:0.5rem 1rem;" onclick="leaveHouse()">Leave House</button>
@@ -252,7 +256,7 @@
     if(!name){ showToast('Enter a house name.'); return; }
     const data = await post('/api/house/create', { name, motto });
     if(!data) return;
-    showToast(`House ${data.house.name} founded!`);
+    showToast(`House ${data.house.name} founded. Your name is entered in the Writ of Clans.`);
     load();
   }
 
@@ -272,7 +276,7 @@
   async function answerRequest(requestId, decision){
     const data = await post(`/api/house/requests/${requestId}/${decision}`);
     if(!data) return;
-    showToast(decision === 'approve' ? `${data.name} has sworn fealty.` : `Request from ${data.name} declined.`);
+    showToast(decision === 'approve' ? `${data.name} has sworn the Banner Oath.` : `Request from ${data.name} declined.`);
     load();
   }
 

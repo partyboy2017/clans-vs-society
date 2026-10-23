@@ -205,6 +205,10 @@
     font-size: 1.2rem;
     line-height: 1.8;
   }
+  .mottos{ display:flex; gap:1.6rem; justify-content:center; flex-wrap:wrap; margin-top:2rem; }
+  .motto{ flex:1 1 220px; max-width:280px; border:1px solid var(--line); padding:1rem 1.2rem; background:var(--bg-panel); }
+  .motto .eyebrow{ display:block; margin-bottom:0.4rem; }
+  .motto em{ color:var(--parchment); font-size:1.05rem; }
   .rule{
     width: 64px;
     height: 1px;
@@ -297,7 +301,7 @@
   </div>
   <span class="eyebrow">A realm without a ruler</span>
   <h1>Clans vs Society</h1>
-  <p class="tagline">The old king is dead and the throne stands empty. In the chaos that follows, lords scheme, blades are drawn, and only the boldest carve out a crown of their own.</p>
+  <p class="tagline">The old king is gone and the throne stands empty. The Stewards of the Concord rule in its name; the Clans answer to no one. Between them, lords scheme, blades are drawn, and only the boldest carve out a crown of their own.</p>
   <div class="hero-ctas">
     <a class="btn btn-primary" href="/auth/google">Forge Your Name</a>
     <a class="btn btn-ghost" href="/auth/google">Return to the Realm</a>
@@ -331,7 +335,12 @@
 
 <section class="lore">
   <span class="eyebrow">What Remains</span>
-  <p>A hundred houses claim the crown, and none can hold it. Villages burn between harvests, the roads belong to whoever guards them last, and old oaths mean less each season. This is what's left of the kingdom — yours to take, if you can keep it.</p>
+  <p>For three hundred and twelve years the Stewards of Aurelia have kept the treasury, the gaol and the law in the name of a king who never came back. They call it <strong>the Concord</strong>. Outside their walls, a hundred banners fly over a hundred holds, and the Concord writes every one of them into its roll of outlaws. They call them <strong>the Clans</strong>.</p>
+  <p>Villages burn between harvests, the roads belong to whoever guards them last, and old oaths mean less each season. This is what's left of the kingdom — yours to take, if you can keep it.</p>
+  <div class="mottos">
+    <div class="motto"><span class="eyebrow">The Concord</span><em>&ldquo;The throne waits.&rdquo;</em></div>
+    <div class="motto"><span class="eyebrow">The Clans</span><em>&ldquo;No king, no law, only what you can hold.&rdquo;</em></div>
+  </div>
   <div class="rule"></div>
 </section>
 

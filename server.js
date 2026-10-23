@@ -2102,7 +2102,7 @@ const NPC_LOCATIONS = [
   {
     id: 'treasury',
     name: 'Royal Treasury',
-    desc: 'The crown jewels and tax reserves of the realm. Only a fool or a legend attempts this.',
+    desc: 'The Concord’s vault beneath the empty throne — crown jewels and three centuries of taxes, kept for a king who never returns. Only a fool or a legend attempts this.',
     risk: 'EXTREME',
     energyCost: 50,
     goldMin: 800, goldMax: 2000,
@@ -2209,7 +2209,7 @@ async function detainedMessage(userId) {
   const now = Date.now();
   if (stats.inJail) {
     const left = stats.jailUntil ? new Date(stats.jailUntil).getTime() - now : 0;
-    return `You are in jail — released in ${formatWait(left)}.`;
+    return `You are held in the Stewards’ Gaol — released in ${formatWait(left)}.`;
   }
   if (stats.inHospital) {
     const left = stats.hospitalUntil ? new Date(stats.hospitalUntil).getTime() - now : 0;
@@ -2325,7 +2325,7 @@ app.post('/api/raid/npc', validate(schemas.raidNpc), async (req, res) => {
     res.json({ ...result, location: location.name, ...levelUp });
 
   } catch (e) {
-    if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
+    if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are held in the Stewards’ Gaol' });
     if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in the Infirmary' });
     if (e && e.code === 'TRAVELING') return res.status(400).json({ error: 'You are on the road. Finish or turn back from your journey first.' });
     if (e && e.code === 'TARGET_TRAVELING') return res.status(400).json({ error: 'That lord is on the road and out of reach' });
@@ -2443,7 +2443,7 @@ app.post('/api/raid/player', validate(schemas.raidPlayer), async (req, res) => {
     });
 
   } catch (e) {
-    if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
+    if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are held in the Stewards’ Gaol' });
     if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in the Infirmary' });
     if (e && e.code === 'TRAVELING') return res.status(400).json({ error: 'You are on the road. Finish or turn back from your journey first.' });
     if (e && e.code === 'TARGET_TRAVELING') return res.status(400).json({ error: 'That lord is on the road and out of reach' });
@@ -3147,7 +3147,7 @@ app.post('/api/travel/start', validate(schemas.travelStart), async (req, res) =>
     }
     const here = stats.currentCityId || HOME_ID;
     if (here === dest.id) return res.status(400).json({ error: `You are already in ${dest.name}`, alreadyThere: true, cityId: dest.id });
-    if (stats.inJail)     return res.status(400).json({ error: 'You are in jail' });
+    if (stats.inJail)     return res.status(400).json({ error: 'You are held in the Stewards’ Gaol' });
     if (stats.inHospital) return res.status(400).json({ error: 'You are in the Infirmary' });
     if (dest.id !== HOME_ID && !stats.hasWagon) return res.status(400).json({ error: 'You need a wagon to travel that far. Build one on the Realm Map.' });
     const fight = await prisma.combatSession.findUnique({ where: { userId: req.user.id }, select: { id: true } });
@@ -3333,7 +3333,7 @@ app.post('/api/monsters/start', validate(schemas.monstersStart), async (req, res
 
     res.json({ session });
   } catch (e) {
-    if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are in jail' });
+    if (e && e.code === 'JAILED')    return res.status(400).json({ error: 'You are held in the Stewards’ Gaol' });
     if (e && e.code === 'HOSPITAL')  return res.status(400).json({ error: 'You are in the Infirmary' });
     if (e && e.code === 'LEVEL_TOO_LOW') return res.status(400).json({ error: `You must be at least Level ${e.minLevel} to hunt in ${zone.name}` });
     if (e && e.code === 'TRAVELING') return res.status(400).json({ error: 'You are on the road. Finish or turn back from your journey first.' });

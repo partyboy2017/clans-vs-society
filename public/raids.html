@@ -101,7 +101,7 @@
     <div class="status-banner jail" id="jail-banner">
       <div class="status-icon">⛓</div>
       <div>
-        <div class="status-title">You are in jail</div>
+        <div class="status-title">You are held in the Stewards’ Gaol</div>
         <div class="status-timer" id="jail-timer">Released in —</div>
       </div>
     </div>
@@ -285,7 +285,7 @@
       ]);
     } else if(data.jailMins > 0){
       addLog(`You raided <span class="loss">${locationName}</span> and were captured. <span class="loss">Jailed for ${data.jailMins} minutes.</span>`);
-      showModal('⛓', 'Captured!', `The guards caught you raiding ${locationName}.`, [
+      showModal('⛓', 'Captured!', `The Concord’s guards caught you raiding ${locationName}. The Stewards’ Gaol awaits.`, [
         { label: 'SENTENCE',  value: `${data.jailMins} minutes`, cls: 'neg' },
         { label: 'XP GAINED', value: `+${data.xpGain}`,         cls: 'pos' },
       ]);

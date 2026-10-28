@@ -6,91 +6,137 @@
 <title>Clans vs Society — Settlement</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/theme.css">
 <style>
-  :root{--bg:#1C1A17;--bg-panel:#25211C;--bg-panel-2:#2C2620;--parchment:#DCCEA6;--rust:#8B3A2A;--rust-bright:#B0492F;--brass:#B08D45;--brass-dim:#8A6F3A;--bone:#ECE4D2;--ash:#93897A;--green:#4A7C59;--green-bright:#5C9E70;--line:rgba(176,141,69,0.22);}
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg);color:var(--bone);font-family:'EB Garamond',serif;font-size:17px;line-height:1.5;min-height:100vh;}
-  .shell{display:grid;grid-template-columns:220px 1fr;grid-template-rows:54px 1fr;min-height:100vh;}
-  .topbar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 1.4rem;background:rgba(28,26,23,0.95);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:10;}
-  .brand{display:flex;align-items:center;gap:0.6rem;font-family:'Cinzel',serif;font-size:0.9rem;letter-spacing:0.1em;text-transform:uppercase;}
-  .brand svg{width:24px;height:24px;}
-  .topbar-right{display:flex;align-items:center;gap:1.2rem;}
-  .player-name{font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--brass);letter-spacing:0.08em;}
-  .logout{font-family:'JetBrains Mono',monospace;font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--ash);text-decoration:none;border:1px solid var(--line);padding:0.35rem 0.7rem;transition:color 0.2s,border-color 0.2s;}
-  .logout:hover{color:var(--bone);border-color:var(--brass-dim);}
-  .sidebar{background:var(--bg-panel);border-right:1px solid var(--line);padding:1.4rem 0;display:flex;flex-direction:column;gap:0.2rem;}
-  .nav-label{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--ash);padding:0.8rem 1.2rem 0.4rem;}
-  .nav-item{display:flex;align-items:center;gap:0.7rem;padding:0.6rem 1.2rem;color:var(--ash);text-decoration:none;font-family:'EB Garamond',serif;font-size:1rem;transition:color 0.15s,background 0.15s;border-left:2px solid transparent;cursor:pointer;}
-  .nav-item:hover{color:var(--bone);background:rgba(176,141,69,0.06);}
-  .nav-item.active{color:var(--parchment);border-left-color:var(--rust-bright);background:rgba(139,58,42,0.12);}
-  .nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:0.7;}
-  .nav-item.active svg{opacity:1;}
-  .nav-divider{height:1px;background:var(--line);margin:0.6rem 1.2rem;}
-  .main{padding:1.8rem 2rem;overflow-y:auto;}
+  /* ── PAGE-SPECIFIC STYLES ONLY ──
+     Shell, sidebar, topbar, toast, buttons and mobile nav come from
+     /theme.css. This page re-skins those shared tokens per region so each
+     settlement looks like its corner of the Map of Karthûl: the hero is a
+     live crop of /assets/map/karthul-map.png centred on the city's pin, and
+     body[data-region] swaps the palette (icy blues for Frostreach, lava for
+     Ashenreach, dune gold for Sandscarre, ...). Gold filigree framing and
+     spaced Cinzel lettering echo the map's cartouche and labels. */
+
+  /* Default = the map's own look: deep ocean blue with gilt edging. */
+  body{
+    --bg:#0E1620; --bg-panel:#142030; --bg-panel-2:#1A2838;
+    --parchment:#E6D7AE; --brass:#C9A55C; --brass-dim:#8E7442;
+    --line:rgba(201,165,92,0.26);
+    --accent:#C9A55C; --accent-soft:rgba(201,165,92,0.14);
+    --glow:rgba(40,90,140,0.35);
+    --map-x:50; --map-y:50;
+    background:
+      radial-gradient(1200px 600px at 70% -10%, var(--glow), transparent 70%),
+      radial-gradient(900px 500px at -10% 110%, var(--accent-soft), transparent 70%),
+      var(--bg);
+    background-attachment:fixed;
+  }
+
+  /* Region palettes — sampled from the painted map. */
+  body[data-region="frostreach"]{ --bg:#0F161D; --bg-panel:#16212B; --bg-panel-2:#1D2B37; --parchment:#E4EEF3; --brass:#A9CBE0; --brass-dim:#6E8FA6; --line:rgba(169,203,224,0.24); --accent:#CFE7F5; --accent-soft:rgba(207,231,245,0.10); --glow:rgba(150,200,235,0.22); --rust:#3E6A8A; --rust-bright:#5288AE; }
+  body[data-region="silverpeaks"]{ --bg:#141517; --bg-panel:#1C1E21; --bg-panel-2:#24272B; --parchment:#DADCE0; --brass:#B9BDC4; --brass-dim:#7C8088; --line:rgba(185,189,196,0.22); --accent:#D38A45; --accent-soft:rgba(211,138,69,0.10); --glow:rgba(160,165,175,0.18); --rust:#8A5A2E; --rust-bright:#B0743D; }
+  body[data-region="verdant"]{ --bg:#101710; --bg-panel:#172216; --bg-panel-2:#1E2C1C; --parchment:#DCE6C4; --brass:#9CC27A; --brass-dim:#62824A; --line:rgba(156,194,122,0.24); --accent:#C9A55C; --accent-soft:rgba(110,160,80,0.12); --glow:rgba(70,130,60,0.25); --rust:#3F6B34; --rust-bright:#548C45; }
+  body[data-region="stormcoast"]{ --bg:#11161B; --bg-panel:#182027; --bg-panel-2:#1F2932; --parchment:#D8DFE6; --brass:#9DB0C2; --brass-dim:#66788A; --line:rgba(157,176,194,0.24); --accent:#E3B35A; --accent-soft:rgba(227,179,90,0.10); --glow:rgba(90,120,150,0.30); --rust:#3D5670; --rust-bright:#51708F; }
+  body[data-region="sandscarre"]{ --bg:#1A140C; --bg-panel:#251C11; --bg-panel-2:#2E2316; --parchment:#F0DDB0; --brass:#E0AE5A; --brass-dim:#9C7638; --line:rgba(224,174,90,0.26); --accent:#F2C774; --accent-soft:rgba(224,174,90,0.12); --glow:rgba(210,150,70,0.25); --rust:#9A5A26; --rust-bright:#C07333; }
+  body[data-region="mireveil"]{ --bg:#0E1513; --bg-panel:#14201C; --bg-panel-2:#1A2924; --parchment:#D3DFC9; --brass:#7FB0A2; --brass-dim:#4E7A6E; --line:rgba(127,176,162,0.24); --accent:#A9C46A; --accent-soft:rgba(127,176,162,0.10); --glow:rgba(60,110,95,0.28); --rust:#3A5F55; --rust-bright:#4D7D70; }
+  body[data-region="ashenreach"]{ --bg:#140E0D; --bg-panel:#1E1513; --bg-panel-2:#281B18; --parchment:#EBD3C2; --brass:#E36A33; --brass-dim:#9A4425; --line:rgba(227,106,51,0.26); --accent:#FF9A4A; --accent-soft:rgba(227,106,51,0.12); --glow:rgba(200,70,30,0.28); --rust:#8E2E1C; --rust-bright:#B83E22; }
+  body[data-region="celestial"]{ --bg:#0B171D; --bg-panel:#11232B; --bg-panel-2:#172D37; --parchment:#DDF1EC; --brass:#5CCBC4; --brass-dim:#368D88; --line:rgba(92,203,196,0.24); --accent:#E8CF8A; --accent-soft:rgba(92,203,196,0.12); --glow:rgba(60,190,190,0.25); --rust:#22706F; --rust-bright:#2E918F; }
+
+  .topbar{ background:color-mix(in srgb, var(--bg) 94%, transparent); }
+  .main{ max-width:1180px; }
 
   .back-link{display:inline-flex;align-items:center;gap:0.4rem;font-family:'JetBrains Mono',monospace;font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--ash);text-decoration:none;margin-bottom:1rem;transition:color 0.15s;}
   .back-link:hover{color:var(--parchment);}
 
-  .page-title{font-family:'Cinzel',serif;font-size:1.5rem;font-weight:600;letter-spacing:0.06em;color:var(--parchment);margin-bottom:0.3rem;}
-  .page-region{font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--brass);margin-bottom:0.6rem;}
-  .page-sub{font-size:0.95rem;color:var(--ash);font-style:italic;margin-bottom:1.6rem;max-width:70ch;}
+  /* ── GILT FRAME (shared by hero + cards) ──
+     A thin outer rule with an inner offset rule, like the map's border. */
+  .gilt{ position:relative; border:1px solid var(--brass-dim); box-shadow: inset 0 0 0 3px var(--bg-panel), inset 0 0 0 4px var(--line); }
+  .gilt-corners::before, .gilt-corners::after{ content:""; position:absolute; width:14px; height:14px; border:1px solid var(--brass); pointer-events:none; }
+  .gilt-corners::before{ top:-1px; left:-1px; border-right:none; border-bottom:none; }
+  .gilt-corners::after{ bottom:-1px; right:-1px; border-left:none; border-top:none; }
 
-  .info-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.3rem 1.4rem;margin-bottom:1.2rem;}
-  .info-title{font-family:'Cinzel',serif;font-size:0.95rem;letter-spacing:0.05em;color:var(--parchment);margin-bottom:0.6rem;padding-bottom:0.6rem;border-bottom:1px solid var(--line);}
-  .info-desc{font-size:0.95rem;color:var(--bone);line-height:1.7;}
+  /* ── HERO: the city's corner of the map ── */
+  .hero{ position:relative; overflow:hidden; aspect-ratio:16/6; min-height:220px; margin-bottom:1.6rem; background:var(--bg-panel); }
+  .hero-map{ position:absolute; inset:0; background-image:url('/assets/map/karthul-map.png'); background-repeat:no-repeat; background-size:260% auto; background-position:50% 50%; filter:saturate(1.05) contrast(1.05); transform:scale(1.02); transition:background-position 0.6s ease; }
+  .hero-shade{ position:absolute; inset:0; background:
+      linear-gradient(90deg, color-mix(in srgb, var(--bg) 92%, transparent) 0%, color-mix(in srgb, var(--bg) 55%, transparent) 42%, transparent 75%),
+      linear-gradient(0deg, color-mix(in srgb, var(--bg) 85%, transparent) 0%, transparent 45%),
+      radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%); }
+  /* A pulsing halo around the map's own painted settlement dot. */
+  .hero-pin{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:22px; height:22px; pointer-events:none; }
+  .hero-pin::before{ content:""; position:absolute; inset:2px; border-radius:50%; border:1.5px solid var(--accent); box-shadow:0 0 12px var(--accent); }
+  .hero-pin::after{ content:""; position:absolute; inset:0; border-radius:50%; border:1.5px solid var(--accent); animation:pinRing 2.4s ease-out infinite; }
+  @keyframes pinRing{ 0%{ transform:scale(0.6); opacity:1; } 100%{ transform:scale(2.6); opacity:0; } }
 
-  .travel-pill{display:inline-flex;align-items:center;gap:0.4rem;font-family:'JetBrains Mono',monospace;font-size:0.68rem;letter-spacing:0.06em;color:var(--brass);background:var(--bg-panel-2);border:1px solid var(--line);padding:0.4rem 0.8rem;margin-top:0.8rem;}
+  .hero-text{ position:absolute; left:0; bottom:0; top:0; display:flex; flex-direction:column; justify-content:center; padding:1.6rem 2rem; max-width:62%; }
+  .hero-kicker{ font-family:'Cinzel',serif; font-size:0.72rem; letter-spacing:0.32em; text-transform:uppercase; color:var(--brass); margin-bottom:0.35rem; }
+  .hero-name{ font-family:'Cinzel',serif; font-weight:700; font-size:clamp(1.7rem, 4vw, 2.7rem); line-height:1.05; letter-spacing:0.04em; color:var(--parchment); text-shadow:0 2px 12px rgba(0,0,0,0.7); }
+  .hero-flourish{ display:block; width:180px; height:18px; margin:0.5rem 0 0.6rem; color:var(--brass); }
+  .hero-subregion{ font-family:'EB Garamond',serif; font-style:italic; font-size:1.05rem; color:var(--bone); opacity:0.9; text-shadow:0 1px 6px rgba(0,0,0,0.8); }
+  .hero-compass{ position:absolute; right:1rem; bottom:0.8rem; width:56px; height:56px; color:var(--brass); opacity:0.75; filter:drop-shadow(0 1px 4px rgba(0,0,0,0.7)); }
 
-  .lock-card{background:var(--bg-panel);border:1px solid var(--rust);padding:2rem;text-align:center;margin-bottom:1.2rem;}
-  .lock-icon{font-size:1.8rem;margin-bottom:0.6rem;}
-  .lock-title{font-family:'Cinzel',serif;font-size:1.1rem;color:var(--parchment);margin-bottom:0.5rem;}
-  .lock-desc{font-size:0.9rem;color:var(--ash);font-style:italic;margin-bottom:1.2rem;}
-  .lock-btn{font-family:'JetBrains Mono',monospace;font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.7rem 1.4rem;border:1px solid var(--brass-dim);color:var(--brass);background:transparent;text-decoration:none;display:inline-block;transition:background 0.15s,color 0.15s;}
-  .lock-btn:hover{background:var(--brass);color:var(--bg);}
+  .tagline{ font-size:1.02rem; color:var(--ash); font-style:italic; margin:-0.4rem 0 1.6rem; max-width:70ch; }
 
-  .section-title{font-family:'Cinzel',serif;font-size:1rem;letter-spacing:0.05em;color:var(--parchment);margin:1.8rem 0 0.8rem;}
+  /* ── CARDS ── */
+  .info-card{ background:var(--bg-panel); padding:1.4rem 1.5rem; margin-bottom:1.2rem; }
+  .info-title{ font-family:'Cinzel',serif; font-size:0.95rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--parchment); margin-bottom:0.7rem; padding-bottom:0.6rem; border-bottom:1px solid var(--line); }
+  .info-desc{ font-size:1rem; color:var(--bone); line-height:1.7; }
+
+  .travel-pill{ display:inline-flex; align-items:center; gap:0.4rem; font-family:'JetBrains Mono',monospace; font-size:0.68rem; letter-spacing:0.06em; color:var(--brass); background:var(--bg-panel-2); border:1px solid var(--line); padding:0.4rem 0.8rem; margin-top:0.9rem; }
+
+  .lock-card{ background:var(--bg-panel); padding:2rem; text-align:center; margin-bottom:1.2rem; }
+  .lock-icon{ font-size:1.8rem; margin-bottom:0.6rem; }
+  .lock-title{ font-family:'Cinzel',serif; font-size:1.15rem; letter-spacing:0.05em; color:var(--parchment); margin-bottom:0.5rem; }
+  .lock-desc{ font-size:0.95rem; color:var(--ash); font-style:italic; margin-bottom:1.2rem; }
+  .lock-btn{ font-family:'JetBrains Mono',monospace; font-size:0.7rem; letter-spacing:0.1em; text-transform:uppercase; padding:0.75rem 1.5rem; border:1px solid var(--brass-dim); color:var(--brass); background:transparent; text-decoration:none; display:inline-block; transition:background 0.15s,color 0.15s; }
+  .lock-btn:hover{ background:var(--brass); color:var(--bg); }
+
+  /* Section headings styled like the map's spaced "THE GREAT OCEAN" label,
+     flanked by gilt rules. */
+  .section-title{ display:flex; align-items:center; gap:0.9rem; font-family:'Cinzel',serif; font-size:0.85rem; letter-spacing:0.3em; text-transform:uppercase; color:var(--parchment); margin:2rem 0 0.9rem; }
+  .section-title::before, .section-title::after{ content:""; flex:1; height:1px; background:linear-gradient(90deg, transparent, var(--brass-dim)); }
+  .section-title::after{ background:linear-gradient(90deg, var(--brass-dim), transparent); }
+  .section-title span::before, .section-title span::after{ content:"◆"; font-size:0.5rem; color:var(--brass); vertical-align:middle; margin:0 0.6rem; }
 
   /* SHOP */
-  .shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.8rem;}
-  .shop-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.1rem;transition:border-color 0.15s;}
-  .shop-card:hover{border-color:var(--brass-dim);}
-  .item-type{font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--brass);margin-bottom:0.4rem;}
-  .item-name{font-family:'Cinzel',serif;font-size:1rem;color:var(--parchment);margin-bottom:0.3rem;}
-  .item-effect{font-size:0.82rem;color:var(--green-bright);margin-bottom:0.3rem;}
-  .item-desc{font-size:0.8rem;color:var(--ash);font-style:italic;margin-bottom:0.8rem;line-height:1.5;}
-  .shop-footer{display:flex;align-items:center;justify-content:space-between;margin-top:0.6rem;padding-top:0.6rem;border-top:1px solid var(--line);}
-  .shop-price{font-family:'Cinzel',serif;font-size:1rem;color:var(--brass);}
-  .buy-btn{font-family:'JetBrains Mono',monospace;font-size:0.62rem;letter-spacing:0.08em;padding:0.35rem 0.8rem;background:var(--green);color:var(--bone);border:none;cursor:pointer;transition:background 0.15s;}
-  .buy-btn:hover:not(:disabled){background:var(--green-bright);}
-  .buy-btn:disabled{background:var(--bg-panel-2);color:var(--ash);border:1px solid var(--line);cursor:not-allowed;}
+  .shop-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:0.9rem; }
+  .shop-card{ background:var(--bg-panel); padding:1.15rem; transition:border-color 0.15s, transform 0.15s; display:flex; flex-direction:column; }
+  .shop-card:hover{ border-color:var(--brass); transform:translateY(-1px); }
+  .item-type{ font-family:'JetBrains Mono',monospace; font-size:0.58rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--brass); margin-bottom:0.4rem; }
+  .item-name{ font-family:'Cinzel',serif; font-size:1rem; color:var(--parchment); margin-bottom:0.3rem; }
+  .item-effect{ font-size:0.85rem; color:var(--green-bright); margin-bottom:0.3rem; }
+  .item-desc{ font-size:0.84rem; color:var(--ash); font-style:italic; margin-bottom:0.8rem; line-height:1.5; flex:1; }
+  .shop-footer{ display:flex; align-items:center; justify-content:space-between; padding-top:0.6rem; border-top:1px solid var(--line); }
+  .shop-price{ font-family:'Cinzel',serif; font-size:1rem; color:var(--accent); }
+  .buy-btn{ font-family:'JetBrains Mono',monospace; font-size:0.62rem; letter-spacing:0.1em; text-transform:uppercase; padding:0.4rem 0.9rem; background:var(--rust); color:var(--bone); border:1px solid var(--rust-bright); cursor:pointer; transition:background 0.15s; }
+  .buy-btn:hover:not(:disabled){ background:var(--rust-bright); }
+  .buy-btn:disabled{ background:var(--bg-panel-2); color:var(--ash); border-color:var(--line); cursor:not-allowed; }
 
   /* NEARBY LINKS */
-  .link-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:0.8rem;}
-  .link-card{background:var(--bg-panel);border:1px solid var(--line);padding:1.1rem;text-decoration:none;color:inherit;display:block;transition:border-color 0.15s,transform 0.1s;}
-  .link-card:hover{border-color:var(--brass-dim);}
-  .link-risk{font-family:'JetBrains Mono',monospace;font-size:0.56rem;letter-spacing:0.14em;margin-bottom:0.4rem;text-transform:uppercase;}
-  .link-risk.LOW{color:var(--green-bright);}
-  .link-risk.MEDIUM{color:var(--brass);}
-  .link-risk.HIGH{color:var(--rust-bright);}
-  .link-risk.EXTREME{color:#cc3333;}
-  .link-risk.END{color:#cc3333;}
-  .link-name{font-family:'Cinzel',serif;font-size:0.98rem;color:var(--parchment);margin-bottom:0.35rem;}
-  .link-desc{font-size:0.8rem;color:var(--ash);font-style:italic;line-height:1.5;margin-bottom:0.6rem;}
-  .link-cta{font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--brass);}
+  .link-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:0.9rem; }
+  .link-card{ background:var(--bg-panel); padding:1.15rem; color:inherit; display:block; }
+  .link-risk{ font-family:'JetBrains Mono',monospace; font-size:0.56rem; letter-spacing:0.14em; margin-bottom:0.4rem; text-transform:uppercase; }
+  .link-risk.LOW{ color:var(--green-bright); }
+  .link-risk.MEDIUM{ color:#D9B25F; }
+  .link-risk.HIGH{ color:#D2643F; }
+  .link-risk.EXTREME, .link-risk.END{ color:#E04848; }
+  .link-name{ font-family:'Cinzel',serif; font-size:0.98rem; color:var(--parchment); margin-bottom:0.35rem; }
+  .link-desc{ font-size:0.84rem; color:var(--ash); font-style:italic; line-height:1.5; margin-bottom:0.6rem; }
+  .link-cta{ font-family:'JetBrains Mono',monospace; font-size:0.6rem; letter-spacing:0.08em; text-transform:uppercase; color:var(--brass); }
 
-  .empty-state{text-align:center;padding:2rem;color:var(--ash);font-style:italic;background:var(--bg-panel);border:1px solid var(--line);}
+  .empty-state{ text-align:center; padding:2rem; color:var(--ash); font-style:italic; background:var(--bg-panel); }
 
-  .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--bg-panel-2);border:1px solid var(--brass-dim);padding:0.8rem 1.2rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;letter-spacing:0.06em;color:var(--bone);opacity:0;transform:translateY(8px);transition:opacity 0.2s,transform 0.2s;pointer-events:none;max-width:300px;z-index:100;}
-  .toast.show{opacity:1;transform:translateY(0);}
-
-  @media(max-width:800px){.shell{grid-template-columns:1fr;}.sidebar{display:none;}}
-  .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(28,26,23,0.97);border-top:1px solid var(--line);z-index:20;padding-bottom:env(safe-area-inset-bottom);}
-  .mobile-nav-inner{display:flex;justify-content:space-around;align-items:stretch;}
-  .mn-item{display:flex;flex-direction:column;align-items:center;gap:0.25rem;padding:0.6rem 0.3rem;color:var(--ash);text-decoration:none;font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:0.06em;text-transform:uppercase;flex:1;transition:color 0.15s;-webkit-tap-highlight-color:transparent;}
-  .mn-item.active{color:var(--parchment);}
-  .mn-item:hover{color:var(--bone);}
-  .mn-item svg{width:20px;height:20px;flex-shrink:0;}
-  @media(max-width:800px){.mobile-nav{display:block;}.main{padding:1.2rem 1rem 5rem !important;}}
+  @media(max-width:800px){
+    .hero{ aspect-ratio:auto; height:280px; }
+    .hero-text{ max-width:100%; padding:1.2rem; justify-content:flex-end; }
+    .hero-shade{ background:
+      linear-gradient(0deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 92%, transparent) 38%, color-mix(in srgb, var(--bg) 30%, transparent) 62%, transparent 80%),
+      radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.45) 100%); }
+    .hero-compass{ display:none; }
+    .section-title{ letter-spacing:0.18em; font-size:0.78rem; }
+    .section-title span::before, .section-title span::after{ display:none; }
+  }
+  @media (prefers-reduced-motion: reduce){ .hero-pin::after{ animation:none; } .hero-map{ transition:none; } }
 </style>
 </head>
 <body>
@@ -114,12 +160,35 @@
   <main class="main">
     <a class="back-link" href="/realm-map">← Back to the Map of Karthûl</a>
 
-    <div class="page-region" id="city-region">Loading...</div>
-    <div class="page-title" id="city-name">—</div>
-    <div class="page-sub" id="city-tagline"></div>
+    <section class="hero gilt gilt-corners" id="hero" aria-label="Location on the map">
+      <div class="hero-map" id="hero-map" role="img" aria-label="Map of Karthûl"></div>
+      <div class="hero-shade"></div>
+      <div class="hero-pin" id="hero-pin" aria-hidden="true"></div>
+      <div class="hero-text">
+        <div class="hero-kicker" id="city-region">Charting…</div>
+        <h1 class="hero-name" id="city-name">—</h1>
+        <svg class="hero-flourish" viewBox="0 0 180 18" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true">
+          <path d="M2 9 H66"/><path d="M114 9 H178"/>
+          <path d="M66 9 C74 2, 82 2, 90 9 C98 16, 106 16, 114 9"/>
+          <path d="M66 9 C74 16, 82 16, 90 9 C98 2, 106 2, 114 9"/>
+          <circle cx="90" cy="9" r="2" fill="currentColor"/>
+        </svg>
+        <div class="hero-subregion" id="city-subregion"></div>
+      </div>
+      <svg class="hero-compass" viewBox="0 0 64 64" fill="none" stroke="currentColor" aria-hidden="true">
+        <circle cx="32" cy="32" r="22" stroke-width="0.8"/>
+        <circle cx="32" cy="32" r="17" stroke-width="0.5" stroke-dasharray="1 2"/>
+        <path d="M32 4 L36 28 L32 32 L28 28 Z" fill="currentColor" stroke-width="0.6"/>
+        <path d="M32 60 L28 36 L32 32 L36 36 Z" stroke-width="0.8"/>
+        <path d="M4 32 L28 28 L32 32 L28 36 Z" stroke-width="0.8"/>
+        <path d="M60 32 L36 36 L32 32 L36 28 Z" stroke-width="0.8"/>
+      </svg>
+    </section>
+
+    <div class="tagline" id="city-tagline"></div>
 
     <div id="content">
-      <div class="empty-state">Charting the road ahead...</div>
+      <div class="empty-state gilt">Charting the road ahead...</div>
     </div>
   </main>
 </div>
@@ -129,6 +198,51 @@
 <script>
   const cityId = window.location.pathname.split('/city/')[1];
   let myGold = 0;
+
+  // Where each settlement's painted dot sits on karthul-map.png (percent of
+  // image width / height) and which regional palette its page wears. These
+  // are the dot centres, a touch left/up of realm-map.html's pin anchors.
+  const CITY_THEME = {
+    'icewind-citadel': { region:'frostreach',  x:49.3, y:16.7 },
+    'stonehall':       { region:'silverpeaks', x:41.6, y:30.1 },
+    'greenwatch':      { region:'verdant',     x:16.0, y:42.6 },
+    'tempest-haven':   { region:'stormcoast',  x:65.8, y:40.0 },
+    'sunspear-oasis':  { region:'sandscarre',  x:19.0, y:74.9 },
+    'bogtimber':       { region:'mireveil',    x:37.2, y:77.3 },
+    'blackgate':       { region:'ashenreach',  x:59.5, y:78.1 },
+    'luminara':        { region:'celestial',   x:83.4, y:69.0 },
+  };
+  const MAP_ASPECT = 1535 / 1024;   // karthul-map.png width / height
+  const MAP_ZOOM = 2.6;             // map width as a multiple of the hero width
+
+  const theme = CITY_THEME[cityId];
+  if (theme) document.body.dataset.region = theme.region;
+
+  // Crop the map so the city's pin lands at a pleasing spot in the hero
+  // (right of centre on desktop so the title has room, centred on mobile),
+  // clamped so we never scroll past the map's edges.
+  function positionHero(){
+    if (!theme) return;
+    const hero = document.getElementById('hero');
+    const map = document.getElementById('hero-map');
+    const pin = document.getElementById('hero-pin');
+    const cw = hero.clientWidth, ch = hero.clientHeight;
+    const mobile = window.matchMedia('(max-width:800px)').matches;
+    const zoom = mobile ? 2.4 : MAP_ZOOM;
+    const iw = cw * zoom, ih = iw / MAP_ASPECT;
+    const targetX = cw * (mobile ? 0.62 : 0.70);
+    const targetY = ch * (mobile ? 0.26 : 0.48);
+    let ox = targetX - (theme.x / 100) * iw;
+    let oy = targetY - (theme.y / 100) * ih;
+    ox = Math.min(0, Math.max(cw - iw, ox));
+    oy = Math.min(0, Math.max(ch - ih, oy));
+    map.style.backgroundSize = `${iw}px ${ih}px`;
+    map.style.backgroundPosition = `${ox}px ${oy}px`;
+    pin.style.left = (ox + (theme.x / 100) * iw) + 'px';
+    pin.style.top  = (oy + (theme.y / 100) * ih) + 'px';
+  }
+  window.addEventListener('resize', positionHero);
+  positionHero();
 
   function showToast(msg){ const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800); }
 
@@ -146,19 +260,26 @@
     return 'LOW';
   }
 
+  const section = title => `<div class="section-title"><span>${title}</span></div>`;
+
+  function loreCard(city, title){
+    return `
+      <div class="info-card gilt">
+        <div class="info-title">${title}</div>
+        <div class="info-desc">${city.lore}</div>
+        <div class="travel-pill">${travelPill(city)}</div>
+      </div>`;
+  }
+
   function renderLocked(city){
     document.getElementById('content').innerHTML = `
-      <div class="lock-card">
+      <div class="lock-card gilt gilt-corners">
         <div class="lock-icon">🔒</div>
         <div class="lock-title">The Road Is Too Far to Walk</div>
         <div class="lock-desc">Reaching ${city.name} takes a wagon — build one from the Realm Map once you're Level 10, then set out again.</div>
         <a class="lock-btn" href="/realm-map">Return to the Map</a>
       </div>
-      <div class="info-card">
-        <div class="info-title">What Travelers Say</div>
-        <div class="info-desc">${city.lore}</div>
-        <div class="travel-pill">${travelPill(city)}</div>
-      </div>
+      ${loreCard(city, 'What Travelers Say')}
     `;
   }
 
@@ -172,7 +293,7 @@
         ? `<a class="lock-btn" href="/traveling.html?to=${encodeURIComponent(onRoad)}">You are on the road elsewhere</a>`
         : `<a class="lock-btn" href="/traveling.html?to=${encodeURIComponent(city.id)}">Travel Here (~${hrs})</a>`;
     document.getElementById('content').innerHTML = `
-      <div class="lock-card">
+      <div class="lock-card gilt gilt-corners">
         <div class="lock-icon">${city.mode === 'sea' ? '⛵' : '🐎'}</div>
         <div class="lock-title">${onRoad === city.id ? `On the Road to ${city.name}` : `You Are Not in ${city.name}`}</div>
         <div class="lock-desc">${onRoad === city.id
@@ -180,11 +301,7 @@
           : `Its market and its roads open to you once you arrive. The journey takes about ${hrs}.`}</div>
         ${action}
       </div>
-      <div class="info-card">
-        <div class="info-title">What Travelers Say</div>
-        <div class="info-desc">${city.lore}</div>
-        <div class="travel-pill">${travelPill(city)}</div>
-      </div>
+      ${loreCard(city, 'What Travelers Say')}
     `;
   }
 
@@ -192,7 +309,7 @@
     const shopHtml = city.shopItems.length ? `
       <div class="shop-grid">
         ${city.shopItems.map(i => `
-          <div class="shop-card">
+          <div class="shop-card gilt">
             <div class="item-type">${i.type}</div>
             <div class="item-name">${i.name}</div>
             ${i.effect ? `<div class="item-effect">${i.effect}</div>` : ''}
@@ -202,44 +319,37 @@
               <button class="buy-btn" onclick="buy(${i.id}, '${i.name.replace(/'/g, "\\'")}', ${i.basePrice})">Buy</button>
             </div>
           </div>`).join('')}
-      </div>` : `<div class="empty-state">No goods for sale here right now.</div>`;
+      </div>` : `<div class="empty-state gilt">No goods for sale here right now.</div>`;
 
     const zonesHtml = city.nearbyZones.length ? `
       <div class="link-grid">
         ${city.nearbyZones.map(z => `
-          <div class="link-card">
+          <div class="link-card gilt">
             <div class="link-risk ${riskClass(z.tier)}">${z.tier} · LVL ${z.levelMin}–${z.levelMax}</div>
             <div class="link-name">${z.name}</div>
             <div class="link-desc">${z.desc}</div>
             <div class="link-cta">Hunted from Aurelia's Monsters page</div>
           </div>`).join('')}
-      </div>` : `<div class="empty-state">No hunting grounds within easy reach.</div>`;
+      </div>` : `<div class="empty-state gilt">No hunting grounds within easy reach.</div>`;
 
     const raidsHtml = city.nearbyRaids.length ? `
       <div class="link-grid">
         ${city.nearbyRaids.map(r => `
-          <div class="link-card">
+          <div class="link-card gilt">
             <div class="link-risk ${riskClass(r.risk)}">${r.risk} RISK</div>
             <div class="link-name">${r.name}</div>
             <div class="link-desc">${r.desc}</div>
             <div class="link-cta">Raided from Aurelia's Raids page</div>
           </div>`).join('')}
-      </div>` : `<div class="empty-state">No known raid targets nearby.</div>`;
+      </div>` : `<div class="empty-state gilt">No known raid targets nearby.</div>`;
 
     document.getElementById('content').innerHTML = `
-      <div class="info-card">
-        <div class="info-title">${city.name}</div>
-        <div class="info-desc">${city.lore}</div>
-        <div class="travel-pill">${travelPill(city)}</div>
-      </div>
-
-      <div class="section-title">Local Shop</div>
+      ${loreCard(city, `About ${city.name}`)}
+      ${section('Local Shop')}
       ${shopHtml}
-
-      <div class="section-title">Nearby Hunting Grounds</div>
+      ${section('Nearby Hunting Grounds')}
       ${zonesHtml}
-
-      <div class="section-title">Nearby Raid Targets</div>
+      ${section('Nearby Raid Targets')}
       ${raidsHtml}
     `;
   }
@@ -275,14 +385,19 @@
       const res = await fetch(`/api/cities/${cityId}`);
       const city = await res.json();
       if (!res.ok) {
-        document.getElementById('content').innerHTML = `<div class="empty-state">${city.error || 'Unknown settlement.'}</div>`;
+        document.getElementById('content').innerHTML = `<div class="empty-state gilt">${city.error || 'Unknown settlement.'}</div>`;
         return;
       }
 
-      document.getElementById('city-region').textContent = city.region;
+      // "Frostreach — The Shivering North" → kicker + italic subtitle,
+      // mirroring how the map labels each region.
+      const [regionName, regionSub] = (city.region || '').split(/\s+—\s+/);
+      document.getElementById('city-region').textContent = regionName || city.region;
+      document.getElementById('city-subregion').textContent = regionSub || '';
       document.getElementById('city-name').textContent = city.name;
       document.getElementById('city-tagline').textContent = city.tagline;
       document.title = `Clans vs Society — ${city.name}`;
+      positionHero();
 
       if (city.here) {
         renderCity(city);
@@ -293,7 +408,7 @@
       }
     } catch (e) {
       console.error('loadCity error:', e);
-      document.getElementById('content').innerHTML = `<div class="empty-state">Something went wrong loading this settlement.</div>`;
+      document.getElementById('content').innerHTML = `<div class="empty-state gilt">Something went wrong loading this settlement.</div>`;
     }
   }
 
